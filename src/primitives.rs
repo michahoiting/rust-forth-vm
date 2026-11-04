@@ -138,22 +138,22 @@ unsafe fn colon(regs: &mut Registers) {
         .write_header(&name, code_cell(docol), F_HIDDEN)
         .is_some()
     {
-        regs.definition = Some(restore_point);
-        regs.compiling = true;
+        regs.compiler.definition = Some(restore_point);
+        regs.compiler.compiling = true;
     }
 }
 
 // SEMICOLON ( ; ): Ends the current definition. This word is immediate.
 unsafe fn semicolon(regs: &mut Registers) {
-    if !regs.compiling {
+    if !regs.compiler.compiling {
         regs.set_error("; can only be used while compiling.");
         return;
     }
-    regs.comma(regs.exit_cfa);
+    regs.comma(regs.compiler.exit_cfa);
     if regs.error.is_none() {
         regs.dictionary.reveal_last();
-        regs.definition = None;
-        regs.compiling = false;
+        regs.compiler.definition = None;
+        regs.compiler.compiling = false;
     }
 }
 
@@ -171,11 +171,12 @@ pub(crate) unsafe fn install(regs: &mut Registers) {
     regs.dictionary.add_primitive_word(":", code_cell(colon), 0);
     regs.dictionary
         .add_primitive_word(";", code_cell(semicolon), F_IMMEDIATE);
-    regs.exit_cfa = regs
+    let exit_cfa = regs
         .dictionary
         .add_primitive_word("EXIT", code_cell(exit), 0);
     // LIT reads its operand from the thread, so it only makes sense in compiled code.
-    regs.lit_cfa = regs
+    let lit_cfa = regs
         .dictionary
         .add_primitive_word("LIT", code_cell(lit), F_HIDDEN);
+    regs.compiler.link_primitives(lit_cfa, exit_cfa);
 }

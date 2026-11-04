@@ -15,15 +15,15 @@ unsafe fn interpret_token(regs: &mut Registers, token: &str) {
     if let Some(header) = regs.dictionary.find_word(token) {
         // --- CASE A: THE TOKEN IS A DICTIONARY WORD ---
         let cfa = cfa_of(header);
-        if regs.compiling && !is_immediate(header) {
+        if regs.compiler.compiling && !is_immediate(header) {
             regs.comma(cfa as Cell);
         } else {
             execute(regs, cfa);
         }
     } else if let Some(number) = parse_number(token) {
         // --- CASE B: THE TOKEN IS A NUMBER (LITERAL) ---
-        if regs.compiling {
-            regs.comma(regs.lit_cfa);
+        if regs.compiler.compiling {
+            regs.comma(regs.compiler.lit_cfa);
             regs.comma(number);
         } else {
             regs.data_stack.push(number); // Push directly onto the parameter stack
@@ -41,8 +41,8 @@ unsafe fn interpret_token(regs: &mut Registers, token: &str) {
 unsafe fn abort(regs: &mut Registers) {
     regs.data_stack.clear();
     regs.return_stack.clear();
-    regs.compiling = false;
-    if let Some(mark) = regs.definition.take() {
+    regs.compiler.compiling = false;
+    if let Some(mark) = regs.compiler.definition.take() {
         regs.dictionary.restore(mark);
     }
 }
@@ -196,7 +196,7 @@ mod tests {
             let mark = regs.dictionary.mark();
             assert_error(&mut regs, ": BROKEN 1 NOPE ;", "not recognized");
             assert_eq!(regs.dictionary.mark(), mark);
-            assert!(!regs.compiling);
+            assert!(!regs.compiler.compiling);
             assert_error(&mut regs, "BROKEN", "not recognized");
             outer_interpreter(&mut regs, "1 2 +").unwrap();
             assert_eq!(regs.data_stack, vec![3]);

@@ -2,7 +2,8 @@ use std::mem;
 use std::ptr;
 
 use crate::cell::Cell;
-use crate::dictionary::{Dictionary, Mark};
+use crate::compiler::Compiler;
+use crate::dictionary::Dictionary;
 use crate::input::InputSource;
 
 // Definition of a Forth primitive (machine-code function).
@@ -20,11 +21,7 @@ pub struct Registers {
     pub(crate) return_stack: Vec<*const Cell>, // Return stack (R-stack) for nested IP pointers
     pub(crate) dictionary: Dictionary, // Word storage, HERE and the head of the word list
 
-    pub(crate) compiling: bool,          // STATE: true between `:` and `;`
-    pub(crate) definition: Option<Mark>, // Dictionary state to restore if a definition fails
-    pub(crate) lit_cfa: Cell,            // CFA compiled in front of inline literals
-    pub(crate) exit_cfa: Cell,           // CFA compiled by `;`
-
+    pub(crate) compiler: Compiler,    // Compilation state
     pub(crate) input: InputSource,    // The text being interpreted
     pub(crate) error: Option<String>, // Set by a primitive to stop the VM
 }
@@ -38,10 +35,7 @@ impl Registers {
             data_stack: Vec::new(),
             return_stack: Vec::new(),
             dictionary: Dictionary::new(),
-            compiling: false,
-            definition: None,
-            lit_cfa: 0,
-            exit_cfa: 0,
+            compiler: Compiler::default(),
             input: InputSource::default(),
             error: None,
         }
