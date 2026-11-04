@@ -6,4 +6,4 @@ publish = false
 
 [[bin]]
 name = "forth-vm"
-path = "forth-vm.rs"
+path = "src/main.rs"
