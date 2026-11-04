@@ -83,8 +83,8 @@ pub unsafe fn evaluate(regs: &mut Registers, input: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::boot;
     use crate::dictionary::DICTIONARY_CELLS;
-    use crate::primitives::boot;
     use crate::vm::run;
 
     // Evaluates the lines in order, and returns the resulting data stack.

@@ -30,6 +30,23 @@ pub struct Registers {
 }
 
 impl Registers {
+    // Creates a VM with an empty dictionary.
+    pub(crate) unsafe fn new() -> Registers {
+        Registers {
+            ip: ptr::null(),
+            w: ptr::null(),
+            data_stack: Vec::new(),
+            return_stack: Vec::new(),
+            dictionary: Dictionary::new(),
+            compiling: false,
+            definition: None,
+            lit_cfa: 0,
+            exit_cfa: 0,
+            input: InputSource::default(),
+            error: None,
+        }
+    }
+
     // Records an error. The inner interpreter stops, and the outer interpreter aborts.
     pub(crate) fn set_error(&mut self, message: impl Into<String>) {
         if self.error.is_none() {

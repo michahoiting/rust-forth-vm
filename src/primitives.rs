@@ -1,8 +1,5 @@
-use std::ptr;
-
 use crate::cell::Cell;
-use crate::dictionary::{cfa_of, is_created, Dictionary, F_CREATED, F_HIDDEN, F_IMMEDIATE};
-use crate::input::InputSource;
+use crate::dictionary::{cfa_of, is_created, F_CREATED, F_HIDDEN, F_IMMEDIATE};
 use crate::vm::{code_cell, Registers};
 
 // --- CORE PRIMITIVES (DOCOL, DOVAR, DODOES) ---
@@ -160,27 +157,8 @@ unsafe fn semicolon(regs: &mut Registers) {
     }
 }
 
-/// Allocates the VM and registers the core primitives under their official text names.
-///
-/// # Safety
-///
-/// The returned VM holds raw pointers into its own dictionary. It must only be
-/// driven through this crate's functions.
-pub unsafe fn boot() -> Registers {
-    let mut regs = Registers {
-        ip: ptr::null(),
-        w: ptr::null(),
-        data_stack: Vec::new(),
-        return_stack: Vec::new(),
-        dictionary: Dictionary::new(),
-        compiling: false,
-        definition: None,
-        lit_cfa: 0,
-        exit_cfa: 0,
-        input: InputSource::default(),
-        error: None,
-    };
-
+// Registers the core primitives under their official text names.
+pub(crate) unsafe fn install(regs: &mut Registers) {
     regs.dictionary.add_primitive_word("+", code_cell(plus), 0);
     regs.dictionary
         .add_primitive_word(".", code_cell(dot_print), 0);
@@ -200,6 +178,4 @@ pub unsafe fn boot() -> Registers {
     regs.lit_cfa = regs
         .dictionary
         .add_primitive_word("LIT", code_cell(lit), F_HIDDEN);
-
-    regs
 }
