@@ -1,10 +1,9 @@
 use std::ptr;
 
-use crate::dictionary::{
-    add_primitive_word, dictionary_comma, write_header, CFA, DICTIONARY_CELLS, FLAGS, F_CREATED,
-    F_HIDDEN, F_IMMEDIATE,
-};
-use crate::vm::{code_cell, Cell, Registers};
+use crate::cell::Cell;
+use crate::dictionary::{cfa_of, is_created, Dictionary, F_CREATED, F_HIDDEN, F_IMMEDIATE};
+use crate::input::InputSource;
+use crate::vm::{code_cell, Registers};
 
 // --- CORE PRIMITIVES (DOCOL, DOVAR, DODOES) ---
 
@@ -59,7 +58,7 @@ unsafe fn lit(regs: &mut Registers) {
 // COMMA ( , ): Pops a Cell from the stack and presses it into the dictionary at HERE.
 unsafe fn comma(regs: &mut Registers) {
     if let Some(value) = regs.pop() {
-        dictionary_comma(regs, value);
+        regs.comma(value);
     }
 }
 
@@ -93,12 +92,15 @@ unsafe fn dot_print(regs: &mut Registers) {
 
 // CREATE: Parses a name and allocates a new word with default DOVAR semantics.
 unsafe fn create(regs: &mut Registers) {
-    let Some(name) = regs.parse_name() else {
+    let Some(name) = regs.input.parse_name() else {
         regs.set_error("CREATE needs a name.");
         return;
     };
-    if write_header(regs, &name, code_cell(dovar), F_CREATED).is_some() {
-        dictionary_comma(regs, 0); // Reserve the action cell for DOES>
+    if regs
+        .write_header(&name, code_cell(dovar), F_CREATED)
+        .is_some()
+    {
+        regs.comma(0); // Reserve the action cell for DOES>
     }
 }
 
@@ -113,13 +115,13 @@ unsafe fn runtime_does(regs: &mut Registers) {
     }
 
     // Only words made by CREATE have an action cell. Anything else has live data at W + 1.
-    let child = regs.last_word;
-    if *child.add(FLAGS) & F_CREATED == 0 {
+    let child = regs.dictionary.last_word();
+    if !is_created(child) {
         regs.set_error("DOES> needs a word made by CREATE.");
         return;
     }
 
-    let child_cfa = child.add(CFA);
+    let child_cfa = cfa_of(child);
     *child_cfa = code_cell(dodoes); // Overwrite the child's CFA with DODOES
     *child_cfa.add(1) = regs.ip as Cell; // Store the pointer to the action code in W+1 of the child
 
@@ -130,12 +132,15 @@ unsafe fn runtime_does(regs: &mut Registers) {
 // COLON ( : ): Parses a name and switches the text interpreter to compiling.
 // The word stays hidden until `;`, so a redefinition can still call the old word.
 unsafe fn colon(regs: &mut Registers) {
-    let Some(name) = regs.parse_name() else {
+    let Some(name) = regs.input.parse_name() else {
         regs.set_error(": needs a name.");
         return;
     };
-    let restore_point = (regs.here, regs.last_word);
-    if write_header(regs, &name, code_cell(docol), F_HIDDEN).is_some() {
+    let restore_point = regs.dictionary.mark();
+    if regs
+        .write_header(&name, code_cell(docol), F_HIDDEN)
+        .is_some()
+    {
         regs.definition = Some(restore_point);
         regs.compiling = true;
     }
@@ -147,9 +152,9 @@ unsafe fn semicolon(regs: &mut Registers) {
         regs.set_error("; can only be used while compiling.");
         return;
     }
-    dictionary_comma(regs, regs.exit_cfa);
+    regs.comma(regs.exit_cfa);
     if regs.error.is_none() {
-        *regs.last_word.add(FLAGS) &= !F_HIDDEN;
+        regs.dictionary.reveal_last();
         regs.definition = None;
         regs.compiling = false;
     }
@@ -162,39 +167,39 @@ unsafe fn semicolon(regs: &mut Registers) {
 /// The returned VM holds raw pointers into its own dictionary. It must only be
 /// driven through this crate's functions.
 pub unsafe fn boot() -> Registers {
-    // Allocate an untyped arena for our Forth dictionary space
-    let mut dictionary = vec![0 as Cell; DICTIONARY_CELLS];
-    let here = dictionary.as_mut_ptr();
-
     let mut regs = Registers {
         ip: ptr::null(),
         w: ptr::null(),
         data_stack: Vec::new(),
         return_stack: Vec::new(),
-        here,
-        last_word: ptr::null_mut(), // Dictionary starts out empty
-        dictionary_end: here.add(dictionary.len()),
-        _dictionary: dictionary,
+        dictionary: Dictionary::new(),
         compiling: false,
         definition: None,
         lit_cfa: 0,
         exit_cfa: 0,
-        source: String::new(),
-        source_pos: 0,
+        input: InputSource::default(),
         error: None,
     };
 
-    add_primitive_word(&mut regs, "+", plus, 0);
-    add_primitive_word(&mut regs, ".", dot_print, 0);
-    add_primitive_word(&mut regs, "@", fetch, 0);
-    add_primitive_word(&mut regs, ",", comma, 0);
-    add_primitive_word(&mut regs, "CREATE", create, 0);
-    add_primitive_word(&mut regs, "DOES>", runtime_does, 0);
-    add_primitive_word(&mut regs, ":", colon, 0);
-    add_primitive_word(&mut regs, ";", semicolon, F_IMMEDIATE);
-    regs.exit_cfa = add_primitive_word(&mut regs, "EXIT", exit, 0);
+    regs.dictionary.add_primitive_word("+", code_cell(plus), 0);
+    regs.dictionary
+        .add_primitive_word(".", code_cell(dot_print), 0);
+    regs.dictionary.add_primitive_word("@", code_cell(fetch), 0);
+    regs.dictionary.add_primitive_word(",", code_cell(comma), 0);
+    regs.dictionary
+        .add_primitive_word("CREATE", code_cell(create), 0);
+    regs.dictionary
+        .add_primitive_word("DOES>", code_cell(runtime_does), 0);
+    regs.dictionary.add_primitive_word(":", code_cell(colon), 0);
+    regs.dictionary
+        .add_primitive_word(";", code_cell(semicolon), F_IMMEDIATE);
+    regs.exit_cfa = regs
+        .dictionary
+        .add_primitive_word("EXIT", code_cell(exit), 0);
     // LIT reads its operand from the thread, so it only makes sense in compiled code.
-    regs.lit_cfa = add_primitive_word(&mut regs, "LIT", lit, F_HIDDEN);
+    regs.lit_cfa = regs
+        .dictionary
+        .add_primitive_word("LIT", code_cell(lit), F_HIDDEN);
 
     regs
 }

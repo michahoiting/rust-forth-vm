@@ -1,6 +1,8 @@
 //! A clean-room Forth virtual machine.
 
+mod cell;
 mod dictionary;
+mod input;
 mod interpreter;
 mod primitives;
 mod vm;

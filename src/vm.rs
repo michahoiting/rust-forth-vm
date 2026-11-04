@@ -1,10 +1,8 @@
 use std::mem;
 
-// --- THE FOUNDATION: THE FORTH CELL ---
-
-// A Cell is the universal basic unit of Forth (64-bit on a 64-bit CPU).
-// It blindly holds data, flags, offsets, or raw memory pointers.
-pub(crate) type Cell = usize;
+use crate::cell::Cell;
+use crate::dictionary::{Dictionary, Mark};
+use crate::input::InputSource;
 
 // Definition of a Forth primitive (machine-code function).
 // Primitives return to the `run` loop instead of calling NEXT themselves, so
@@ -19,18 +17,14 @@ pub struct Registers {
     pub(crate) w: *const Cell,  // Word Register: points to the currently active CFA Cell
     pub(crate) data_stack: Vec<Cell>, // Parameter stack (contains raw Cells)
     pub(crate) return_stack: Vec<*const Cell>, // Return stack (R-stack) for nested IP pointers
-    pub(crate) here: *mut Cell, // Dictionary pointer to the next free Cell
-    pub(crate) last_word: *mut Cell, // Pointer to the LFA of the most recently created word
-    pub(crate) dictionary_end: *mut Cell, // One past the last usable dictionary Cell
-    pub(crate) _dictionary: Vec<Cell>, // Owns the arena that the pointers above refer to
+    pub(crate) dictionary: Dictionary, // Word storage, HERE and the head of the word list
 
-    pub(crate) compiling: bool, // STATE: true between `:` and `;`
-    pub(crate) definition: Option<(*mut Cell, *mut Cell)>, // HERE and LAST to restore if a definition fails
-    pub(crate) lit_cfa: Cell,  // CFA compiled in front of inline literals
-    pub(crate) exit_cfa: Cell, // CFA compiled by `;`
+    pub(crate) compiling: bool,          // STATE: true between `:` and `;`
+    pub(crate) definition: Option<Mark>, // Dictionary state to restore if a definition fails
+    pub(crate) lit_cfa: Cell,            // CFA compiled in front of inline literals
+    pub(crate) exit_cfa: Cell,           // CFA compiled by `;`
 
-    pub(crate) source: String,        // The line being interpreted
-    pub(crate) source_pos: usize,     // Parse offset into `source`
+    pub(crate) input: InputSource,    // The text being interpreted
     pub(crate) error: Option<String>, // Set by a primitive to stop the VM
 }
 
@@ -51,15 +45,27 @@ impl Registers {
         value
     }
 
-    // Parses the next whitespace-delimited token from the input source.
-    pub(crate) fn parse_name(&mut self) -> Option<String> {
-        let rest = &self.source[self.source_pos..];
-        let start = rest.find(|c: char| !c.is_whitespace())?;
-        let tail = &rest[start..];
-        let len = tail.find(char::is_whitespace).unwrap_or(tail.len());
-        let token = tail[..len].to_string();
-        self.source_pos += start + len;
-        Some(token)
+    // Presses a Cell into the dictionary, flagging an error when it is full.
+    pub(crate) unsafe fn comma(&mut self, value: Cell) {
+        if let Err(message) = self.dictionary.comma(value) {
+            self.set_error(message);
+        }
+    }
+
+    // Writes a word header, flagging an error when the dictionary is full.
+    pub(crate) unsafe fn write_header(
+        &mut self,
+        name: &str,
+        code: Cell,
+        flags: Cell,
+    ) -> Option<*mut Cell> {
+        match self.dictionary.write_header(name, code, flags) {
+            Ok(header) => Some(header),
+            Err(message) => {
+                self.set_error(message);
+                None
+            }
+        }
     }
 }
 

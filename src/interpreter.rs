@@ -1,7 +1,8 @@
 use std::ptr;
 
-use crate::dictionary::{dictionary_comma, find_word, CFA, FLAGS, F_IMMEDIATE};
-use crate::vm::{run, Cell, Registers};
+use crate::cell::Cell;
+use crate::dictionary::{cfa_of, is_immediate};
+use crate::vm::{run, Registers};
 
 // --- THE TEXT INTERPRETER / OUTER INTERPRETER ---
 
@@ -26,20 +27,19 @@ unsafe fn execute(regs: &mut Registers, cfa: *mut Cell) {
 
 // Handles a single token, either interpreting or compiling it.
 unsafe fn interpret_token(regs: &mut Registers, token: &str) {
-    if let Some(header) = find_word(regs, token) {
+    if let Some(header) = regs.dictionary.find_word(token) {
         // --- CASE A: THE TOKEN IS A DICTIONARY WORD ---
-        let cfa = header.add(CFA);
-        let immediate = *header.add(FLAGS) & F_IMMEDIATE != 0;
-        if regs.compiling && !immediate {
-            dictionary_comma(regs, cfa as Cell);
+        let cfa = cfa_of(header);
+        if regs.compiling && !is_immediate(header) {
+            regs.comma(cfa as Cell);
         } else {
             execute(regs, cfa);
         }
     } else if let Some(number) = parse_number(token) {
         // --- CASE B: THE TOKEN IS A NUMBER (LITERAL) ---
         if regs.compiling {
-            dictionary_comma(regs, regs.lit_cfa);
-            dictionary_comma(regs, number);
+            regs.comma(regs.lit_cfa);
+            regs.comma(number);
         } else {
             regs.data_stack.push(number); // Push directly onto the parameter stack
         }
@@ -57,9 +57,8 @@ unsafe fn abort(regs: &mut Registers) {
     regs.data_stack.clear();
     regs.return_stack.clear();
     regs.compiling = false;
-    if let Some((here, last_word)) = regs.definition.take() {
-        regs.here = here;
-        regs.last_word = last_word;
+    if let Some(mark) = regs.definition.take() {
+        regs.dictionary.restore(mark);
     }
 }
 
@@ -70,11 +69,10 @@ unsafe fn abort(regs: &mut Registers) {
 /// Forth code has raw memory access: `@` dereferences any address it is given,
 /// so the input must not fetch from an invalid address.
 pub unsafe fn outer_interpreter(regs: &mut Registers, input: &str) -> Result<(), String> {
-    regs.source = input.to_string();
-    regs.source_pos = 0;
+    regs.input.load(input);
 
     // Tokenize the input string by whitespace (spaces, tabs, newlines)
-    while let Some(token) = regs.parse_name() {
+    while let Some(token) = regs.input.parse_name() {
         interpret_token(regs, &token);
         if let Some(message) = regs.error.take() {
             abort(regs);
@@ -209,9 +207,9 @@ mod tests {
     fn failed_definition_is_rolled_back() {
         unsafe {
             let mut regs = boot();
-            let here = regs.here;
+            let mark = regs.dictionary.mark();
             assert_error(&mut regs, ": BROKEN 1 NOPE ;", "not recognized");
-            assert_eq!(regs.here, here);
+            assert_eq!(regs.dictionary.mark(), mark);
             assert!(!regs.compiling);
             assert_error(&mut regs, "BROKEN", "not recognized");
             outer_interpreter(&mut regs, "1 2 +").unwrap();
@@ -248,7 +246,7 @@ mod tests {
             let mut regs = boot();
             let cells = "1 , ".repeat(DICTIONARY_CELLS);
             assert_error(&mut regs, &cells, "Dictionary overflow");
-            assert_eq!(regs.here, regs.dictionary_end);
+            assert_error(&mut regs, "1 ,", "Dictionary overflow");
             assert_error(&mut regs, "CREATE X", "Dictionary overflow");
         }
     }
@@ -258,7 +256,7 @@ mod tests {
         unsafe {
             let mut regs = boot();
             outer_interpreter(&mut regs, ": NOOP ;").unwrap();
-            let cfa = find_word(&regs, "NOOP").unwrap().add(CFA);
+            let cfa = cfa_of(regs.dictionary.find_word("NOOP").unwrap());
 
             let mut thread = vec![cfa as Cell; 5_000_000];
             thread.push(0);

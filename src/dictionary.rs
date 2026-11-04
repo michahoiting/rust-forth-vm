@@ -1,10 +1,11 @@
-//! The dictionary: the word header layout, and the functions that write to and
-//! search the linked list of words. Its storage lives in [`Registers`].
+//! The dictionary: its storage, the word header layout, and the functions that
+//! write to and search the linked list of words. Nothing outside this module
+//! knows how a header is laid out, except that a word's body follows its CFA.
 
 use std::mem;
 use std::ptr;
 
-use crate::vm::{code_cell, Cell, PrimitiveFn, Registers};
+use crate::cell::Cell;
 
 // Size of the dictionary arena, in Cells.
 pub(crate) const DICTIONARY_CELLS: usize = 1024;
@@ -12,87 +13,160 @@ pub(crate) const DICTIONARY_CELLS: usize = 1024;
 // Layout of a dictionary header, relative to its LFA. Every word uses this
 // layout, whether it is a primitive or was created at runtime. The name bytes
 // are stored in the dictionary directly in front of the header.
-pub(crate) const LFA: usize = 0; // Link Field: points to the LFA of the previous word
-pub(crate) const NFA: usize = 1; // Name Field: points to the name bytes
-pub(crate) const LEN: usize = 2; // Length of the name in bytes
-pub(crate) const FLAGS: usize = 3; // Combination of the F_* flags below
-pub(crate) const CFA: usize = 4; // Code Field: the machine-code pointer
-pub(crate) const HEADER_CELLS: usize = 5;
+const LFA: usize = 0; // Link Field: points to the LFA of the previous word
+const NFA: usize = 1; // Name Field: points to the name bytes
+const LEN: usize = 2; // Length of the name in bytes
+const FLAGS: usize = 3; // Combination of the F_* flags below
+const CFA: usize = 4; // Code Field: the machine-code pointer
+const HEADER_CELLS: usize = 5;
 
 pub(crate) const F_IMMEDIATE: Cell = 1; // Executes even while compiling
 pub(crate) const F_HIDDEN: Cell = 2; // Invisible to dictionary lookups
 pub(crate) const F_CREATED: Cell = 4; // Made by CREATE, so it owns an action cell for DOES>
 
-// Presses a Cell into the dictionary at HERE.
-pub(crate) unsafe fn dictionary_comma(regs: &mut Registers, value: Cell) {
-    if regs.here >= regs.dictionary_end {
-        regs.set_error("Dictionary overflow.");
-        return;
-    }
-    *regs.here = value;
-    regs.here = regs.here.add(1);
+// Error reported when a write does not fit in the dictionary.
+pub(crate) const OVERFLOW: &str = "Dictionary overflow.";
+
+// Returns the CFA of the word with this header.
+pub(crate) unsafe fn cfa_of(header: *mut Cell) -> *mut Cell {
+    header.add(CFA)
 }
 
-// Writes a complete word into the dictionary: the name bytes, then the header.
-// Returns the LFA of the new word, or None if the dictionary is full.
-pub(crate) unsafe fn write_header(
-    regs: &mut Registers,
-    name: &str,
-    code: Cell,
-    flags: Cell,
-) -> Option<*mut Cell> {
-    let name_cells = name.len().div_ceil(mem::size_of::<Cell>());
-    let free_cells = regs.dictionary_end.offset_from(regs.here) as usize;
-    if name_cells + HEADER_CELLS > free_cells {
-        regs.set_error("Dictionary overflow.");
-        return None;
-    }
-
-    // The dictionary owns its own copy, because the input line does not outlive this call.
-    let name_ptr = regs.here as *mut u8;
-    ptr::copy_nonoverlapping(name.as_ptr(), name_ptr, name.len());
-
-    let header = regs.here.add(name_cells);
-    *header.add(LFA) = regs.last_word as Cell;
-    *header.add(NFA) = name_ptr as Cell;
-    *header.add(LEN) = name.len();
-    *header.add(FLAGS) = flags;
-    *header.add(CFA) = code;
-
-    regs.here = header.add(HEADER_CELLS);
-    regs.last_word = header; // Update the head pointer of the dictionary
-    Some(header)
+pub(crate) unsafe fn is_immediate(header: *mut Cell) -> bool {
+    *header.add(FLAGS) & F_IMMEDIATE != 0
 }
 
-// Simulates the built-in bootstrap dictionary populated when a Forth system boots.
-// Returns the CFA of the new word.
-pub(crate) unsafe fn add_primitive_word(
-    regs: &mut Registers,
-    name: &str,
-    code_fn: PrimitiveFn,
-    flags: Cell,
-) -> Cell {
-    let header = write_header(regs, name, code_cell(code_fn), flags)
-        .expect("the dictionary must be able to hold the primitives");
-    header.add(CFA) as Cell
+pub(crate) unsafe fn is_created(header: *mut Cell) -> bool {
+    *header.add(FLAGS) & F_CREATED != 0
 }
 
-// Linearly traverses the linked list of the dictionary (from newest to oldest).
-// Returns the LFA of the matching word.
-pub(crate) unsafe fn find_word(regs: &Registers, token: &str) -> Option<*mut Cell> {
-    let mut current_lfa = regs.last_word;
+unsafe fn is_hidden(header: *mut Cell) -> bool {
+    *header.add(FLAGS) & F_HIDDEN != 0
+}
 
-    while !current_lfa.is_null() {
-        let nfa_ptr = *current_lfa.add(NFA) as *const u8;
-        let len = *current_lfa.add(LEN);
-        let hidden = *current_lfa.add(FLAGS) & F_HIDDEN != 0;
+// A saved dictionary state, used to discard everything written after it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Mark {
+    here: *mut Cell,
+    last_word: *mut Cell,
+}
 
-        // Reconstruct the name from raw dictionary data pointers
-        if !hidden && std::slice::from_raw_parts(nfa_ptr, len) == token.as_bytes() {
-            return Some(current_lfa);
+pub(crate) struct Dictionary {
+    here: *mut Cell,      // Dictionary pointer to the next free Cell
+    last_word: *mut Cell, // Pointer to the LFA of the most recently created word
+    end: *mut Cell,       // One past the last usable Cell
+    _storage: Vec<Cell>,  // Owns the arena that the pointers above refer to
+}
+
+impl Dictionary {
+    // Allocates an untyped arena for our Forth dictionary space.
+    pub(crate) unsafe fn new() -> Dictionary {
+        let mut storage = vec![0 as Cell; DICTIONARY_CELLS];
+        let here = storage.as_mut_ptr();
+        Dictionary {
+            here,
+            last_word: ptr::null_mut(), // Dictionary starts out empty
+            end: here.add(storage.len()),
+            _storage: storage,
         }
-        // Follow the link pointer to the previous word (LFA)
-        current_lfa = *current_lfa.add(LFA) as *mut Cell;
     }
-    None
+
+    // Presses a Cell into the dictionary at HERE.
+    pub(crate) unsafe fn comma(&mut self, value: Cell) -> Result<(), &'static str> {
+        if self.here >= self.end {
+            return Err(OVERFLOW);
+        }
+        *self.here = value;
+        self.here = self.here.add(1);
+        Ok(())
+    }
+
+    // Writes a complete word into the dictionary: the name bytes, then the header.
+    // Returns the LFA of the new word.
+    pub(crate) unsafe fn write_header(
+        &mut self,
+        name: &str,
+        code: Cell,
+        flags: Cell,
+    ) -> Result<*mut Cell, &'static str> {
+        let name_cells = name.len().div_ceil(mem::size_of::<Cell>());
+        let free_cells = self.end.offset_from(self.here) as usize;
+        if name_cells + HEADER_CELLS > free_cells {
+            return Err(OVERFLOW);
+        }
+
+        // The dictionary owns its own copy, because the input line does not outlive this call.
+        let name_ptr = self.here as *mut u8;
+        ptr::copy_nonoverlapping(name.as_ptr(), name_ptr, name.len());
+
+        let header = self.here.add(name_cells);
+        *header.add(LFA) = self.last_word as Cell;
+        *header.add(NFA) = name_ptr as Cell;
+        *header.add(LEN) = name.len();
+        *header.add(FLAGS) = flags;
+        *header.add(CFA) = code;
+
+        self.here = header.add(HEADER_CELLS);
+        self.last_word = header; // Update the head pointer of the dictionary
+        Ok(header)
+    }
+
+    // Simulates the built-in bootstrap dictionary populated when a Forth system boots.
+    // Returns the CFA of the new word.
+    pub(crate) unsafe fn add_primitive_word(
+        &mut self,
+        name: &str,
+        code: Cell,
+        flags: Cell,
+    ) -> Cell {
+        let header = self
+            .write_header(name, code, flags)
+            .expect("the dictionary must be able to hold the primitives");
+        cfa_of(header) as Cell
+    }
+
+    // Linearly traverses the linked list of the dictionary (from newest to oldest).
+    // Returns the LFA of the matching word.
+    pub(crate) unsafe fn find_word(&self, token: &str) -> Option<*mut Cell> {
+        let mut current_lfa = self.last_word;
+
+        while !current_lfa.is_null() {
+            let nfa_ptr = *current_lfa.add(NFA) as *const u8;
+            let len = *current_lfa.add(LEN);
+
+            // Reconstruct the name from raw dictionary data pointers
+            if !is_hidden(current_lfa)
+                && std::slice::from_raw_parts(nfa_ptr, len) == token.as_bytes()
+            {
+                return Some(current_lfa);
+            }
+            // Follow the link pointer to the previous word (LFA)
+            current_lfa = *current_lfa.add(LFA) as *mut Cell;
+        }
+        None
+    }
+
+    // Returns the header of the most recently created word.
+    pub(crate) fn last_word(&self) -> *mut Cell {
+        self.last_word
+    }
+
+    // Makes the most recently created word visible to lookups.
+    pub(crate) unsafe fn reveal_last(&mut self) {
+        *self.last_word.add(FLAGS) &= !F_HIDDEN;
+    }
+
+    // Saves the current state, for a later `restore`.
+    pub(crate) fn mark(&self) -> Mark {
+        Mark {
+            here: self.here,
+            last_word: self.last_word,
+        }
+    }
+
+    // Discards everything written since `mark` was saved.
+    pub(crate) fn restore(&mut self, mark: Mark) {
+        self.here = mark.here;
+        self.last_word = mark.last_word;
+    }
 }
