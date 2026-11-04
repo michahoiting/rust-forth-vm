@@ -2,6 +2,7 @@ use std::mem;
 use std::ptr;
 
 // --- 1. THE FOUNDATION: THE FORTH CELL ---
+
 // A Cell is the universal basic unit of Forth (64-bit on a 64-bit CPU).
 // It blindly holds data, flags, offsets, or raw memory pointers.
 type Cell = usize;
@@ -84,6 +85,7 @@ fn code_cell(code: PrimitiveFn) -> Cell {
 }
 
 // --- 2. THE INNER INTERPRETER (NEXT) ---
+
 // The heart of the Forth engine. Fetches the CFA, increments IP, and jumps to the code.
 // A zero Cell in the thread marks its end, and leaves W null.
 #[inline(always)]
@@ -116,6 +118,7 @@ unsafe fn run(regs: &mut Registers) {
 }
 
 // --- 3. CORE PRIMITIVES (DOCOL, DOVAR, DODOES) ---
+
 // A word made by CREATE has two Cells behind its CFA: W + 1 is the action cell
 // reserved for DOES>, and its data field starts at W + 2.
 
@@ -305,6 +308,7 @@ unsafe fn semicolon(regs: &mut Registers) {
 }
 
 // --- 6. HELPER FUNCTION: INJECT PRIMITIVES DIRECTLY INTO THE DICTIONARY ---
+
 // Simulates the built-in bootstrap dictionary populated when a Forth system boots.
 // Returns the CFA of the new word.
 unsafe fn add_primitive_word(

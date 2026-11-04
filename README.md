@@ -1,0 +1,93 @@
+# rust-forth-vm
+
+A clean-room implementation of a Forth virtual machine in Rust. It is an
+indirect-threaded VM with a linked-list dictionary, a text interpreter, and a
+compiler for colon definitions and `CREATE ... DOES>` defining words.
+
+The program runs a scripted demo. There is no interactive prompt or file input
+yet.
+
+## Usage
+
+```sh
+cargo run    # Run the demo
+cargo test   # Run the unit tests
+```
+
+## Example
+
+The demo evaluates lines of Forth like these:
+
+```forth
+40 2 + .                          \ 42
+-5 3 + .                          \ -2
+
+CREATE STATIONARY-SOURCE 1337 ,
+STATIONARY-SOURCE @ .             \ 1337
+
+: ADD3 3 + ;
+: ADD6 ADD3 ADD3 ;
+36 ADD6 .                         \ 42
+
+: CONSTANT CREATE , DOES> @ ;
+42 CONSTANT ANSWER
+ANSWER .                          \ 42
+```
+
+The `\` comments are for this README only, because the interpreter does not
+support comments yet.
+
+## Words
+
+| Word     | Stack effect | Description                                       |
+|----------|--------------|---------------------------------------------------|
+| `+`      | `( a b -- n )` | Adds two Cells, wrapping on overflow            |
+| `.`      | `( n -- )`   | Prints a Cell as a signed number                  |
+| `@`      | `( addr -- x )` | Fetches the Cell at an address                 |
+| `,`      | `( x -- )`   | Stores a Cell at `HERE` and advances it           |
+| `CREATE` | `( -- )`     | Parses a name and creates a word that pushes its data address |
+| `DOES>`  | `( -- )`     | Inside a definition: gives the newest `CREATE`d word the code that follows |
+| `:`      | `( -- )`     | Parses a name and starts compiling a definition   |
+| `;`      | `( -- )`     | Ends the definition (immediate)                   |
+| `EXIT`   | `( -- )`     | Returns from the current definition               |
+
+Word names are case-sensitive. Numbers are decimal, and may be negative.
+
+## How it works
+
+Every dictionary entry has the same header. The name bytes are stored in the
+dictionary directly in front of it.
+
+```
+LFA     Link to the previous word
+NFA     Pointer to the name bytes
+LEN     Length of the name in bytes
+FLAGS   F_IMMEDIATE, F_HIDDEN, F_CREATED
+CFA     Pointer to the machine code
+...     Body
+```
+
+The body depends on how the word was defined:
+
+- **Primitives** have no body.
+- **Colon words** hold a thread of CFAs, ending in `EXIT`. Literals are compiled
+  as `LIT` followed by the value.
+- **`CREATE`d words** hold an action cell for `DOES>` at `CFA + 1`, and their
+  data starts at `CFA + 2`.
+
+Primitives return to the `run` loop instead of calling `next` themselves, so
+threaded code does not grow the Rust call stack. A zero Cell ends a thread.
+
+A word being defined stays hidden until `;`, so a redefinition can call the
+previous word of the same name. This also means a word cannot call itself.
+
+If an error occurs, the interpreter discards the rest of the line, clears both
+stacks, and rolls back any unfinished colon definition.
+
+## Limitations
+
+- There are no stack or memory-store words such as `DUP`, `DROP`, `SWAP` or `!`.
+- There is no control flow, such as `IF` or `BEGIN`, and so no loops.
+- There is no `IMMEDIATE`, `[` or `]`.
+- The dictionary has a fixed size of 1024 Cells.
+- `@` does not validate addresses, so `5 @` crashes the process.
