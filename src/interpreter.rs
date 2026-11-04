@@ -1,8 +1,6 @@
-use std::ptr;
-
 use crate::cell::Cell;
 use crate::dictionary::{cfa_of, is_immediate};
-use crate::vm::{run, Registers};
+use crate::vm::{execute, Registers};
 
 // --- THE TEXT INTERPRETER / OUTER INTERPRETER ---
 
@@ -10,19 +8,6 @@ use crate::vm::{run, Registers};
 fn parse_number(token: &str) -> Option<Cell> {
     let signed = token.parse::<isize>().map(|number| number as Cell);
     signed.or_else(|_| token.parse::<Cell>()).ok()
-}
-
-// Executes a single word from the text interpreter.
-unsafe fn execute(regs: &mut Registers, cfa: *mut Cell) {
-    // To safely execute this single binary CFA via NEXT, we construct a mini 'trampoline' thread in RAM:
-    // [ Target CFA Address ] [ Stop / End Marker (0) ]
-    let trampoline: [Cell; 2] = [cfa as Cell, 0];
-    regs.ip = trampoline.as_ptr();
-
-    // Kickstart the Inner Interpreter engine
-    run(regs);
-
-    regs.ip = ptr::null(); // The trampoline is about to go out of scope
 }
 
 // Handles a single token, either interpreting or compiling it.
@@ -100,6 +85,7 @@ mod tests {
     use super::*;
     use crate::dictionary::DICTIONARY_CELLS;
     use crate::primitives::boot;
+    use crate::vm::run;
 
     // Evaluates the lines in order, and returns the resulting data stack.
     unsafe fn eval_stack(lines: &[&str]) -> Vec<Cell> {

@@ -1,4 +1,5 @@
 use std::mem;
+use std::ptr;
 
 use crate::cell::Cell;
 use crate::dictionary::{Dictionary, Mark};
@@ -105,4 +106,17 @@ pub(crate) unsafe fn run(regs: &mut Registers) {
             return;
         }
     }
+}
+
+// Executes a single word from the text interpreter.
+pub(crate) unsafe fn execute(regs: &mut Registers, cfa: *mut Cell) {
+    // To safely execute this single binary CFA via NEXT, we construct a mini 'trampoline' thread in RAM:
+    // [ Target CFA Address ] [ Stop / End Marker (0) ]
+    let trampoline: [Cell; 2] = [cfa as Cell, 0];
+    regs.ip = trampoline.as_ptr();
+
+    // Kickstart the Inner Interpreter engine
+    run(regs);
+
+    regs.ip = ptr::null(); // The trampoline is about to go out of scope
 }
