@@ -1,0 +1,9 @@
+[package]
+name = "rust-forth-vm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "forth-vm"
+path = "forth-vm.rs"
