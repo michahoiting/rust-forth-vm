@@ -55,7 +55,8 @@ unsafe fn lit(regs: &mut Registers) {
 // COMMA ( , ): Pops a Cell from the stack and presses it into the dictionary at HERE.
 unsafe fn comma(regs: &mut Registers) {
     if let Some(value) = regs.pop() {
-        regs.comma(value);
+        let result = regs.dictionary.comma(value);
+        regs.check(result);
     }
 }
 
@@ -93,11 +94,12 @@ unsafe fn create(regs: &mut Registers) {
         regs.set_error("CREATE needs a name.");
         return;
     };
-    if regs
-        .write_header(&name, code_cell(dovar), F_CREATED)
-        .is_some()
-    {
-        regs.comma(0); // Reserve the action cell for DOES>
+    let result = regs
+        .dictionary
+        .write_header(&name, code_cell(dovar), F_CREATED);
+    if regs.check(result).is_some() {
+        let result = regs.dictionary.comma(0); // Reserve the action cell for DOES>
+        regs.check(result);
     }
 }
 
@@ -127,34 +129,21 @@ unsafe fn runtime_does(regs: &mut Registers) {
 }
 
 // COLON ( : ): Parses a name and switches the text interpreter to compiling.
-// The word stays hidden until `;`, so a redefinition can still call the old word.
 unsafe fn colon(regs: &mut Registers) {
     let Some(name) = regs.input.parse_name() else {
         regs.set_error(": needs a name.");
         return;
     };
-    let restore_point = regs.dictionary.mark();
-    if regs
-        .write_header(&name, code_cell(docol), F_HIDDEN)
-        .is_some()
-    {
-        regs.compiler.definition = Some(restore_point);
-        regs.compiler.compiling = true;
-    }
+    let result = regs
+        .compiler
+        .begin_definition(&mut regs.dictionary, &name, code_cell(docol));
+    regs.check(result);
 }
 
 // SEMICOLON ( ; ): Ends the current definition. This word is immediate.
 unsafe fn semicolon(regs: &mut Registers) {
-    if !regs.compiler.compiling {
-        regs.set_error("; can only be used while compiling.");
-        return;
-    }
-    regs.comma(regs.compiler.exit_cfa);
-    if regs.error.is_none() {
-        regs.dictionary.reveal_last();
-        regs.compiler.definition = None;
-        regs.compiler.compiling = false;
-    }
+    let result = regs.compiler.end_definition(&mut regs.dictionary);
+    regs.check(result);
 }
 
 // Registers the core primitives under their official text names.

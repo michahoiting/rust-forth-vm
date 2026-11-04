@@ -15,16 +15,19 @@ unsafe fn interpret_token(regs: &mut Registers, token: &str) {
     if let Some(header) = regs.dictionary.find_word(token) {
         // --- CASE A: THE TOKEN IS A DICTIONARY WORD ---
         let cfa = cfa_of(header);
-        if regs.compiler.compiling && !is_immediate(header) {
-            regs.comma(cfa as Cell);
+        if regs.compiler.is_compiling() && !is_immediate(header) {
+            let result = regs
+                .compiler
+                .compile_word(&mut regs.dictionary, cfa as Cell);
+            regs.check(result);
         } else {
             execute(regs, cfa);
         }
     } else if let Some(number) = parse_number(token) {
         // --- CASE B: THE TOKEN IS A NUMBER (LITERAL) ---
-        if regs.compiler.compiling {
-            regs.comma(regs.compiler.lit_cfa);
-            regs.comma(number);
+        if regs.compiler.is_compiling() {
+            let result = regs.compiler.compile_literal(&mut regs.dictionary, number);
+            regs.check(result);
         } else {
             regs.data_stack.push(number); // Push directly onto the parameter stack
         }
@@ -41,10 +44,7 @@ unsafe fn interpret_token(regs: &mut Registers, token: &str) {
 unsafe fn abort(regs: &mut Registers) {
     regs.data_stack.clear();
     regs.return_stack.clear();
-    regs.compiler.compiling = false;
-    if let Some(mark) = regs.compiler.definition.take() {
-        regs.dictionary.restore(mark);
-    }
+    regs.compiler.abort(&mut regs.dictionary);
 }
 
 /// Evaluates a line of Forth, stopping at the first error.
@@ -196,7 +196,7 @@ mod tests {
             let mark = regs.dictionary.mark();
             assert_error(&mut regs, ": BROKEN 1 NOPE ;", "not recognized");
             assert_eq!(regs.dictionary.mark(), mark);
-            assert!(!regs.compiler.compiling);
+            assert!(!regs.compiler.is_compiling());
             assert_error(&mut regs, "BROKEN", "not recognized");
             outer_interpreter(&mut regs, "1 2 +").unwrap();
             assert_eq!(regs.data_stack, vec![3]);

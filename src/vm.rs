@@ -57,22 +57,10 @@ impl Registers {
         value
     }
 
-    // Presses a Cell into the dictionary, flagging an error when it is full.
-    pub(crate) unsafe fn comma(&mut self, value: Cell) {
-        if let Err(message) = self.dictionary.comma(value) {
-            self.set_error(message);
-        }
-    }
-
-    // Writes a word header, flagging an error when the dictionary is full.
-    pub(crate) unsafe fn write_header(
-        &mut self,
-        name: &str,
-        code: Cell,
-        flags: Cell,
-    ) -> Option<*mut Cell> {
-        match self.dictionary.write_header(name, code, flags) {
-            Ok(header) => Some(header),
+    // Turns a failed Result into a VM error.
+    pub(crate) fn check<T>(&mut self, result: Result<T, &'static str>) -> Option<T> {
+        match result {
+            Ok(value) => Some(value),
             Err(message) => {
                 self.set_error(message);
                 None
