@@ -296,12 +296,17 @@ fn fetch_rejects_addresses_outside_the_dictionary() {
 fn fetch_rejects_misaligned_addresses() {
     unsafe {
         let mut regs = boot(io::sink());
-        assert_error!(
-            &mut regs,
-            "CREATE X 7 , X 1 + @",
-            ForthError::InvalidAddress(_)
-        );
+        for offset in 1..mem::size_of::<Cell>() {
+            let line = format!("CREATE X 7 , X {} + @", offset);
+            assert_error!(&mut regs, &line, ForthError::InvalidAddress(_));
+        }
     }
+}
+
+#[test]
+fn fetch_reads_aligned_cells_behind_the_first() {
+    let line = format!("CREATE X 1 , 2 , X {} + @ .", mem::size_of::<Cell>());
+    assert_eq!(output_of(&[&line]), "2 ");
 }
 
 #[test]
@@ -309,6 +314,19 @@ fn fetch_rejects_here() {
     unsafe {
         let mut regs = boot(io::sink());
         assert_error!(&mut regs, "CREATE X X @", ForthError::InvalidAddress(_));
+    }
+}
+
+#[test]
+fn failed_definition_invalidates_its_addresses() {
+    unsafe {
+        let mut regs = boot(io::sink());
+        outer_interpreter(&mut regs, "CREATE X 7 ,").unwrap();
+        assert_error!(&mut regs, ": BROKEN NOPE ;", ForthError::UnknownWord(_));
+
+        // The definition wrote behind the data of X, and is gone again.
+        let line = format!("X {} + @", mem::size_of::<Cell>());
+        assert_error!(&mut regs, &line, ForthError::InvalidAddress(_));
     }
 }
 

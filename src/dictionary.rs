@@ -184,3 +184,73 @@ impl Dictionary {
         self.last_word = mark.last_word;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CELL_SIZE: usize = mem::size_of::<Cell>();
+
+    // Creates a dictionary holding these Cells, starting at its first Cell.
+    unsafe fn dictionary_with(values: &[Cell]) -> Dictionary {
+        let mut dictionary = Dictionary::new();
+        for value in values {
+            dictionary.comma(*value).unwrap();
+        }
+        dictionary
+    }
+
+    fn assert_invalid(dictionary: &Dictionary, addr: Cell) {
+        let result = dictionary.fetch(addr);
+        assert!(
+            matches!(result, Err(ForthError::InvalidAddress(a)) if a == addr),
+            "got: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn fetch_reads_the_first_cell() {
+        unsafe {
+            let dictionary = dictionary_with(&[7]);
+            assert_eq!(dictionary.fetch(dictionary.start as Cell).unwrap(), 7);
+        }
+    }
+
+    #[test]
+    fn fetch_rejects_addresses_just_below_the_start() {
+        unsafe {
+            let dictionary = dictionary_with(&[7]);
+            let start = dictionary.start as Cell;
+            assert_invalid(&dictionary, start - 1);
+            assert_invalid(&dictionary, start - CELL_SIZE);
+        }
+    }
+
+    #[test]
+    fn fetch_rejects_misaligned_addresses_inside_the_written_cells() {
+        unsafe {
+            // Every address here is below HERE, so only the alignment check can reject it.
+            let dictionary = dictionary_with(&[1, 2]);
+            let start = dictionary.start as Cell;
+            for offset in 1..CELL_SIZE {
+                assert_invalid(&dictionary, start + offset);
+                assert_invalid(&dictionary, start + CELL_SIZE + offset);
+            }
+        }
+    }
+
+    #[test]
+    fn fetch_rejects_addresses_after_a_restore() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[1]);
+            let mark = dictionary.mark();
+            let addr = dictionary.here as Cell;
+            dictionary.comma(2).unwrap();
+            assert_eq!(dictionary.fetch(addr).unwrap(), 2);
+
+            dictionary.restore(mark);
+            assert_invalid(&dictionary, addr);
+        }
+    }
+}
