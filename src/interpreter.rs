@@ -53,8 +53,6 @@ unsafe fn abort(regs: &mut Registers) {
 ///
 /// `regs` must come from [`boot`](crate::boot). The VM runs threaded code through
 /// raw pointers into its dictionary, which only this crate's functions keep valid.
-/// The input must not use `!` to overwrite a word's header or compiled code, because
-/// the VM trusts those cells.
 pub unsafe fn outer_interpreter(regs: &mut Registers, input: &str) -> Result<(), ForthError> {
     regs.input.load(input);
 
