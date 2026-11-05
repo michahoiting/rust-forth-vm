@@ -25,8 +25,8 @@ pub enum ForthError {
     NotCompiling,
     /// A token, held here, is neither a known word nor a number.
     UnknownWord(String),
-    /// `@` was given an address, held here, that it may not read: one outside the
-    /// written part of the dictionary, or one that is not cell-aligned.
+    /// `@` or `!` was given an address, held here, that it may not access: one outside
+    /// the written part of the dictionary, or one that is not cell-aligned.
     InvalidAddress(Cell),
     /// The output writer failed.
     Output(io::Error),

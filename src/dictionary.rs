@@ -81,18 +81,31 @@ impl Dictionary {
         Ok(())
     }
 
-    // Reads the Cell at `addr`, which must be a cell-aligned address below HERE.
-    pub(crate) fn fetch(&self, addr: Cell) -> Result<Cell, ForthError> {
+    // Returns the index of the Cell at `addr`, which must be a cell-aligned address below
+    // HERE. This keeps the Cell inside the part of the arena that has been written.
+    fn cell_index(&self, addr: Cell) -> Result<usize, ForthError> {
         let start = self.start as Cell;
         let here = self.here as Cell;
         let cell_size = mem::size_of::<Cell>();
         if addr < start || addr >= here || !(addr - start).is_multiple_of(cell_size) {
             return Err(ForthError::InvalidAddress(addr));
         }
+        Ok((addr - start) / cell_size)
+    }
 
-        // The checks above place this Cell in the part of the arena that has been written.
-        // The number from the stack is only used as an offset, never as a pointer.
-        Ok(unsafe { *self.start.add((addr - start) / cell_size) })
+    // Reads the Cell at `addr`. The number from the stack is only used as an offset,
+    // never as a pointer.
+    pub(crate) fn fetch(&self, addr: Cell) -> Result<Cell, ForthError> {
+        let index = self.cell_index(addr)?;
+        Ok(unsafe { *self.start.add(index) })
+    }
+
+    // Writes the Cell at `addr`, checked in the same way as `fetch`. This can change word
+    // headers and compiled code, which the VM trusts.
+    pub(crate) fn store(&mut self, addr: Cell, value: Cell) -> Result<(), ForthError> {
+        let index = self.cell_index(addr)?;
+        unsafe { *self.start.add(index) = value };
+        Ok(())
     }
 
     // Writes a complete word into the dictionary: the name bytes, then the header.
@@ -187,7 +200,10 @@ impl Dictionary {
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+
     use super::*;
+    use crate::{boot, outer_interpreter};
 
     const CELL_SIZE: usize = mem::size_of::<Cell>();
 
@@ -202,6 +218,15 @@ mod tests {
 
     fn assert_invalid(dictionary: &Dictionary, addr: Cell) {
         let result = dictionary.fetch(addr);
+        assert!(
+            matches!(result, Err(ForthError::InvalidAddress(a)) if a == addr),
+            "got: {:?}",
+            result
+        );
+    }
+
+    fn assert_store_invalid(dictionary: &mut Dictionary, addr: Cell) {
+        let result = dictionary.store(addr, 9);
         assert!(
             matches!(result, Err(ForthError::InvalidAddress(a)) if a == addr),
             "got: {:?}",
@@ -251,6 +276,108 @@ mod tests {
 
             dictionary.restore(mark);
             assert_invalid(&dictionary, addr);
+        }
+    }
+
+    #[test]
+    fn store_writes_the_first_cell() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[1, 2]);
+            let start = dictionary.start as Cell;
+            dictionary.store(start, 9).unwrap();
+            assert_eq!(dictionary.fetch(start).unwrap(), 9);
+        }
+    }
+
+    #[test]
+    fn store_writes_the_last_written_cell() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[1, 2]);
+            let last = dictionary.start as Cell + CELL_SIZE;
+            dictionary.store(last, 9).unwrap();
+            assert_eq!(dictionary.fetch(last).unwrap(), 9);
+        }
+    }
+
+    #[test]
+    fn store_changes_only_the_target_cell() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[1, 2, 3]);
+            let start = dictionary.start as Cell;
+            dictionary.store(start + CELL_SIZE, 9).unwrap();
+            assert_eq!(dictionary.fetch(start).unwrap(), 1);
+            assert_eq!(dictionary.fetch(start + CELL_SIZE).unwrap(), 9);
+            assert_eq!(dictionary.fetch(start + 2 * CELL_SIZE).unwrap(), 3);
+        }
+    }
+
+    #[test]
+    fn store_rejects_addresses_just_below_the_start() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[7]);
+            let start = dictionary.start as Cell;
+            assert_store_invalid(&mut dictionary, start - 1);
+            assert_store_invalid(&mut dictionary, start - CELL_SIZE);
+        }
+    }
+
+    #[test]
+    fn store_rejects_here() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[7]);
+            let here = dictionary.here as Cell;
+            assert_store_invalid(&mut dictionary, here);
+        }
+    }
+
+    #[test]
+    fn store_rejects_misaligned_addresses_inside_the_written_cells() {
+        unsafe {
+            // Every address here is below HERE, so only the alignment check can reject it.
+            let mut dictionary = dictionary_with(&[1, 2]);
+            let start = dictionary.start as Cell;
+            for offset in 1..CELL_SIZE {
+                assert_store_invalid(&mut dictionary, start + offset);
+                assert_store_invalid(&mut dictionary, start + CELL_SIZE + offset);
+            }
+            assert_eq!(dictionary.fetch(start).unwrap(), 1);
+            assert_eq!(dictionary.fetch(start + CELL_SIZE).unwrap(), 2);
+        }
+    }
+
+    #[test]
+    fn store_rejects_addresses_after_a_restore() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[1]);
+            let mark = dictionary.mark();
+            let addr = dictionary.here as Cell;
+            dictionary.comma(2).unwrap();
+            dictionary.store(addr, 9).unwrap();
+
+            dictionary.restore(mark);
+            assert_store_invalid(&mut dictionary, addr);
+        }
+    }
+
+    // `!` is deliberately not limited to data fields for now. This pins that down, using
+    // the hidden flag because it has a visible effect without corrupting the VM. If `!`
+    // gets restricted later, this test should change with it.
+    #[test]
+    fn store_can_change_a_word_header() {
+        unsafe {
+            let mut regs = boot(io::sink());
+            outer_interpreter(&mut regs, "CREATE X 7 ,").unwrap();
+            let header = regs.dictionary.find_word("X").unwrap();
+
+            let addr = header.add(FLAGS) as Cell;
+            let flags = F_CREATED | F_HIDDEN;
+            outer_interpreter(&mut regs, &format!("{} {} !", flags, addr)).unwrap();
+
+            outer_interpreter(&mut regs, &format!("{} @", addr)).unwrap();
+            assert_eq!(regs.data_stack, vec![flags]);
+
+            let error = outer_interpreter(&mut regs, "X").unwrap_err();
+            assert!(matches!(error, ForthError::UnknownWord(name) if name == "X"));
         }
     }
 }
