@@ -5,11 +5,13 @@ use std::io::Write;
 mod cell;
 mod compiler;
 mod dictionary;
+mod error;
 mod input;
 mod interpreter;
 mod primitives;
 mod vm;
 
+pub use error::ForthError;
 pub use interpreter::outer_interpreter;
 pub use vm::Registers;
 

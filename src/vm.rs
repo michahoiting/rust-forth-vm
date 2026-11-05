@@ -5,10 +5,8 @@ use std::ptr;
 use crate::cell::Cell;
 use crate::compiler::Compiler;
 use crate::dictionary::Dictionary;
+use crate::error::ForthError;
 use crate::input::InputSource;
-
-// Error reported when the output writer fails.
-pub(crate) const OUTPUT_ERROR: &str = "Output error.";
 
 // Definition of a Forth primitive (machine-code function).
 // Primitives return to the `run` loop instead of calling NEXT themselves, so
@@ -25,10 +23,10 @@ pub struct Registers {
     pub(crate) return_stack: Vec<*const Cell>, // Return stack (R-stack) for nested IP pointers
     pub(crate) dictionary: Dictionary, // Word storage, HERE and the head of the word list
 
-    pub(crate) compiler: Compiler,     // Compilation state
-    pub(crate) output: Box<dyn Write>, // Where Forth words write their output
-    pub(crate) input: InputSource,     // The text being interpreted
-    pub(crate) error: Option<String>,  // Set by a primitive to stop the VM
+    pub(crate) compiler: Compiler,        // Compilation state
+    pub(crate) output: Box<dyn Write>,    // Where Forth words write their output
+    pub(crate) input: InputSource,        // The text being interpreted
+    pub(crate) error: Option<ForthError>, // Set by a primitive to stop the VM
 }
 
 impl Registers {
@@ -48,9 +46,9 @@ impl Registers {
     }
 
     // Records an error. The inner interpreter stops, and the outer interpreter aborts.
-    pub(crate) fn set_error(&mut self, message: impl Into<String>) {
+    pub(crate) fn set_error(&mut self, error: ForthError) {
         if self.error.is_none() {
-            self.error = Some(message.into());
+            self.error = Some(error);
         }
     }
 
@@ -58,17 +56,17 @@ impl Registers {
     pub(crate) fn pop(&mut self) -> Option<Cell> {
         let value = self.data_stack.pop();
         if value.is_none() {
-            self.set_error("Data stack underflow.");
+            self.set_error(ForthError::DataStackUnderflow);
         }
         value
     }
 
     // Turns a failed Result into a VM error.
-    pub(crate) fn check<T>(&mut self, result: Result<T, &'static str>) -> Option<T> {
+    pub(crate) fn check<T>(&mut self, result: Result<T, ForthError>) -> Option<T> {
         match result {
             Ok(value) => Some(value),
-            Err(message) => {
-                self.set_error(message);
+            Err(error) => {
+                self.set_error(error);
                 None
             }
         }

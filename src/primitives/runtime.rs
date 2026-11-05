@@ -2,6 +2,7 @@
 //! or compiled into threads.
 
 use crate::cell::Cell;
+use crate::error::ForthError;
 use crate::vm::Registers;
 
 // A word made by CREATE has two Cells behind its CFA: W + 1 is the action cell
@@ -39,7 +40,7 @@ pub(super) unsafe fn dodoes(regs: &mut Registers) {
 pub(super) unsafe fn exit(regs: &mut Registers) {
     match regs.return_stack.pop() {
         Some(old_ip) => regs.ip = old_ip,
-        None => regs.set_error("Return stack underflow."),
+        None => regs.set_error(ForthError::ReturnStackUnderflow),
     }
 }
 

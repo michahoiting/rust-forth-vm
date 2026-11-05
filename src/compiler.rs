@@ -3,6 +3,7 @@
 
 use crate::cell::Cell;
 use crate::dictionary::{Dictionary, Mark, F_HIDDEN};
+use crate::error::ForthError;
 
 #[derive(Default)]
 pub(crate) struct Compiler {
@@ -30,7 +31,7 @@ impl Compiler {
         dictionary: &mut Dictionary,
         name: &str,
         code: Cell,
-    ) -> Result<(), &'static str> {
+    ) -> Result<(), ForthError> {
         let restore_point = dictionary.mark();
         dictionary.write_header(name, code, F_HIDDEN)?;
         self.definition = Some(restore_point);
@@ -42,9 +43,9 @@ impl Compiler {
     pub(crate) unsafe fn end_definition(
         &mut self,
         dictionary: &mut Dictionary,
-    ) -> Result<(), &'static str> {
+    ) -> Result<(), ForthError> {
         if !self.compiling {
-            return Err("; can only be used while compiling.");
+            return Err(ForthError::NotCompiling);
         }
         dictionary.comma(self.exit_cfa)?;
         dictionary.reveal_last();
@@ -58,7 +59,7 @@ impl Compiler {
         &self,
         dictionary: &mut Dictionary,
         cfa: Cell,
-    ) -> Result<(), &'static str> {
+    ) -> Result<(), ForthError> {
         dictionary.comma(cfa)
     }
 
@@ -67,7 +68,7 @@ impl Compiler {
         &self,
         dictionary: &mut Dictionary,
         number: Cell,
-    ) -> Result<(), &'static str> {
+    ) -> Result<(), ForthError> {
         dictionary.comma(self.lit_cfa)?;
         dictionary.comma(number)
     }

@@ -8,7 +8,7 @@ unsafe fn evaluate(regs: &mut Registers, input: &str) {
     print!("Input: '{}' ", input);
     match outer_interpreter(regs, input) {
         Ok(()) => println!("ok"),
-        Err(message) => println!("Forth Error: {}", message),
+        Err(error) => println!("Forth Error: {}", error),
     }
 }
 
