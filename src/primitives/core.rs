@@ -27,7 +27,7 @@ pub(super) unsafe fn plus(regs: &mut Registers) {
 // PRINT ( . ): Pops a Cell from the stack and writes it to the output as a signed number.
 pub(super) unsafe fn dot_print(regs: &mut Registers) {
     if let Some(value) = regs.pop() {
-        let result = writeln!(regs.output, "Forth Output: {}", value as isize);
+        let result = write!(regs.output, "{} ", value as isize);
         regs.check(result.map_err(|_| OUTPUT_ERROR));
     }
 }

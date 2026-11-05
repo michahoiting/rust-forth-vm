@@ -296,7 +296,7 @@ mod tests {
             let output = Capture::default();
             let mut regs = boot(output.clone());
             outer_interpreter(&mut regs, "-5 3 + .").unwrap();
-            assert_eq!(output.text(), "Forth Output: -2\n");
+            assert_eq!(output.text(), "-2 ");
         }
     }
 
@@ -306,7 +306,7 @@ mod tests {
             let output = Capture::default();
             let mut regs = boot(output.clone());
             outer_interpreter(&mut regs, "1 . 2 .").unwrap();
-            assert_eq!(output.text(), "Forth Output: 1\nForth Output: 2\n");
+            assert_eq!(output.text(), "1 2 ");
         }
     }
 
@@ -316,7 +316,7 @@ mod tests {
             let output = Capture::default();
             let mut regs = boot(BufWriter::new(output.clone()));
             assert_error(&mut regs, "1 . +", "underflow");
-            assert_eq!(output.text(), "Forth Output: 1\n");
+            assert_eq!(output.text(), "1 ");
         }
     }
 
@@ -354,7 +354,7 @@ mod tests {
             let output = Capture::default();
             let mut regs = boot(BufWriter::new(output.clone()));
             outer_interpreter(&mut regs, "7 .").unwrap();
-            assert_eq!(output.text(), "Forth Output: 7\n");
+            assert_eq!(output.text(), "7 ");
         }
     }
 }
