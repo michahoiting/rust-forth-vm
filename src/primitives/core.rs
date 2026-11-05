@@ -2,15 +2,16 @@
 
 use std::io::Write;
 
-use crate::cell::Cell;
 use crate::error::ForthError;
 use crate::vm::Registers;
 
-// FETCH ( @ ): Pops an address from the stack and replaces it with the contents of that Cell.
+// FETCH ( @ ): Pops a dictionary address from the stack and replaces it with the contents of that Cell.
 pub(super) unsafe fn fetch(regs: &mut Registers) {
     if let Some(addr) = regs.pop() {
-        let ptr = addr as *const Cell;
-        regs.data_stack.push(*ptr);
+        let result = regs.dictionary.fetch(addr);
+        if let Some(value) = regs.check(result) {
+            regs.data_stack.push(value);
+        }
     }
 }
 

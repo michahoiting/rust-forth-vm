@@ -4,9 +4,10 @@
 use std::cell::RefCell;
 use std::error::Error;
 use std::io::{self, BufWriter, Write};
+use std::mem;
 use std::rc::Rc;
 
-use rust_forth_vm::{boot, outer_interpreter, ForthError};
+use rust_forth_vm::{boot, outer_interpreter, Cell, ForthError};
 
 // A writer whose contents stay readable after it is moved into the VM.
 #[derive(Clone, Default)]
@@ -67,7 +68,7 @@ fn arithmetic_and_literals() {
     assert_eq!(output_of(&["40 2 + ."]), "42 ");
     assert_eq!(output_of(&["-5 3 + ."]), "-2 ");
     // The full unsigned range is accepted, and `.` prints signed.
-    assert_eq!(output_of(&["18446744073709551615 ."]), "-1 ");
+    assert_eq!(output_of(&[&format!("{} .", Cell::MAX)]), "-1 ");
 }
 
 #[test]
@@ -273,9 +274,81 @@ fn errors_have_stable_messages() {
             ForthError::UnknownWord("NOPE".to_string()),
             "Word or numeric literal 'NOPE' not recognized.",
         ),
+        (ForthError::InvalidAddress(0x2a), "Invalid address 0x2a."),
         (ForthError::Output(io::Error::other("x")), "Output error."),
     ];
     for (error, message) in cases {
         assert_eq!(error.to_string(), message);
+    }
+}
+
+#[test]
+fn fetch_rejects_addresses_outside_the_dictionary() {
+    unsafe {
+        let mut regs = boot(io::sink());
+        assert_error!(&mut regs, "0 @", ForthError::InvalidAddress(0));
+        assert_error!(&mut regs, "5 @", ForthError::InvalidAddress(5));
+        assert_error!(&mut regs, "-1 @", ForthError::InvalidAddress(Cell::MAX));
+    }
+}
+
+#[test]
+fn fetch_rejects_misaligned_addresses() {
+    unsafe {
+        let mut regs = boot(io::sink());
+        for offset in 1..mem::size_of::<Cell>() {
+            let line = format!("CREATE X 7 , X {} + @", offset);
+            assert_error!(&mut regs, &line, ForthError::InvalidAddress(_));
+        }
+    }
+}
+
+#[test]
+fn fetch_reads_aligned_cells_behind_the_first() {
+    let line = format!("CREATE X 1 , 2 , X {} + @ .", mem::size_of::<Cell>());
+    assert_eq!(output_of(&[&line]), "2 ");
+}
+
+#[test]
+fn fetch_rejects_here() {
+    unsafe {
+        let mut regs = boot(io::sink());
+        assert_error!(&mut regs, "CREATE X X @", ForthError::InvalidAddress(_));
+    }
+}
+
+#[test]
+fn failed_definition_invalidates_its_addresses() {
+    unsafe {
+        let mut regs = boot(io::sink());
+        outer_interpreter(&mut regs, "CREATE X 7 ,").unwrap();
+        assert_error!(&mut regs, ": BROKEN NOPE ;", ForthError::UnknownWord(_));
+
+        // The definition wrote behind the data of X, and is gone again.
+        let line = format!("X {} + @", mem::size_of::<Cell>());
+        assert_error!(&mut regs, &line, ForthError::InvalidAddress(_));
+    }
+}
+
+#[test]
+fn fetch_reads_the_last_written_cell() {
+    assert_eq!(output_of(&["CREATE X 7 , X @ ."]), "7 ");
+}
+
+#[test]
+fn fetch_reads_headers() {
+    // The Cell in front of the data field is the action cell, which starts at zero.
+    let line = format!("CREATE X 7 , X -{} + @ .", mem::size_of::<Cell>());
+    assert_eq!(output_of(&[&line]), "0 ");
+}
+
+#[test]
+fn invalid_address_leaves_a_usable_vm() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = boot(output.clone());
+        assert_error!(&mut regs, "5 @", ForthError::InvalidAddress(5));
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
     }
 }

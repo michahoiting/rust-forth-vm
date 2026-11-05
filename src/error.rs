@@ -4,6 +4,8 @@ use std::error::Error;
 use std::fmt;
 use std::io;
 
+use crate::cell::Cell;
+
 /// An error that stopped the evaluation of a line.
 #[derive(Debug)]
 pub enum ForthError {
@@ -23,6 +25,9 @@ pub enum ForthError {
     NotCompiling,
     /// A token, held here, is neither a known word nor a number.
     UnknownWord(String),
+    /// `@` was given an address, held here, that it may not read: one outside the
+    /// written part of the dictionary, or one that is not cell-aligned.
+    InvalidAddress(Cell),
     /// The output writer failed.
     Output(io::Error),
 }
@@ -42,6 +47,7 @@ impl fmt::Display for ForthError {
             ForthError::UnknownWord(token) => {
                 write!(f, "Word or numeric literal '{}' not recognized.", token)
             }
+            ForthError::InvalidAddress(addr) => write!(f, "Invalid address {:#x}.", addr),
             ForthError::Output(_) => write!(f, "Output error."),
         }
     }

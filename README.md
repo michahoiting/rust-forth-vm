@@ -43,7 +43,7 @@ support comments yet.
 |----------|--------------|---------------------------------------------------|
 | `+`      | `( a b -- n )` | Adds two Cells, wrapping on overflow            |
 | `.`      | `( n -- )`   | Prints a Cell as a signed number                  |
-| `@`      | `( addr -- x )` | Fetches the Cell at an address                 |
+| `@`      | `( addr -- x )` | Fetches the Cell at a dictionary address below `HERE` |
 | `,`      | `( x -- )`   | Stores a Cell at `HERE` and advances it           |
 | `CREATE` | `( -- )`     | Parses a name and creates a word that pushes its data address |
 | `DOES>`  | `( -- )`     | Inside a definition: gives the newest `CREATE`d word the code that follows |
@@ -90,4 +90,3 @@ stacks, and rolls back any unfinished colon definition.
 - There is no control flow, such as `IF` or `BEGIN`, and so no loops.
 - There is no `IMMEDIATE`, `[` or `]`.
 - The dictionary has a fixed size of 1024 Cells.
-- `@` does not validate addresses, so `5 @` crashes the process.
