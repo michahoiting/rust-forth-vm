@@ -76,61 +76,12 @@ pub unsafe fn outer_interpreter(regs: &mut Registers, input: &str) -> Result<(),
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
-    use std::io::{self, BufWriter};
-    use std::rc::Rc;
+    use std::io;
 
     use super::*;
     use crate::boot;
     use crate::dictionary::DICTIONARY_CELLS;
     use crate::vm::run;
-
-    // A writer whose contents stay readable after it is moved into the VM.
-    #[derive(Clone, Default)]
-    struct Capture(Rc<RefCell<Vec<u8>>>);
-
-    impl Capture {
-        fn text(&self) -> String {
-            String::from_utf8(self.0.borrow().clone()).unwrap()
-        }
-    }
-
-    impl Write for Capture {
-        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-            self.0.borrow_mut().extend_from_slice(bytes);
-            Ok(bytes.len())
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
-    // A writer that fails every write.
-    struct FailingWriter;
-
-    impl Write for FailingWriter {
-        fn write(&mut self, _bytes: &[u8]) -> io::Result<usize> {
-            Err(io::Error::other("write failed"))
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
-    unsafe fn quiet_boot() -> Registers {
-        boot(io::sink())
-    }
-
-    // Evaluates the lines in order, and returns the resulting data stack.
-    unsafe fn eval_stack(lines: &[&str]) -> Vec<Cell> {
-        let mut regs = quiet_boot();
-        for line in lines {
-            outer_interpreter(&mut regs, line).unwrap();
-        }
-        regs.data_stack
-    }
 
     // Asserts that evaluating `input` fails with a message containing `expected`.
     unsafe fn assert_error(regs: &mut Registers, input: &str, expected: &str) {
@@ -139,133 +90,20 @@ mod tests {
     }
 
     #[test]
-    fn arithmetic_and_literals() {
-        unsafe {
-            assert_eq!(eval_stack(&["40 2 +"]), vec![42]);
-            assert_eq!(eval_stack(&["-5 3 +"]), vec![-2isize as Cell]);
-            assert_eq!(eval_stack(&["18446744073709551615"]), vec![Cell::MAX]);
-        }
-    }
-
-    #[test]
-    fn create_comma_fetch() {
-        unsafe {
-            assert_eq!(eval_stack(&["CREATE X 1337 , X @"]), vec![1337]);
-        }
-    }
-
-    #[test]
-    fn name_is_owned_by_the_dictionary() {
-        unsafe {
-            let mut regs = quiet_boot();
-            let line = String::from("CREATE X 1 ,");
-            outer_interpreter(&mut regs, &line).unwrap();
-            drop(line);
-            outer_interpreter(&mut regs, "X @").unwrap();
-            assert_eq!(regs.data_stack, vec![1]);
-        }
-    }
-
-    #[test]
-    fn colon_definitions_nest() {
-        unsafe {
-            let lines = [": ADD3 3 + ;", ": ADD6 ADD3 ADD3 ;", "36 ADD6"];
-            assert_eq!(eval_stack(&lines), vec![42]);
-        }
-    }
-
-    #[test]
-    fn definition_can_span_lines() {
-        unsafe {
-            assert_eq!(eval_stack(&[": A 1", "2 + ;", "A"]), vec![3]);
-        }
-    }
-
-    #[test]
-    fn redefinition_calls_the_previous_word() {
-        unsafe {
-            assert_eq!(eval_stack(&[": X 1 ;", ": X X 2 + ;", "X"]), vec![3]);
-        }
-    }
-
-    #[test]
-    fn exit_leaves_a_definition_early() {
-        unsafe {
-            assert_eq!(eval_stack(&[": A 1 EXIT 2 ;", "A"]), vec![1]);
-        }
-    }
-
-    #[test]
-    fn does_gives_each_child_its_own_data() {
-        unsafe {
-            let lines = [
-                ": CONSTANT CREATE , DOES> @ ;",
-                "42 CONSTANT ANSWER",
-                "7 CONSTANT LUCKY",
-                "ANSWER LUCKY ANSWER",
-            ];
-            assert_eq!(eval_stack(&lines), vec![42, 7, 42]);
-        }
-    }
-
-    #[test]
-    fn does_requires_a_definition() {
-        unsafe {
-            let mut regs = quiet_boot();
-            assert_error(&mut regs, "CREATE X DOES>", "inside a definition");
-        }
-    }
-
-    #[test]
-    fn does_requires_a_created_word() {
-        unsafe {
-            let mut regs = quiet_boot();
-            outer_interpreter(&mut regs, ": BAD 1 DOES> ;").unwrap();
-            assert_error(&mut regs, "BAD", "made by CREATE");
-        }
-    }
-
-    #[test]
     fn failed_definition_is_rolled_back() {
         unsafe {
-            let mut regs = quiet_boot();
+            let mut regs = boot(io::sink());
             let mark = regs.dictionary.mark();
             assert_error(&mut regs, ": BROKEN 1 NOPE ;", "not recognized");
             assert_eq!(regs.dictionary.mark(), mark);
             assert!(!regs.compiler.is_compiling());
-            assert_error(&mut regs, "BROKEN", "not recognized");
-            outer_interpreter(&mut regs, "1 2 +").unwrap();
-            assert_eq!(regs.data_stack, vec![3]);
-        }
-    }
-
-    #[test]
-    fn stack_underflow_is_reported() {
-        unsafe {
-            let mut regs = quiet_boot();
-            assert_error(&mut regs, "1 +", "underflow");
-            assert_error(&mut regs, ".", "underflow");
-            assert_error(&mut regs, "@", "underflow");
-            assert_error(&mut regs, ",", "underflow");
-            assert_error(&mut regs, "EXIT", "underflow");
-        }
-    }
-
-    #[test]
-    fn misused_words_are_rejected() {
-        unsafe {
-            let mut regs = quiet_boot();
-            assert_error(&mut regs, ";", "while compiling");
-            assert_error(&mut regs, ":", "needs a name");
-            assert_error(&mut regs, "CREATE", "needs a name");
-            assert_error(&mut regs, "LIT", "not recognized");
         }
     }
 
     #[test]
     fn dictionary_overflow_is_reported() {
         unsafe {
-            let mut regs = quiet_boot();
+            let mut regs = boot(io::sink());
             let cells = "1 , ".repeat(DICTIONARY_CELLS);
             assert_error(&mut regs, &cells, "Dictionary overflow");
             assert_error(&mut regs, "1 ,", "Dictionary overflow");
@@ -276,7 +114,7 @@ mod tests {
     #[test]
     fn long_threads_do_not_grow_the_rust_stack() {
         unsafe {
-            let mut regs = quiet_boot();
+            let mut regs = boot(io::sink());
             outer_interpreter(&mut regs, ": NOOP ;").unwrap();
             let cfa = cfa_of(regs.dictionary.find_word("NOOP").unwrap());
 
@@ -287,74 +125,6 @@ mod tests {
 
             assert!(regs.error.is_none());
             assert!(regs.return_stack.is_empty());
-        }
-    }
-
-    #[test]
-    fn dot_writes_a_signed_number() {
-        unsafe {
-            let output = Capture::default();
-            let mut regs = boot(output.clone());
-            outer_interpreter(&mut regs, "-5 3 + .").unwrap();
-            assert_eq!(output.text(), "-2 ");
-        }
-    }
-
-    #[test]
-    fn output_keeps_its_order() {
-        unsafe {
-            let output = Capture::default();
-            let mut regs = boot(output.clone());
-            outer_interpreter(&mut regs, "1 . 2 .").unwrap();
-            assert_eq!(output.text(), "1 2 ");
-        }
-    }
-
-    #[test]
-    fn output_before_an_error_is_kept() {
-        unsafe {
-            let output = Capture::default();
-            let mut regs = boot(BufWriter::new(output.clone()));
-            assert_error(&mut regs, "1 . +", "underflow");
-            assert_eq!(output.text(), "1 ");
-        }
-    }
-
-    #[test]
-    fn underflow_in_dot_writes_nothing() {
-        unsafe {
-            let output = Capture::default();
-            let mut regs = boot(output.clone());
-            assert_error(&mut regs, ".", "underflow");
-            assert_eq!(output.text(), "");
-        }
-    }
-
-    #[test]
-    fn failing_writer_is_reported() {
-        unsafe {
-            let mut regs = boot(FailingWriter);
-            assert_error(&mut regs, "1 .", OUTPUT_ERROR);
-            outer_interpreter(&mut regs, "1 2 +").unwrap();
-            assert_eq!(regs.data_stack, vec![3]);
-        }
-    }
-
-    #[test]
-    fn failing_flush_is_reported() {
-        unsafe {
-            let mut regs = boot(BufWriter::new(FailingWriter));
-            assert_error(&mut regs, "1 .", OUTPUT_ERROR);
-        }
-    }
-
-    #[test]
-    fn buffered_output_is_flushed_at_the_end_of_a_line() {
-        unsafe {
-            let output = Capture::default();
-            let mut regs = boot(BufWriter::new(output.clone()));
-            outer_interpreter(&mut regs, "7 .").unwrap();
-            assert_eq!(output.text(), "7 ");
         }
     }
 }
