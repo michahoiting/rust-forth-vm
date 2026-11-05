@@ -1,3 +1,5 @@
+use std::io;
+
 use rust_forth_vm::{boot, outer_interpreter, Registers};
 
 // Echoes a line of input, evaluates it, and reports any error.
@@ -10,7 +12,7 @@ unsafe fn evaluate(regs: &mut Registers, input: &str) {
 
 fn main() {
     unsafe {
-        let mut regs = boot();
+        let mut regs = boot(io::stdout());
 
         println!("--- FORTH BOOTSEQUENCE COMPLETED ---");
         println!("The Text Interpreter (Outer Interpreter) is online.\n");
