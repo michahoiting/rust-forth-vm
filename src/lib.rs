@@ -11,6 +11,7 @@ mod interpreter;
 mod primitives;
 mod vm;
 
+pub use cell::Cell;
 pub use error::ForthError;
 pub use interpreter::outer_interpreter;
 pub use vm::Registers;

@@ -51,8 +51,8 @@ unsafe fn abort(regs: &mut Registers) {
 ///
 /// # Safety
 ///
-/// Forth code has raw memory access: `@` dereferences any address it is given,
-/// so the input must not fetch from an invalid address.
+/// `regs` must come from [`boot`](crate::boot). The VM runs threaded code through
+/// raw pointers into its dictionary, which only this crate's functions keep valid.
 pub unsafe fn outer_interpreter(regs: &mut Registers, input: &str) -> Result<(), ForthError> {
     regs.input.load(input);
 

@@ -50,6 +50,7 @@ pub(crate) struct Mark {
 }
 
 pub(crate) struct Dictionary {
+    start: *mut Cell,     // The first Cell of the arena
     here: *mut Cell,      // Dictionary pointer to the next free Cell
     last_word: *mut Cell, // Pointer to the LFA of the most recently created word
     end: *mut Cell,       // One past the last usable Cell
@@ -62,6 +63,7 @@ impl Dictionary {
         let mut storage = vec![0 as Cell; DICTIONARY_CELLS];
         let here = storage.as_mut_ptr();
         Dictionary {
+            start: here,
             here,
             last_word: ptr::null_mut(), // Dictionary starts out empty
             end: here.add(storage.len()),
@@ -77,6 +79,20 @@ impl Dictionary {
         *self.here = value;
         self.here = self.here.add(1);
         Ok(())
+    }
+
+    // Reads the Cell at `addr`, which must be a cell-aligned address below HERE.
+    pub(crate) fn fetch(&self, addr: Cell) -> Result<Cell, ForthError> {
+        let start = self.start as Cell;
+        let here = self.here as Cell;
+        let cell_size = mem::size_of::<Cell>();
+        if addr < start || addr >= here || !(addr - start).is_multiple_of(cell_size) {
+            return Err(ForthError::InvalidAddress(addr));
+        }
+
+        // The checks above place this Cell in the part of the arena that has been written.
+        // The number from the stack is only used as an offset, never as a pointer.
+        Ok(unsafe { *self.start.add((addr - start) / cell_size) })
     }
 
     // Writes a complete word into the dictionary: the name bytes, then the header.
