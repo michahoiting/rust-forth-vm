@@ -8,7 +8,7 @@ mod interpreter;
 mod primitives;
 mod vm;
 
-pub use interpreter::{evaluate, outer_interpreter};
+pub use interpreter::outer_interpreter;
 pub use vm::Registers;
 
 /// Allocates the VM and registers the core primitives.

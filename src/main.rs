@@ -1,4 +1,12 @@
-use rust_forth_vm::{boot, evaluate};
+use rust_forth_vm::{boot, outer_interpreter, Registers};
+
+// Echoes a line of input, evaluates it, and reports any error.
+unsafe fn evaluate(regs: &mut Registers, input: &str) {
+    println!("Input: '{}'", input);
+    if let Err(message) = outer_interpreter(regs, input) {
+        println!("Forth Error: {}", message);
+    }
+}
 
 fn main() {
     unsafe {
