@@ -3,6 +3,7 @@
 use super::runtime::{docol, dodoes, dovar, exit};
 use crate::cell::Cell;
 use crate::dictionary::{cfa_of, is_created, F_CREATED};
+use crate::error::ForthError;
 use crate::vm::{code_cell, Registers};
 
 // COMMA ( , ): Pops a Cell from the stack and presses it into the dictionary at HERE.
@@ -16,7 +17,7 @@ pub(super) unsafe fn comma(regs: &mut Registers) {
 // CREATE: Parses a name and allocates a new word with default DOVAR semantics.
 pub(super) unsafe fn create(regs: &mut Registers) {
     let Some(name) = regs.input.parse_name() else {
-        regs.set_error("CREATE needs a name.");
+        regs.set_error(ForthError::MissingName("CREATE"));
         return;
     };
     let result = regs
@@ -34,14 +35,14 @@ pub(super) unsafe fn runtime_does(regs: &mut Registers) {
     // An empty Return Stack means DOES> is running from the text interpreter. IP then
     // points into the temporary trampoline, which must not be stored in the child.
     if regs.return_stack.is_empty() {
-        regs.set_error("DOES> can only be used inside a definition.");
+        regs.set_error(ForthError::DoesOutsideDefinition);
         return;
     }
 
     // Only words made by CREATE have an action cell. Anything else has live data at W + 1.
     let child = regs.dictionary.last_word();
     if !is_created(child) {
-        regs.set_error("DOES> needs a word made by CREATE.");
+        regs.set_error(ForthError::DoesWithoutCreate);
         return;
     }
 
@@ -56,7 +57,7 @@ pub(super) unsafe fn runtime_does(regs: &mut Registers) {
 // COLON ( : ): Parses a name and switches the text interpreter to compiling.
 pub(super) unsafe fn colon(regs: &mut Registers) {
     let Some(name) = regs.input.parse_name() else {
-        regs.set_error(": needs a name.");
+        regs.set_error(ForthError::MissingName(":"));
         return;
     };
     let result = regs

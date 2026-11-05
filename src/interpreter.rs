@@ -2,7 +2,8 @@ use std::io::Write;
 
 use crate::cell::Cell;
 use crate::dictionary::{cfa_of, is_immediate};
-use crate::vm::{execute, Registers, OUTPUT_ERROR};
+use crate::error::ForthError;
+use crate::vm::{execute, Registers};
 
 // --- THE TEXT INTERPRETER / OUTER INTERPRETER ---
 
@@ -35,10 +36,7 @@ unsafe fn interpret_token(regs: &mut Registers, token: &str) {
         }
     } else {
         // --- CASE C: SYNTAX / COMPILATION ERROR ---
-        regs.set_error(format!(
-            "Word or numeric literal '{}' not recognized.",
-            token
-        ));
+        regs.set_error(ForthError::UnknownWord(token.to_string()));
     }
 }
 
@@ -55,21 +53,21 @@ unsafe fn abort(regs: &mut Registers) {
 ///
 /// Forth code has raw memory access: `@` dereferences any address it is given,
 /// so the input must not fetch from an invalid address.
-pub unsafe fn outer_interpreter(regs: &mut Registers, input: &str) -> Result<(), String> {
+pub unsafe fn outer_interpreter(regs: &mut Registers, input: &str) -> Result<(), ForthError> {
     regs.input.load(input);
 
     // Tokenize the input string by whitespace (spaces, tabs, newlines)
     while let Some(token) = regs.input.parse_name() {
         interpret_token(regs, &token);
-        if let Some(message) = regs.error.take() {
+        if let Some(error) = regs.error.take() {
             abort(regs);
             let _ = regs.output.flush(); // Keep earlier output, but report the original error
-            return Err(message);
+            return Err(error);
         }
     }
-    if regs.output.flush().is_err() {
+    if let Err(error) = regs.output.flush() {
         abort(regs);
-        return Err(OUTPUT_ERROR.to_string());
+        return Err(ForthError::Output(error));
     }
     Ok(())
 }
@@ -83,10 +81,12 @@ mod tests {
     use crate::dictionary::DICTIONARY_CELLS;
     use crate::vm::run;
 
-    // Asserts that evaluating `input` fails with a message containing `expected`.
-    unsafe fn assert_error(regs: &mut Registers, input: &str, expected: &str) {
-        let message = outer_interpreter(regs, input).unwrap_err();
-        assert!(message.contains(expected), "got: {}", message);
+    // Asserts that evaluating `input` fails with an error matching the pattern.
+    macro_rules! assert_error {
+        ($regs:expr, $input:expr, $($pattern:tt)+) => {
+            let error = outer_interpreter($regs, $input).unwrap_err();
+            assert!(matches!(&error, $($pattern)+), "got: {}", error);
+        };
     }
 
     #[test]
@@ -94,7 +94,7 @@ mod tests {
         unsafe {
             let mut regs = boot(io::sink());
             let mark = regs.dictionary.mark();
-            assert_error(&mut regs, ": BROKEN 1 NOPE ;", "not recognized");
+            assert_error!(&mut regs, ": BROKEN 1 NOPE ;", ForthError::UnknownWord(name) if name == "NOPE");
             assert_eq!(regs.dictionary.mark(), mark);
             assert!(!regs.compiler.is_compiling());
         }
@@ -105,9 +105,9 @@ mod tests {
         unsafe {
             let mut regs = boot(io::sink());
             let cells = "1 , ".repeat(DICTIONARY_CELLS);
-            assert_error(&mut regs, &cells, "Dictionary overflow");
-            assert_error(&mut regs, "1 ,", "Dictionary overflow");
-            assert_error(&mut regs, "CREATE X", "Dictionary overflow");
+            assert_error!(&mut regs, &cells, ForthError::DictionaryOverflow);
+            assert_error!(&mut regs, "1 ,", ForthError::DictionaryOverflow);
+            assert_error!(&mut regs, "CREATE X", ForthError::DictionaryOverflow);
         }
     }
 

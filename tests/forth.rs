@@ -2,10 +2,11 @@
 //! through `.` and the output writer.
 
 use std::cell::RefCell;
+use std::error::Error;
 use std::io::{self, BufWriter, Write};
 use std::rc::Rc;
 
-use rust_forth_vm::{boot, outer_interpreter, Registers};
+use rust_forth_vm::{boot, outer_interpreter, ForthError};
 
 // A writer whose contents stay readable after it is moved into the VM.
 #[derive(Clone, Default)]
@@ -53,10 +54,12 @@ fn output_of(lines: &[&str]) -> String {
     }
 }
 
-// Asserts that evaluating `input` fails with a message containing `expected`.
-unsafe fn assert_error(regs: &mut Registers, input: &str, expected: &str) {
-    let message = outer_interpreter(regs, input).unwrap_err();
-    assert!(message.contains(expected), "got: {}", message);
+// Asserts that evaluating `input` fails with an error matching the pattern.
+macro_rules! assert_error {
+    ($regs:expr, $input:expr, $($pattern:tt)+) => {
+        let error = outer_interpreter($regs, $input).unwrap_err();
+        assert!(matches!(&error, $($pattern)+), "got: {}", error);
+    };
 }
 
 #[test]
@@ -110,7 +113,7 @@ fn exit_leaves_a_definition_early() {
         outer_interpreter(&mut regs, "A .").unwrap();
         assert_eq!(output.text(), "1 ");
         // The 2 behind EXIT was never pushed.
-        assert_error(&mut regs, ".", "underflow");
+        assert_error!(&mut regs, ".", ForthError::DataStackUnderflow);
     }
 }
 
@@ -129,7 +132,11 @@ fn does_gives_each_child_its_own_data() {
 fn does_requires_a_definition() {
     unsafe {
         let mut regs = boot(io::sink());
-        assert_error(&mut regs, "CREATE X DOES>", "inside a definition");
+        assert_error!(
+            &mut regs,
+            "CREATE X DOES>",
+            ForthError::DoesOutsideDefinition
+        );
     }
 }
 
@@ -138,7 +145,7 @@ fn does_requires_a_created_word() {
     unsafe {
         let mut regs = boot(io::sink());
         outer_interpreter(&mut regs, ": BAD 1 DOES> ;").unwrap();
-        assert_error(&mut regs, "BAD", "made by CREATE");
+        assert_error!(&mut regs, "BAD", ForthError::DoesWithoutCreate);
     }
 }
 
@@ -147,8 +154,8 @@ fn failed_definition_leaves_a_usable_vm() {
     unsafe {
         let output = Capture::default();
         let mut regs = boot(output.clone());
-        assert_error(&mut regs, ": BROKEN 1 NOPE ;", "not recognized");
-        assert_error(&mut regs, "BROKEN", "not recognized");
+        assert_error!(&mut regs, ": BROKEN 1 NOPE ;", ForthError::UnknownWord(name) if name == "NOPE");
+        assert_error!(&mut regs, "BROKEN", ForthError::UnknownWord(name) if name == "BROKEN");
         outer_interpreter(&mut regs, "1 2 + .").unwrap();
         assert_eq!(output.text(), "3 ");
     }
@@ -158,11 +165,11 @@ fn failed_definition_leaves_a_usable_vm() {
 fn stack_underflow_is_reported() {
     unsafe {
         let mut regs = boot(io::sink());
-        assert_error(&mut regs, "1 +", "underflow");
-        assert_error(&mut regs, ".", "underflow");
-        assert_error(&mut regs, "@", "underflow");
-        assert_error(&mut regs, ",", "underflow");
-        assert_error(&mut regs, "EXIT", "underflow");
+        assert_error!(&mut regs, "1 +", ForthError::DataStackUnderflow);
+        assert_error!(&mut regs, ".", ForthError::DataStackUnderflow);
+        assert_error!(&mut regs, "@", ForthError::DataStackUnderflow);
+        assert_error!(&mut regs, ",", ForthError::DataStackUnderflow);
+        assert_error!(&mut regs, "EXIT", ForthError::ReturnStackUnderflow);
     }
 }
 
@@ -170,10 +177,10 @@ fn stack_underflow_is_reported() {
 fn misused_words_are_rejected() {
     unsafe {
         let mut regs = boot(io::sink());
-        assert_error(&mut regs, ";", "while compiling");
-        assert_error(&mut regs, ":", "needs a name");
-        assert_error(&mut regs, "CREATE", "needs a name");
-        assert_error(&mut regs, "LIT", "not recognized");
+        assert_error!(&mut regs, ";", ForthError::NotCompiling);
+        assert_error!(&mut regs, ":", ForthError::MissingName(":"));
+        assert_error!(&mut regs, "CREATE", ForthError::MissingName("CREATE"));
+        assert_error!(&mut regs, "LIT", ForthError::UnknownWord(name) if name == "LIT");
     }
 }
 
@@ -192,7 +199,7 @@ fn output_before_an_error_is_kept() {
     unsafe {
         let output = Capture::default();
         let mut regs = boot(BufWriter::new(output.clone()));
-        assert_error(&mut regs, "1 . +", "underflow");
+        assert_error!(&mut regs, "1 . +", ForthError::DataStackUnderflow);
         assert_eq!(output.text(), "1 ");
     }
 }
@@ -202,7 +209,7 @@ fn underflow_in_dot_writes_nothing() {
     unsafe {
         let output = Capture::default();
         let mut regs = boot(output.clone());
-        assert_error(&mut regs, ".", "underflow");
+        assert_error!(&mut regs, ".", ForthError::DataStackUnderflow);
         assert_eq!(output.text(), "");
     }
 }
@@ -211,7 +218,7 @@ fn underflow_in_dot_writes_nothing() {
 fn failing_writer_is_reported() {
     unsafe {
         let mut regs = boot(FailingWriter);
-        assert_error(&mut regs, "1 .", "Output error");
+        assert_error!(&mut regs, "1 .", ForthError::Output(_));
         outer_interpreter(&mut regs, "1 2 +").unwrap();
     }
 }
@@ -220,7 +227,7 @@ fn failing_writer_is_reported() {
 fn failing_flush_is_reported() {
     unsafe {
         let mut regs = boot(BufWriter::new(FailingWriter));
-        assert_error(&mut regs, "1 .", "Output error");
+        assert_error!(&mut regs, "1 .", ForthError::Output(_));
     }
 }
 
@@ -231,5 +238,44 @@ fn buffered_output_is_flushed_at_the_end_of_a_line() {
         let mut regs = boot(BufWriter::new(output.clone()));
         outer_interpreter(&mut regs, "7 .").unwrap();
         assert_eq!(output.text(), "7 ");
+    }
+}
+
+#[test]
+fn output_error_keeps_its_cause() {
+    unsafe {
+        let mut regs = boot(FailingWriter);
+        let error = outer_interpreter(&mut regs, "1 .").unwrap_err();
+        assert_eq!(error.source().unwrap().to_string(), "write failed");
+    }
+}
+
+#[test]
+fn errors_have_stable_messages() {
+    let cases = [
+        (ForthError::DataStackUnderflow, "Data stack underflow."),
+        (ForthError::ReturnStackUnderflow, "Return stack underflow."),
+        (ForthError::DictionaryOverflow, "Dictionary overflow."),
+        (ForthError::MissingName("CREATE"), "CREATE needs a name."),
+        (
+            ForthError::DoesOutsideDefinition,
+            "DOES> can only be used inside a definition.",
+        ),
+        (
+            ForthError::DoesWithoutCreate,
+            "DOES> needs a word made by CREATE.",
+        ),
+        (
+            ForthError::NotCompiling,
+            "; can only be used while compiling.",
+        ),
+        (
+            ForthError::UnknownWord("NOPE".to_string()),
+            "Word or numeric literal 'NOPE' not recognized.",
+        ),
+        (ForthError::Output(io::Error::other("x")), "Output error."),
+    ];
+    for (error, message) in cases {
+        assert_eq!(error.to_string(), message);
     }
 }

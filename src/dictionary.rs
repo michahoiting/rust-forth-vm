@@ -6,6 +6,7 @@ use std::mem;
 use std::ptr;
 
 use crate::cell::Cell;
+use crate::error::ForthError;
 
 // Size of the dictionary arena, in Cells.
 pub(crate) const DICTIONARY_CELLS: usize = 1024;
@@ -23,9 +24,6 @@ const HEADER_CELLS: usize = 5;
 pub(crate) const F_IMMEDIATE: Cell = 1; // Executes even while compiling
 pub(crate) const F_HIDDEN: Cell = 2; // Invisible to dictionary lookups
 pub(crate) const F_CREATED: Cell = 4; // Made by CREATE, so it owns an action cell for DOES>
-
-// Error reported when a write does not fit in the dictionary.
-pub(crate) const OVERFLOW: &str = "Dictionary overflow.";
 
 // Returns the CFA of the word with this header.
 pub(crate) unsafe fn cfa_of(header: *mut Cell) -> *mut Cell {
@@ -72,9 +70,9 @@ impl Dictionary {
     }
 
     // Presses a Cell into the dictionary at HERE.
-    pub(crate) unsafe fn comma(&mut self, value: Cell) -> Result<(), &'static str> {
+    pub(crate) unsafe fn comma(&mut self, value: Cell) -> Result<(), ForthError> {
         if self.here >= self.end {
-            return Err(OVERFLOW);
+            return Err(ForthError::DictionaryOverflow);
         }
         *self.here = value;
         self.here = self.here.add(1);
@@ -88,11 +86,11 @@ impl Dictionary {
         name: &str,
         code: Cell,
         flags: Cell,
-    ) -> Result<*mut Cell, &'static str> {
+    ) -> Result<*mut Cell, ForthError> {
         let name_cells = name.len().div_ceil(mem::size_of::<Cell>());
         let free_cells = self.end.offset_from(self.here) as usize;
         if name_cells + HEADER_CELLS > free_cells {
-            return Err(OVERFLOW);
+            return Err(ForthError::DictionaryOverflow);
         }
 
         // The dictionary owns its own copy, because the input line does not outlive this call.
