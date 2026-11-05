@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::mem;
 use std::ptr;
 
@@ -5,6 +6,9 @@ use crate::cell::Cell;
 use crate::compiler::Compiler;
 use crate::dictionary::Dictionary;
 use crate::input::InputSource;
+
+// Error reported when the output writer fails.
+pub(crate) const OUTPUT_ERROR: &str = "Output error.";
 
 // Definition of a Forth primitive (machine-code function).
 // Primitives return to the `run` loop instead of calling NEXT themselves, so
@@ -21,14 +25,15 @@ pub struct Registers {
     pub(crate) return_stack: Vec<*const Cell>, // Return stack (R-stack) for nested IP pointers
     pub(crate) dictionary: Dictionary, // Word storage, HERE and the head of the word list
 
-    pub(crate) compiler: Compiler,    // Compilation state
-    pub(crate) input: InputSource,    // The text being interpreted
-    pub(crate) error: Option<String>, // Set by a primitive to stop the VM
+    pub(crate) compiler: Compiler,     // Compilation state
+    pub(crate) output: Box<dyn Write>, // Where Forth words write their output
+    pub(crate) input: InputSource,     // The text being interpreted
+    pub(crate) error: Option<String>,  // Set by a primitive to stop the VM
 }
 
 impl Registers {
     // Creates a VM with an empty dictionary.
-    pub(crate) unsafe fn new() -> Registers {
+    pub(crate) unsafe fn new(output: Box<dyn Write>) -> Registers {
         Registers {
             ip: ptr::null(),
             w: ptr::null(),
@@ -36,6 +41,7 @@ impl Registers {
             return_stack: Vec::new(),
             dictionary: Dictionary::new(),
             compiler: Compiler::default(),
+            output,
             input: InputSource::default(),
             error: None,
         }
