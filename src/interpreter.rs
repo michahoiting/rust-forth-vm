@@ -67,19 +67,6 @@ pub unsafe fn outer_interpreter(regs: &mut Registers, input: &str) -> Result<(),
     Ok(())
 }
 
-/// Echoes a line of input, evaluates it, and reports any error.
-///
-/// # Safety
-///
-/// Forth code has raw memory access: `@` dereferences any address it is given,
-/// so the input must not fetch from an invalid address.
-pub unsafe fn evaluate(regs: &mut Registers, input: &str) {
-    println!("Input: '{}'", input);
-    if let Err(message) = outer_interpreter(regs, input) {
-        println!("Forth Error: {}", message);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
