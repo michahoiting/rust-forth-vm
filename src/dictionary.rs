@@ -8,9 +8,6 @@ use std::ptr;
 use crate::cell::Cell;
 use crate::error::ForthError;
 
-// Size of the dictionary arena, in Cells.
-pub(crate) const DICTIONARY_CELLS: usize = 1024;
-
 // Layout of a dictionary header, relative to its LFA. Every word uses this
 // layout, whether it is a primitive or was created at runtime. The name bytes
 // are stored in the dictionary directly in front of the header.
@@ -58,17 +55,23 @@ pub(crate) struct Dictionary {
 }
 
 impl Dictionary {
-    // Allocates an untyped arena for our Forth dictionary space.
-    pub(crate) unsafe fn new() -> Dictionary {
-        let mut storage = vec![0 as Cell; DICTIONARY_CELLS];
+    // Allocates an untyped arena of `cells` Cells for our Forth dictionary space. The arena
+    // can't grow later, because threads, links and action cells hold raw addresses into it.
+    pub(crate) unsafe fn new(cells: usize) -> Result<Dictionary, ForthError> {
+        let mut storage: Vec<Cell> = Vec::new();
+        storage
+            .try_reserve_exact(cells)
+            .map_err(|_| ForthError::DictionaryTooLarge(cells))?;
+        storage.resize(cells, 0);
+
         let here = storage.as_mut_ptr();
-        Dictionary {
+        Ok(Dictionary {
             start: here,
             here,
             last_word: ptr::null_mut(), // Dictionary starts out empty
             end: here.add(storage.len()),
             _storage: storage,
-        }
+        })
     }
 
     // Presses a Cell into the dictionary at HERE.
@@ -145,11 +148,9 @@ impl Dictionary {
         name: &str,
         code: Cell,
         flags: Cell,
-    ) -> Cell {
-        let header = self
-            .write_header(name, code, flags)
-            .expect("the dictionary must be able to hold the primitives");
-        cfa_of(header) as Cell
+    ) -> Result<Cell, ForthError> {
+        let header = self.write_header(name, code, flags)?;
+        Ok(cfa_of(header) as Cell)
     }
 
     // Linearly traverses the linked list of the dictionary (from newest to oldest).
@@ -206,10 +207,11 @@ mod tests {
     use crate::{boot, outer_interpreter};
 
     const CELL_SIZE: usize = mem::size_of::<Cell>();
+    const TEST_CELLS: usize = 1024;
 
     // Creates a dictionary holding these Cells, starting at its first Cell.
     unsafe fn dictionary_with(values: &[Cell]) -> Dictionary {
-        let mut dictionary = Dictionary::new();
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
         for value in values {
             dictionary.comma(*value).unwrap();
         }
@@ -365,7 +367,7 @@ mod tests {
     #[test]
     fn store_can_change_a_word_header() {
         unsafe {
-            let mut regs = boot(io::sink());
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
             outer_interpreter(&mut regs, "CREATE X 7 ,").unwrap();
             let header = regs.dictionary.find_word("X").unwrap();
 
@@ -378,6 +380,47 @@ mod tests {
 
             let error = outer_interpreter(&mut regs, "X").unwrap_err();
             assert!(matches!(error, ForthError::UnknownWord(name) if name == "X"));
+        }
+    }
+
+    #[test]
+    fn dictionary_holds_exactly_the_requested_cells() {
+        unsafe {
+            let mut dictionary = Dictionary::new(2).unwrap();
+            dictionary.comma(1).unwrap();
+            dictionary.comma(2).unwrap();
+            assert!(matches!(
+                dictionary.comma(3),
+                Err(ForthError::DictionaryOverflow)
+            ));
+        }
+    }
+
+    #[test]
+    fn empty_dictionary_is_valid() {
+        unsafe {
+            let mut dictionary = Dictionary::new(0).unwrap();
+            assert!(matches!(
+                dictionary.comma(1),
+                Err(ForthError::DictionaryOverflow)
+            ));
+        }
+    }
+
+    #[test]
+    fn write_header_must_fit() {
+        unsafe {
+            // This name takes exactly one Cell.
+            let name = "X".repeat(CELL_SIZE);
+
+            let mut dictionary = Dictionary::new(HEADER_CELLS + 1).unwrap();
+            assert!(dictionary.write_header(&name, 0, 0).is_ok());
+
+            let mut dictionary = Dictionary::new(HEADER_CELLS).unwrap();
+            assert!(matches!(
+                dictionary.write_header(&name, 0, 0),
+                Err(ForthError::DictionaryOverflow)
+            ));
         }
     }
 }

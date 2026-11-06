@@ -15,6 +15,8 @@ pub enum ForthError {
     ReturnStackUnderflow,
     /// A write did not fit in the dictionary.
     DictionaryOverflow,
+    /// A dictionary of this many Cells could not be allocated.
+    DictionaryTooLarge(usize),
     /// A parsing word, named here, found no name in the input.
     MissingName(&'static str),
     /// `DOES>` ran from the text interpreter.
@@ -38,6 +40,9 @@ impl fmt::Display for ForthError {
             ForthError::DataStackUnderflow => write!(f, "Data stack underflow."),
             ForthError::ReturnStackUnderflow => write!(f, "Return stack underflow."),
             ForthError::DictionaryOverflow => write!(f, "Dictionary overflow."),
+            ForthError::DictionaryTooLarge(cells) => {
+                write!(f, "Cannot allocate a dictionary of {} Cells.", cells)
+            }
             ForthError::MissingName(word) => write!(f, "{} needs a name.", word),
             ForthError::DoesOutsideDefinition => {
                 write!(f, "DOES> can only be used inside a definition.")

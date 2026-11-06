@@ -78,8 +78,9 @@ mod tests {
 
     use super::*;
     use crate::boot;
-    use crate::dictionary::DICTIONARY_CELLS;
     use crate::vm::run;
+
+    const TEST_CELLS: usize = 1024;
 
     // Asserts that evaluating `input` fails with an error matching the pattern.
     macro_rules! assert_error {
@@ -92,7 +93,7 @@ mod tests {
     #[test]
     fn failed_definition_is_rolled_back() {
         unsafe {
-            let mut regs = boot(io::sink());
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
             let mark = regs.dictionary.mark();
             assert_error!(&mut regs, ": BROKEN 1 NOPE ;", ForthError::UnknownWord(name) if name == "NOPE");
             assert_eq!(regs.dictionary.mark(), mark);
@@ -103,8 +104,8 @@ mod tests {
     #[test]
     fn dictionary_overflow_is_reported() {
         unsafe {
-            let mut regs = boot(io::sink());
-            let cells = "1 , ".repeat(DICTIONARY_CELLS);
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let cells = "1 , ".repeat(TEST_CELLS);
             assert_error!(&mut regs, &cells, ForthError::DictionaryOverflow);
             assert_error!(&mut regs, "1 ,", ForthError::DictionaryOverflow);
             assert_error!(&mut regs, "CREATE X", ForthError::DictionaryOverflow);
@@ -114,7 +115,7 @@ mod tests {
     #[test]
     fn long_threads_do_not_grow_the_rust_stack() {
         unsafe {
-            let mut regs = boot(io::sink());
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
             outer_interpreter(&mut regs, ": NOOP ;").unwrap();
             let cfa = cfa_of(regs.dictionary.find_word("NOOP").unwrap());
 
