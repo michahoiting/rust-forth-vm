@@ -553,3 +553,121 @@ fn variable_overflows_a_full_dictionary() {
         assert_eq!(output.text(), "3 ");
     }
 }
+
+#[test]
+fn dup_copies_the_top_cell() {
+    assert_eq!(output_of(&["1 2 DUP . . ."]), "2 2 1 ");
+}
+
+#[test]
+fn question_dup_copies_only_non_zero_cells() {
+    assert_eq!(output_of(&["5 ?DUP . ."]), "5 5 ");
+    assert_eq!(output_of(&["7 0 ?DUP . ."]), "0 7 ");
+}
+
+#[test]
+fn drop_removes_the_top_cell() {
+    assert_eq!(output_of(&["1 2 DROP ."]), "1 ");
+}
+
+#[test]
+fn swap_exchanges_the_top_two_cells() {
+    assert_eq!(output_of(&["1 2 SWAP . ."]), "1 2 ");
+}
+
+#[test]
+fn over_copies_the_second_cell() {
+    assert_eq!(output_of(&["3 4 OVER . . ."]), "3 4 3 ");
+}
+
+#[test]
+fn rot_moves_the_third_cell_to_the_top() {
+    assert_eq!(output_of(&["1 2 3 ROT . . ."]), "1 3 2 ");
+}
+
+#[test]
+fn pick_copies_the_nth_cell() {
+    assert_eq!(output_of(&["10 20 30 2 PICK . . . ."]), "10 30 20 10 ");
+}
+
+#[test]
+fn roll_moves_the_nth_cell_to_the_top() {
+    // DEPTH shows that the Cell was moved, not copied.
+    assert_eq!(output_of(&["1 2 3 2 ROLL . . . DEPTH ."]), "1 3 2 0 ");
+}
+
+#[test]
+fn depth_counts_the_cells() {
+    assert_eq!(output_of(&["DEPTH ."]), "0 ");
+    assert_eq!(output_of(&["1 2 3 DEPTH . . . ."]), "3 3 2 1 ");
+}
+
+#[test]
+fn stack_words_work_in_colon_definitions() {
+    let cases = [
+        (": W DUP + ;", "21 W .", "42 "),
+        (": W ?DUP ;", "5 W . .", "5 5 "),
+        (": W DROP ;", "1 2 W .", "1 "),
+        (": W SWAP ;", "1 2 W . .", "1 2 "),
+        (": W OVER ;", "3 4 W . . .", "3 4 3 "),
+        (": W ROT ;", "1 2 3 W . . .", "1 3 2 "),
+        (": W 1 PICK ;", "3 4 W . . .", "3 4 3 "),
+        (": W 2 ROLL ;", "1 2 3 W . . .", "1 3 2 "),
+        (": W DEPTH ;", "9 W . .", "1 9 "),
+    ];
+    for (definition, line, expected) in cases {
+        assert_eq!(output_of(&[definition, line]), expected);
+    }
+}
+
+#[test]
+fn stack_words_can_add_to_a_variable() {
+    let lines = [
+        "VARIABLE X",
+        ": +! SWAP OVER @ + SWAP ! ;",
+        "40 X ! 2 X +!",
+        "X @ .",
+    ];
+    assert_eq!(output_of(&lines), "42 ");
+}
+
+#[test]
+fn stack_words_report_underflow() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        for word in ["DUP", "?DUP", "DROP", "SWAP", "OVER", "ROT", "PICK", "ROLL"] {
+            assert_error!(&mut regs, word, ForthError::DataStackUnderflow);
+        }
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn stack_words_report_underflow_when_one_cell_short() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        for line in ["1 SWAP", "1 OVER", "1 2 ROT"] {
+            assert_error!(&mut regs, line, ForthError::DataStackUnderflow);
+        }
+    }
+}
+
+#[test]
+fn pick_and_roll_reject_an_n_equal_to_the_depth() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        assert_error!(&mut regs, "1 2 2 PICK", ForthError::DataStackUnderflow);
+        assert_error!(&mut regs, "1 2 2 ROLL", ForthError::DataStackUnderflow);
+    }
+}
+
+#[test]
+fn pick_and_roll_reject_a_negative_n() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        assert_error!(&mut regs, "1 -1 PICK", ForthError::DataStackUnderflow);
+        assert_error!(&mut regs, "1 -1 ROLL", ForthError::DataStackUnderflow);
+    }
+}

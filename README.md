@@ -38,6 +38,13 @@ VARIABLE COUNTER
 COUNTER @ .                       \ 42
 COUNTER @ 1 + COUNTER !
 COUNTER @ .                       \ 43
+
+: DOUBLE DUP + ;
+21 DOUBLE .                       \ 42
+
+: +! SWAP OVER @ + SWAP ! ;
+5 COUNTER +!
+COUNTER @ .                       \ 48
 ```
 
 The `\` comments are for this README only, because the interpreter does not
@@ -58,6 +65,15 @@ support comments yet.
 | `:`      | `( -- )`     | Parses a name and starts compiling a definition   |
 | `;`      | `( -- )`     | Ends the definition (immediate)                   |
 | `EXIT`   | `( -- )`     | Returns from the current definition               |
+| `DUP`    | `( x -- x x )` | Copies the top Cell                             |
+| `?DUP`   | `( x -- 0 \| x x )` | Copies the top Cell if it isn't zero       |
+| `DROP`   | `( x -- )`   | Removes the top Cell                              |
+| `SWAP`   | `( a b -- b a )` | Exchanges the top two Cells                   |
+| `OVER`   | `( a b -- a b a )` | Copies the second Cell to the top           |
+| `ROT`    | `( a b c -- b c a )` | Moves the third Cell to the top           |
+| `PICK`   | `( ... n -- ... x )` | Copies the `n`th Cell below `n`, counting from 0 |
+| `ROLL`   | `( ... n -- ... x )` | Moves the `n`th Cell below `n` to the top, counting from 0 |
+| `DEPTH`  | `( -- n )`   | Pushes the number of Cells on the stack           |
 
 Word names are case-sensitive. Numbers are decimal, and may be negative.
 
@@ -94,7 +110,7 @@ stacks, and rolls back any unfinished colon definition.
 
 ## Limitations
 
-- There are no stack words such as `DUP`, `DROP` or `SWAP`.
+- There are no return stack words, such as `>R` and `R>`.
 - There is no control flow, such as `IF` or `BEGIN`, and so no loops.
 - There is no `IMMEDIATE`, `[` or `]`.
 - The dictionary size is chosen when the VM boots, and can't grow afterwards.

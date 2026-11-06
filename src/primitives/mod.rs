@@ -19,6 +19,24 @@ pub(crate) unsafe fn install(regs: &mut Registers) -> Result<(), ForthError> {
     regs.dictionary
         .add_primitive_word("!", code_cell(core::store), 0)?;
     regs.dictionary
+        .add_primitive_word("DUP", code_cell(core::dup), 0)?;
+    regs.dictionary
+        .add_primitive_word("?DUP", code_cell(core::question_dup), 0)?;
+    regs.dictionary
+        .add_primitive_word("DROP", code_cell(core::drop), 0)?;
+    regs.dictionary
+        .add_primitive_word("SWAP", code_cell(core::swap), 0)?;
+    regs.dictionary
+        .add_primitive_word("OVER", code_cell(core::over), 0)?;
+    regs.dictionary
+        .add_primitive_word("ROT", code_cell(core::rot), 0)?;
+    regs.dictionary
+        .add_primitive_word("PICK", code_cell(core::pick), 0)?;
+    regs.dictionary
+        .add_primitive_word("ROLL", code_cell(core::roll), 0)?;
+    regs.dictionary
+        .add_primitive_word("DEPTH", code_cell(core::depth), 0)?;
+    regs.dictionary
         .add_primitive_word(",", code_cell(compiler::comma), 0)?;
     regs.dictionary
         .add_primitive_word("CREATE", code_cell(compiler::create), 0)?;

@@ -64,11 +64,30 @@ fn main() {
         evaluate(&mut regs, "OTHER @ . COUNTER @ .");
         println!("-------------------------------------\n");
 
-        // --- TEST RUN 6: Error Handling ---
+        // --- TEST RUN 6: Stack Words ---
+        evaluate(&mut regs, "1 2 DROP .");
+        evaluate(&mut regs, "1 2 SWAP . .");
+        evaluate(&mut regs, "3 4 OVER . . .");
+        evaluate(&mut regs, "1 2 3 ROT . . .");
+        evaluate(&mut regs, "5 ?DUP . .");
+        evaluate(&mut regs, "0 ?DUP .");
+        evaluate(&mut regs, "10 20 30 2 PICK . . . .");
+        evaluate(&mut regs, "1 2 3 2 ROLL . . .");
+        evaluate(&mut regs, "1 2 3 DEPTH . . . .");
+        evaluate(&mut regs, ": DOUBLE DUP + ;"); // Reuse a value without naming it
+        evaluate(&mut regs, "21 DOUBLE .");
+        evaluate(&mut regs, ": +! SWAP OVER @ + SWAP ! ;"); // Add to a variable
+        evaluate(&mut regs, "5 COUNTER +!");
+        evaluate(&mut regs, "COUNTER @ .");
+        println!("-------------------------------------\n");
+
+        // --- TEST RUN 7: Error Handling ---
         evaluate(&mut regs, ": BROKEN 1 NO-SUCH-WORD ;");
         evaluate(&mut regs, "BROKEN");
         evaluate(&mut regs, "+");
         evaluate(&mut regs, "1 5 !");
+        evaluate(&mut regs, "DROP");
+        evaluate(&mut regs, "9 PICK");
         println!("-------------------------------------\n");
     }
 }
