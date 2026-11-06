@@ -190,6 +190,11 @@ impl Dictionary {
         *self.last_word.add(FLAGS) &= !F_PENDING;
     }
 
+    // Marks the most recently created word as immediate. Its other flags stay as they are.
+    pub(crate) unsafe fn mark_last_immediate(&mut self) {
+        *self.last_word.add(FLAGS) |= F_IMMEDIATE;
+    }
+
     // Returns whether `xt` is the code field of a finished word, hidden or not.
     pub(crate) unsafe fn is_execution_token(&self, xt: Cell) -> bool {
         let mut current_lfa = self.last_word;
@@ -522,6 +527,46 @@ mod tests {
 
             dictionary.restore(mark);
             assert!(!dictionary.is_execution_token(xt));
+        }
+    }
+
+    #[test]
+    fn mark_last_immediate_only_marks_the_newest_word() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let older = dictionary.write_header("A", 0, 0).unwrap();
+            let newest = dictionary.write_header("B", 0, 0).unwrap();
+
+            dictionary.mark_last_immediate();
+            assert!(is_immediate(newest));
+            assert!(!is_immediate(older));
+        }
+    }
+
+    #[test]
+    fn mark_last_immediate_keeps_other_flags() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let flags = F_HIDDEN | F_PENDING | F_CREATED;
+            let header = dictionary.write_header("X", 0, flags).unwrap();
+
+            dictionary.mark_last_immediate();
+            assert!(is_immediate(header));
+            assert!(is_hidden(header));
+            assert!(is_pending(header));
+            assert!(is_created(header));
+        }
+    }
+
+    #[test]
+    fn mark_last_immediate_can_be_repeated() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let header = dictionary.write_header("X", 0, 0).unwrap();
+
+            dictionary.mark_last_immediate();
+            dictionary.mark_last_immediate();
+            assert_eq!(*header.add(FLAGS), F_IMMEDIATE);
         }
     }
 }

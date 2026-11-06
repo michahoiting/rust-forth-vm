@@ -96,13 +96,19 @@ pub(super) unsafe fn semicolon(regs: &mut Registers) {
     regs.check(result);
 }
 
+// IMMEDIATE ( -- ): Marks the most recently created word as immediate, so that it runs during
+// compilation instead of being compiled.
+pub(super) unsafe fn immediate(regs: &mut Registers) {
+    regs.dictionary.mark_last_immediate();
+}
+
 #[cfg(test)]
 mod tests {
     use std::io;
 
     use super::*;
     use crate::boot;
-    use crate::dictionary::{is_hidden, is_pending};
+    use crate::dictionary::{is_hidden, is_immediate, is_pending};
 
     const TEST_CELLS: usize = 1024;
 
@@ -134,6 +140,21 @@ mod tests {
             let header = regs.dictionary.last_word();
             assert!(is_pending(header));
             assert!(!is_hidden(header));
+        }
+    }
+
+    #[test]
+    fn immediate_marks_the_newest_word_and_leaves_the_stack_alone() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            regs.input.load("X");
+            create(&mut regs);
+            regs.data_stack.push(7);
+
+            immediate(&mut regs);
+            assert!(regs.error.is_none(), "got: {:?}", regs.error);
+            assert_eq!(regs.data_stack, [7]);
+            assert!(is_immediate(regs.dictionary.last_word()));
         }
     }
 }
