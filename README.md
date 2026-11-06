@@ -187,8 +187,9 @@ stacks, and rolls back any unfinished colon definition.
 
 ## Versioning
 
-This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). It
-is in initial development, so the API can still change. See
+After the first release, this project adheres to
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html). It is
+in initial development, so the API can still change. See
 [CONTRIBUTING.md](CONTRIBUTING.md#versioning) for what the version number covers.
 
 ## License

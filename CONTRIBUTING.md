@@ -57,8 +57,9 @@ longer exists.
 
 ## Versioning
 
-Versions follow [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). The public
-API that the version number covers is:
+After the first release, versions follow
+[Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). The public API that the
+version number covers is:
 
 - The public items of the Rust library.
 - The Forth words and their documented behaviour.

@@ -10,7 +10,7 @@ The FORTH-83 standard is the reference for how words behave. Later ANS Forth wor
 
 See `README.md` for the word list and internals, and the GitHub issues for known problems. Don't copy either into this file, because they change.
 
-See `CONTRIBUTING.md` for setup, the release steps, and the versioning policy. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+See `CONTRIBUTING.md` for setup, the release steps, and the versioning policy. After the first release, versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Commands
 
