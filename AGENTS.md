@@ -29,10 +29,11 @@ make doc-serve # Serves the docs on localhost, including private items. Needs py
 
 CI uses the latest stable toolchain on purpose, so a new lint can fail it with no code change. Raise `rust-version` when code needs a newer feature, and check it with a PR's CI run. CI runs on PRs and on pushes to `main`, not on other branches.
 
-These two aren't part of CI:
+These three aren't part of CI:
 
 ```sh
-make hooks     # Installs the git hooks from `.githooks/`. Run it once after cloning
+make setup-dev # Installs the developer tools and the git hooks. Run it once after cloning
+make hooks     # Installs only the git hooks from `.githooks/`
 make protect   # Applies the ruleset for `main`. Needs gh and admin access
 ```
 

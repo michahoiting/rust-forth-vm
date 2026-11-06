@@ -7,7 +7,8 @@
 # make msrv       Checks the oldest supported Rust version, which needs that toolchain.
 # make mutants    Mutation testing, which needs cargo-mutants.
 # make doc-serve  Serves the docs on localhost, which needs python3.
-# make hooks      Installs the git hooks in this clone. Run it once after cloning.
+# make setup-dev  Installs the developer tools and the git hooks. Run it once after cloning.
+# make hooks      Installs only the git hooks in this clone.
 # make protect    Applies the GitHub ruleset for main, which needs gh and admin access.
 
 # Stops rustup from installing a missing toolchain when a target asks for it.
@@ -20,7 +21,7 @@ MSRV := $(shell sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
 
 .DEFAULT_GOAL := ci
 
-.PHONY: ci ci-all fmt clippy build test test-release doc doc-serve miri miri-32 check-miri msrv msrv-version mutants demo hooks protect
+.PHONY: ci ci-all fmt clippy build test test-release doc doc-serve miri miri-32 check-miri msrv msrv-version mutants demo setup-dev hooks protect
 
 ci: fmt clippy build test test-release doc
 
@@ -85,6 +86,24 @@ mutants:
 
 demo:
 	cargo run --locked
+
+# Everything the other targets need, except what depends on the OS. Those tools are only
+# checked for: git and rustup are required, while python3 and gh are for one target each.
+setup-dev:
+	@for tool in git rustup; do \
+		command -v $$tool >/dev/null 2>&1 || { \
+			echo "$$tool is not installed. Install it first, then run this again. rustup is at https://rustup.rs"; \
+			exit 1; \
+		}; \
+	done
+	rustup toolchain install stable --no-self-update --profile minimal --component rustfmt,clippy
+	rustup toolchain install nightly --no-self-update --profile minimal --component miri,rust-src
+	rustup toolchain install $(MSRV) --no-self-update --profile minimal
+	@rustup default >/dev/null 2>&1 || rustup default stable
+	@cargo +stable mutants --version >/dev/null 2>&1 || cargo +stable install cargo-mutants --locked
+	@$(MAKE) --no-print-directory hooks
+	@command -v python3 >/dev/null 2>&1 || echo "Note: python3 is not installed. make doc-serve needs it."
+	@command -v gh >/dev/null 2>&1 || echo "Note: gh is not installed. make protect needs it."
 
 hooks:
 	git config core.hooksPath .githooks

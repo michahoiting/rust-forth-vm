@@ -2,7 +2,7 @@
 
 A clean-room implementation of a Forth virtual machine in Rust. It is an
 indirect-threaded VM with a linked-list dictionary, a text interpreter, and a
-compiler for colon definitions and `CREATE ... DOES>` defining words.
+compiler for colon definitions.
 
 The program runs a scripted demo. There is no interactive prompt or file input
 yet.
@@ -12,7 +12,8 @@ yet.
 You need `git`, `make`, and Rust with the `rustfmt` and `clippy` components. The
 oldest supported Rust version is the `rust-version` in [Cargo.toml](Cargo.toml).
 If you don't have Rust yet, install it with [rustup](https://rustup.rs), which
-includes both components.
+includes both components. Serving the docs with `make doc-serve` also needs
+`python3`.
 
 Get the code and run the demo:
 
@@ -27,7 +28,7 @@ These commands are useful from there:
 ```sh
 make test       # Run the unit and API tests
 make ci         # Run all the checks that work on the stable toolchain
-make doc-serve  # Serve the docs at http://localhost:8000/rust_forth_vm/, needs python3
+make doc-serve  # Serve the docs at http://localhost:8000/rust_forth_vm/
 ```
 
 `cargo build --release` builds the program as `target/release/forth-vm`.
@@ -40,8 +41,9 @@ crates.io. The [API docs](src/lib.rs) start with a complete example.
 rust-forth-vm = { git = "https://github.com/michahoiting/rust-forth-vm" }
 ```
 
-To work on the project, see [CONTRIBUTING.md](CONTRIBUTING.md). Notable changes
-are listed in [CHANGELOG.md](CHANGELOG.md).
+To work on the project, run `make setup-dev`, which installs all the developer
+tools, and see [CONTRIBUTING.md](CONTRIBUTING.md). Notable changes are listed in
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Example
 

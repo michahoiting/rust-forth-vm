@@ -6,12 +6,17 @@ which applies to people and coding agents alike.
 
 ## Setting up
 
-Follow [Getting started](README.md#getting-started) first, then install the git hooks once
-in your clone:
+Follow [Getting started](README.md#getting-started) first, then run this once in your
+clone:
 
 ```sh
-make hooks
+make setup-dev
 ```
+
+It installs or updates the stable and nightly toolchains, the oldest supported Rust version,
+Miri, and `cargo-mutants`, and installs the git hooks. It's safe to run again. It needs
+`git` and `rustup`, and tells you if `python3` or `gh` is missing, which only `make doc-serve`
+and `make protect` need.
 
 The hooks catch problems before CI does:
 
@@ -22,15 +27,6 @@ The hooks catch problems before CI does:
 
 If a hook itself gets in the way, `git commit --no-verify` and `git push --no-verify` skip
 it. CI still runs the same checks.
-
-`make ci` only needs the stable toolchain with `rustfmt` and `clippy`. These are optional,
-and each target prints how to install what's missing:
-
-| Target         | Needs                                                                       |
-|----------------|-----------------------------------------------------------------------------|
-| `make ci-all`  | `rustup toolchain install nightly --profile minimal --component miri,rust-src` |
-| `make msrv`    | `rustup toolchain install <rust-version> --profile minimal`, with the `rust-version` from `Cargo.toml` |
-| `make mutants` | `cargo install cargo-mutants --locked`                                      |
 
 ## Making a change
 

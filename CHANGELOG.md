@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - An indirect-threaded Forth VM with a linked-list dictionary, a text interpreter, and a
-  compiler for colon definitions and `CREATE ... DOES>` defining words.
+  compiler for colon definitions.
 - A library API: `boot` creates a VM with a chosen dictionary size and an output writer,
   and `outer_interpreter` evaluates Forth source in it. Errors are `ForthError` values.
 - Words for arithmetic and output: `+` and `.`.
@@ -26,5 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This changelog, a contributing guide, a versioning policy, and getting-started steps in
   the README.
 - Git hooks and a GitHub ruleset that protect `main`.
+- `make setup-dev`, which installs the developer tools and the git hooks.
 
 [Unreleased]: https://github.com/michahoiting/rust-forth-vm/commits/main
