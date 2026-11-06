@@ -50,6 +50,8 @@ pub(crate) unsafe fn install(regs: &mut Registers) -> Result<(), ForthError> {
     regs.dictionary
         .add_primitive_word("VARIABLE", code_cell(compiler::variable), 0)?;
     regs.dictionary
+        .add_primitive_word("CONSTANT", code_cell(compiler::constant), 0)?;
+    regs.dictionary
         .add_primitive_word("DOES>", code_cell(compiler::runtime_does), 0)?;
     regs.dictionary
         .add_primitive_word(":", code_cell(compiler::colon), 0)?;

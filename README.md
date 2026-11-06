@@ -60,9 +60,12 @@ STATIONARY-SOURCE @ .             \ 1337
 : ADD6 ADD3 ADD3 ;
 36 ADD6 .                         \ 42
 
-: CONSTANT CREATE , DOES> @ ;
 42 CONSTANT ANSWER
 ANSWER .                          \ 42
+
+: ADDER CREATE , DOES> @ + ;
+3 ADDER PLUS3
+1 PLUS3 .                         \ 4
 
 VARIABLE COUNTER
 42 COUNTER !
@@ -103,6 +106,7 @@ it.
 | `,`      | `( x -- )`   | Stores a Cell at `HERE` and advances it           |
 | `CREATE` | `( -- )`     | Parses a name and creates a word that pushes its data address |
 | `VARIABLE` | `( -- )`   | Parses a name and creates a word holding one Cell, initially 0 |
+| `CONSTANT` | `( x -- )` | Parses a name and creates a word that pushes `x`  |
 | `DOES>`  | `( -- )`     | Inside a definition: gives the newest `CREATE`d word the code that follows |
 | `:`      | `( -- )`     | Parses a name and starts compiling a definition   |
 | `;`      | `( -- )`     | Ends the definition (immediate)                   |
@@ -145,6 +149,7 @@ The body depends on how the word was defined:
   as `LIT` followed by the value.
 - **`CREATE`d words** hold an action cell for `DOES>` at `CFA + 1`, and their
   data starts at `CFA + 2`.
+- **`CONSTANT` words** hold their value at `CFA + 1`.
 
 Primitives return to the `run` loop instead of calling `next` themselves, so
 threaded code does not grow the Rust call stack. A zero Cell ends a thread.
@@ -162,8 +167,8 @@ stacks, and rolls back any unfinished colon definition.
 - There is no `[` or `]`.
 - Immediate words must not use `,` while a definition is being compiled, because it
   writes into the thread and can crash the process (see issue #15). Using `CREATE`,
-  `VARIABLE`, `:` or `:NONAME` there leaves the open definition unfinished, so it
-  can't be found or executed.
+  `VARIABLE`, `CONSTANT`, `:` or `:NONAME` there leaves the open definition unfinished,
+  so it can't be found or executed.
 - The dictionary size is chosen when the VM boots, and can't grow afterwards.
 - `!` can overwrite word headers and compiled code, which can crash the process.
 

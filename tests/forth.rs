@@ -137,9 +137,9 @@ fn exit_leaves_a_definition_early() {
 #[test]
 fn does_gives_each_child_its_own_data() {
     let lines = [
-        ": CONSTANT CREATE , DOES> @ ;",
-        "42 CONSTANT ANSWER",
-        "7 CONSTANT LUCKY",
+        ": FIXED CREATE , DOES> @ ;",
+        "42 FIXED ANSWER",
+        "7 FIXED LUCKY",
         "ANSWER . LUCKY . ANSWER .",
     ];
     assert_eq!(output_of(&lines), "42 7 42 ");
@@ -545,6 +545,96 @@ fn variable_works_in_a_colon_word() {
 }
 
 #[test]
+fn constant_pushes_its_value() {
+    assert_eq!(output_of(&["42 CONSTANT ANSWER", "ANSWER ."]), "42 ");
+}
+
+#[test]
+fn constant_keeps_a_negative_value() {
+    assert_eq!(output_of(&["-5 CONSTANT N", "N ."]), "-5 ");
+}
+
+#[test]
+fn constant_takes_only_the_top_cell() {
+    assert_eq!(output_of(&["1 2 CONSTANT TWO", "TWO . ."]), "2 1 ");
+}
+
+#[test]
+fn constants_are_independent() {
+    let lines = ["1 CONSTANT A 2 CONSTANT B", "A . B . A ."];
+    assert_eq!(output_of(&lines), "1 2 1 ");
+}
+
+#[test]
+fn constant_works_in_a_colon_word() {
+    let lines = ["42 CONSTANT ANSWER", ": NEXT-UP ANSWER 1 + ;", "NEXT-UP ."];
+    assert_eq!(output_of(&lines), "43 ");
+}
+
+#[test]
+fn constant_works_in_a_defining_word() {
+    let lines = [": FIVES 5 CONSTANT ;", "FIVES A FIVES B", "A . B ."];
+    assert_eq!(output_of(&lines), "5 5 ");
+}
+
+#[test]
+fn constant_can_be_redefined_by_a_forth_word() {
+    let lines = [": CONSTANT CREATE , DOES> @ ;", "42 CONSTANT A", "A ."];
+    assert_eq!(output_of(&lines), "42 ");
+}
+
+#[test]
+fn does_cannot_change_a_constant() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        outer_interpreter(&mut regs, ": MAKE 7 CONSTANT DOES> 8 ;").unwrap();
+        assert_error!(&mut regs, "MAKE X", ForthError::DoesWithoutCreate);
+        outer_interpreter(&mut regs, "X .").unwrap();
+        assert_eq!(output.text(), "7 ");
+    }
+}
+
+#[test]
+fn constant_needs_a_value_and_a_name() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        assert_error!(&mut regs, "CONSTANT X", ForthError::DataStackUnderflow);
+        assert_error!(&mut regs, "CONSTANT", ForthError::DataStackUnderflow);
+        assert_error!(&mut regs, "X", ForthError::UnknownWord(_));
+        assert_error!(&mut regs, "5 CONSTANT", ForthError::MissingName("CONSTANT"));
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn constant_that_does_not_fit_leaves_no_word() {
+    unsafe {
+        // The last size that fails has room for the header, but not for the value.
+        let smallest = smallest_cells();
+        for cells in smallest..TEST_CELLS {
+            let output = Capture::default();
+            let mut regs = boot(output.clone(), cells).unwrap();
+            match outer_interpreter(&mut regs, "1 CONSTANT X") {
+                Ok(()) => {
+                    assert!(cells > smallest);
+                    outer_interpreter(&mut regs, "X .").unwrap();
+                    assert_eq!(output.text(), "1 ");
+                    return;
+                }
+                Err(error) => {
+                    assert!(matches!(error, ForthError::DictionaryOverflow));
+                    assert_error!(&mut regs, "X", ForthError::UnknownWord(_));
+                }
+            }
+        }
+        panic!("no dictionary size was large enough");
+    }
+}
+
+#[test]
 fn variable_needs_a_name() {
     unsafe {
         let mut regs = test_vm(io::sink());
@@ -721,11 +811,7 @@ fn xt_works_from_a_variable() {
 
 #[test]
 fn xt_works_from_a_constant() {
-    let lines = [
-        ": CONSTANT CREATE , DOES> @ ;",
-        ":NONAME 3 + ; CONSTANT ADD3",
-        "4 ADD3 EXECUTE .",
-    ];
+    let lines = [":NONAME 3 + ; CONSTANT ADD3", "4 ADD3 EXECUTE ."];
     assert_eq!(output_of(&lines), "7 ");
 }
 

@@ -18,7 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   addresses below `HERE`.
 - The FORTH-83 data stack words: `DUP`, `?DUP`, `DROP`, `SWAP`, `OVER`, `ROT`, `PICK`,
   `ROLL` and `DEPTH`.
-- Defining words: `:`, `;`, `:NONAME`, `CREATE`, `DOES>`, `IMMEDIATE` and `EXIT`.
+- Defining words: `:`, `;`, `:NONAME`, `CREATE`, `CONSTANT`, `DOES>`, `IMMEDIATE` and
+  `EXIT`.
 - `EXECUTE`, which runs a word from its execution token.
 - Comments with `(` and `\`.
 - A `forth-vm` binary that runs a scripted demo.
