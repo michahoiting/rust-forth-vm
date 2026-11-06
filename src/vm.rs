@@ -64,6 +64,30 @@ impl Registers {
         value
     }
 
+    // Returns whether the stack holds at least `count` Cells, flagging an error when it doesn't.
+    pub(crate) fn require(&mut self, count: usize) -> bool {
+        let enough = self.data_stack.len() >= count;
+        if !enough {
+            self.set_error(ForthError::DataStackUnderflow);
+        }
+        enough
+    }
+
+    // Reads `n` from the top of the stack without popping it, and returns the position of the
+    // `n`th Cell below it, counting from 0. A negative `n` is a huge Cell, so it is out of range.
+    pub(crate) fn indexed_cell(&mut self) -> Option<usize> {
+        if !self.require(1) {
+            return None;
+        }
+        let depth = self.data_stack.len() - 1;
+        let n = self.data_stack[depth];
+        if n >= depth {
+            self.set_error(ForthError::DataStackUnderflow);
+            return None;
+        }
+        Some(depth - 1 - n)
+    }
+
     // Turns a failed Result into a VM error.
     pub(crate) fn check<T>(&mut self, result: Result<T, ForthError>) -> Option<T> {
         match result {
