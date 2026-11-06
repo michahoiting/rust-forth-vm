@@ -85,7 +85,7 @@ mutants:
 	cargo mutants
 
 demo:
-	cargo run --locked
+	cargo run --locked -- --demo
 
 # Everything the other targets need, except what depends on the OS. Those tools are only
 # checked for: git and rustup are required, while python3 and gh are for one target each.

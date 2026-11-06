@@ -1,17 +1,27 @@
 // Copyright (c) 2026 M.W.R. Hoiting
 
-//! A scripted demo of the Forth VM. Each section shows the normal use of some words, and
-//! the last one shows how errors are handled.
+//! An interactive Forth prompt, and a scripted demo of the Forth VM.
+//!
+//! By default, or with `--interactive`, the program evaluates each line from stdin in one VM.
+//!
+//! With `--demo`, it shows a menu of demo sections. Each section shows the normal use of some
+//! words, and the last one shows how errors are handled.
 
-use std::io;
+use std::env;
+use std::io::{self, BufRead, Write};
+use std::process::ExitCode;
+use std::slice;
 
-use rust_forth_vm::{boot, outer_interpreter, Registers};
+use rust_forth_vm::{boot, outer_interpreter, ForthError, Registers};
 
 /// The size of the demo's Forth dictionary.
 const DICTIONARY_CELLS: usize = 1024;
 
-/// The demo sections, each with its title and one block of Forth source. All of them run in
-/// the same VM, so later sections can use words from earlier ones.
+/// The usage line, printed for arguments the program doesn't know.
+const USAGE: &str = "Usage: forth-vm [--interactive | --demo]";
+
+/// The demo sections, each with its title and one block of Forth source. Each section runs in a
+/// new VM, so it must define everything it uses.
 const SECTIONS: [(&str, &str); 11] = [
     (
         "Evaluating Text Operations",
@@ -89,6 +99,8 @@ OTHER @ . COUNTER @ .              \ prints 7 45
 : DOUBLE DUP + ;              \ reuse a value without naming it
 21 DOUBLE .                   \ prints 42
 : +! SWAP OVER @ + SWAP ! ;   \ add to a variable
+VARIABLE COUNTER
+45 COUNTER !
 5 COUNTER +!
 COUNTER @ .                   \ prints 50
 ",
@@ -166,6 +178,13 @@ ANNOUNCE                      \ prints 99
     (
         "Reaching a Word's Parameter Field",
         r"
+\ Some words to look into
+: ADD3 3 + ;
+VARIABLE COUNTER
+50 COUNTER !
+: ADDER CREATE , DOES> @ + ;
+3 ADDER PLUS3
+
 \ ' gives the execution token of a word, which :NONAME gives for an unnamed one
 3 ' ADD3 EXECUTE .            \ prints 6
 
@@ -188,6 +207,15 @@ ANNOUNCE                      \ prints 99
     ),
 ];
 
+/// The `QUIT` examples. `QUIT` discards the rest of its text and keeps the data stack, so each
+/// one is a separate block, followed by a block that prints what was left.
+const QUIT_TESTS: [&str; 4] = [
+    r"7 1 . QUIT 2 .                  \ prints 1, and leaves 7 on the stack",
+    r".                               \ prints 7",
+    r": STOP 3 . QUIT 4 . ; 8 STOP 5 .  \ prints 3: QUIT also leaves a definition",
+    r".                               \ prints 8",
+];
+
 /// The error handling tests. An error discards the rest of its text, so each one is a separate
 /// block.
 const ERROR_TESTS: [&str; 8] = [
@@ -201,6 +229,49 @@ const ERROR_TESTS: [&str; 8] = [
     "1 ( never closed",
 ];
 
+/// The sections with several blocks of source, which run after [`SECTIONS`]. Each one has its
+/// title and its blocks, which share a VM.
+const BLOCK_SECTIONS: [(&str, &[&str]); 2] = [
+    ("Returning to the Interpreter with QUIT", &QUIT_TESTS),
+    ("Error Handling", &ERROR_TESTS),
+];
+
+/// The number of sections to choose from.
+const SECTION_COUNT: usize = SECTIONS.len() + BLOCK_SECTIONS.len();
+
+/// Returns the title and the blocks of a section, given its number counting from 1.
+fn section(number: usize) -> (&'static str, &'static [&'static str]) {
+    match SECTIONS.get(number - 1) {
+        Some((title, source)) => (title, slice::from_ref(source)),
+        None => BLOCK_SECTIONS[number - 1 - SECTIONS.len()],
+    }
+}
+
+/// Boots a VM that writes to stdout.
+///
+/// # Safety
+///
+/// The result has the same requirements as the result of [`boot`].
+unsafe fn new_vm() -> Registers {
+    boot(io::stdout(), DICTIONARY_CELLS)
+        .expect("the dictionary must be able to hold the primitives")
+}
+
+/// Evaluates some Forth source and ends the output line with the result. That's `ok` if all of
+/// it ran, unless a definition is still open. After `QUIT`, the standard allows no message.
+///
+/// # Safety
+///
+/// `regs` must come from [`boot`].
+unsafe fn interpret(regs: &mut Registers, input: &str) {
+    match outer_interpreter(regs, input) {
+        Ok(()) if regs.is_compiling() => {}
+        Ok(()) => println!("ok"),
+        Err(ForthError::Quit) => println!(),
+        Err(error) => println!("Forth Error: {}", error),
+    }
+}
+
 /// Echoes a block of Forth source and evaluates it. Output from Forth words follows on one
 /// line, which ends with the result.
 ///
@@ -213,31 +284,168 @@ unsafe fn evaluate(regs: &mut Registers, input: &str) {
         println!("{}", format!("    {}", line).trim_end());
     }
     print!("Output: ");
-    match outer_interpreter(regs, input) {
-        Ok(()) => println!("ok"),
-        Err(error) => println!("Forth Error: {}", error),
+    interpret(regs, input);
+}
+
+/// Runs one section in a new VM, given its number counting from 1.
+fn run_section(number: usize) {
+    let (title, blocks) = section(number);
+    println!("--- TEST RUN {}: {} ---", number, title);
+    // SAFETY: `regs` comes from `boot`, through `new_vm`.
+    unsafe {
+        let mut regs = new_vm();
+        for source in blocks {
+            evaluate(&mut regs, source);
+        }
+    }
+    println!("-------------------------------------\n");
+}
+
+/// One answer to the demo menu.
+#[derive(Debug, PartialEq)]
+enum Choice {
+    /// Run all the sections.
+    All,
+    /// Run the section with this number, counting from 1.
+    Section(usize),
+    /// Leave the program.
+    Quit,
+}
+
+/// Reads one answer to the demo menu, with `section_count` sections to choose from. Returns
+/// `None` if the answer isn't valid.
+fn parse_choice(input: &str, section_count: usize) -> Option<Choice> {
+    let input = input.trim();
+    match input {
+        "" => Some(Choice::All),
+        "q" | "Q" => Some(Choice::Quit),
+        _ => match input.parse() {
+            Ok(0) => Some(Choice::All),
+            Ok(number) if number <= section_count => Some(Choice::Section(number)),
+            _ => None,
+        },
     }
 }
 
-/// Boots a VM and runs every section of the demo in it.
-fn main() {
+/// Reads a line of input. Returns the exit code instead if the program should end, which it
+/// does at the end of the input, or if the input can't be read.
+fn read_line(input: &mut impl BufRead) -> Result<String, ExitCode> {
+    let mut line = String::new();
+    let result = input.read_line(&mut line);
+    match result {
+        Ok(0) => {
+            println!();
+            Err(ExitCode::SUCCESS)
+        }
+        Ok(_) => Ok(line),
+        Err(error) => {
+            println!();
+            eprintln!("Cannot read the input: {}", error);
+            Err(ExitCode::FAILURE)
+        }
+    }
+}
+
+/// Prints the list of sections.
+fn print_menu() {
+    println!("Demo sections:");
+    println!("{:>4}. All sections", 0);
+    for number in 1..=SECTION_COUNT {
+        println!("{:>4}. {}", number, section(number).0);
+    }
+}
+
+/// Shows the demo menu and runs what the user chooses from `input`, until they quit or the
+/// input ends.
+fn demo_menu(mut input: impl BufRead) -> ExitCode {
+    loop {
+        print_menu();
+        print!("Enter a section number, Q to quit [0]: ");
+        let _ = io::stdout().flush(); // The prompt has no newline. The menu works without it
+
+        let line = match read_line(&mut input) {
+            Ok(line) => line,
+            Err(code) => return code,
+        };
+        match parse_choice(&line, SECTION_COUNT) {
+            Some(Choice::All) => (1..=SECTION_COUNT).for_each(run_section),
+            Some(Choice::Section(number)) => run_section(number),
+            Some(Choice::Quit) => return ExitCode::SUCCESS,
+            None => println!("Invalid choice: {}\n", line.trim()),
+        }
+    }
+}
+
+/// Evaluates each line of `input` in one VM, until the input ends.
+fn interactive(mut input: impl BufRead) -> ExitCode {
+    // SAFETY: `regs` comes from `boot`, through `new_vm`.
     unsafe {
-        let mut regs = boot(io::stdout(), DICTIONARY_CELLS)
-            .expect("the dictionary must be able to hold the primitives");
-
-        println!("--- FORTH BOOTSEQUENCE COMPLETED ---");
-        println!("The Text Interpreter (Outer Interpreter) is online.\n");
-
-        for (number, (title, source)) in SECTIONS.iter().enumerate() {
-            println!("--- TEST RUN {}: {} ---", number + 1, title);
-            evaluate(&mut regs, source);
-            println!("-------------------------------------\n");
+        let mut regs = new_vm();
+        loop {
+            match read_line(&mut input) {
+                Ok(line) => interpret(&mut regs, &line),
+                Err(code) => return code,
+            }
         }
+    }
+}
 
-        println!("--- TEST RUN {}: Error Handling ---", SECTIONS.len() + 1);
-        for source in ERROR_TESTS {
-            evaluate(&mut regs, source);
+/// Starts the interactive prompt or the demo menu, depending on the arguments.
+fn main() -> ExitCode {
+    let mut arguments = env::args_os().skip(1);
+    let demo = match (arguments.next(), arguments.next()) {
+        (None, _) => false,
+        (Some(argument), None) if argument == "--interactive" => false,
+        (Some(argument), None) if argument == "--demo" => true,
+        _ => {
+            eprintln!("{}", USAGE);
+            return ExitCode::from(2);
         }
-        println!("-------------------------------------\n");
+    };
+
+    println!("--- FORTH BOOTSEQUENCE COMPLETED ---");
+    println!("The Text Interpreter (Outer Interpreter) is online.");
+    if demo {
+        println!();
+        demo_menu(io::stdin().lock())
+    } else {
+        println!("Press Ctrl-D to leave.\n");
+        interactive(io::stdin().lock())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_choice_reads_all_quit_and_section_numbers() {
+        assert_eq!(parse_choice("", 13), Some(Choice::All));
+        assert_eq!(parse_choice("\n", 13), Some(Choice::All));
+        assert_eq!(parse_choice("  \r\n", 13), Some(Choice::All));
+        assert_eq!(parse_choice("0\n", 13), Some(Choice::All));
+        assert_eq!(parse_choice("q\n", 13), Some(Choice::Quit));
+        assert_eq!(parse_choice("Q\n", 13), Some(Choice::Quit));
+        assert_eq!(parse_choice("1\n", 13), Some(Choice::Section(1)));
+        assert_eq!(parse_choice(" 13 \n", 13), Some(Choice::Section(13)));
+    }
+
+    #[test]
+    fn parse_choice_rejects_anything_else() {
+        assert_eq!(parse_choice("14\n", 13), None);
+        assert_eq!(parse_choice("-1\n", 13), None);
+        assert_eq!(parse_choice("abc\n", 13), None);
+        assert_eq!(parse_choice("quit\n", 13), None);
+        assert_eq!(parse_choice("1 2\n", 13), None);
+        assert_eq!(parse_choice("99999999999999999999999\n", 13), None);
+    }
+
+    #[test]
+    fn section_numbers_cover_every_section_in_order() {
+        assert_eq!(section(1).0, SECTIONS[0].0);
+        assert_eq!(section(1).1, [SECTIONS[0].1]);
+        assert_eq!(section(SECTIONS.len()).0, SECTIONS[SECTIONS.len() - 1].0);
+        assert_eq!(section(SECTION_COUNT - 1).1, QUIT_TESTS);
+        assert_eq!(section(SECTION_COUNT).1, ERROR_TESTS);
     }
 }

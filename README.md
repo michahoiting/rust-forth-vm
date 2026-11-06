@@ -4,8 +4,8 @@ A clean-room implementation of a Forth virtual machine in Rust. It is an
 indirect-threaded VM with a linked-list dictionary, a text interpreter, and a
 compiler for colon definitions.
 
-The program runs a scripted demo. There is no interactive prompt or file input
-yet.
+The program is an interactive Forth prompt, and also has a scripted demo. There is
+no file input yet.
 
 ## Getting started
 
@@ -22,6 +22,20 @@ git clone https://github.com/michahoiting/rust-forth-vm.git
 cd rust-forth-vm
 make demo
 ```
+
+The demo shows a menu of its sections. Enter a number to run one section, press
+Enter to run them all, or enter `Q` to quit. Each section runs in a new VM.
+
+Start the interactive prompt with:
+
+```sh
+cargo run --locked
+```
+
+It evaluates each line you enter, in one VM, and prints `ok` after a line that
+succeeds, unless a definition is still open. Press Ctrl-D to leave. `forth-vm`
+starts this way by default, and also accepts `--interactive`, and `--demo` for the
+demo.
 
 These commands are useful from there:
 
@@ -118,6 +132,7 @@ it.
 | `[']`    | `( -- )`     | Inside a definition: parses a name, and compiles its execution token as a literal (immediate) |
 | `>BODY`  | `( xt -- addr )` | Replaces an execution token with the address of that word's Parameter Field |
 | `EXIT`   | `( -- )`     | Returns from the current definition               |
+| `QUIT`   | `( -- )`     | Clears the return stack, discards the rest of the input, and returns to interpreting. Keeps the data stack, and doesn't leave the program |
 | `(`      | `( -- )`     | Skips the input up to and including the next `)` (immediate) |
 | `\`      | `( -- )`     | Skips the rest of the line (immediate)            |
 | `DUP`    | `( x -- x x )` | Copies the top Cell                             |
@@ -189,6 +204,8 @@ stacks, and rolls back any unfinished colon definition.
   `VARIABLE`, `CONSTANT`, `:` or `:NONAME` there leaves the open definition unfinished,
   so it can't be found or executed.
 - The dictionary size is chosen when the VM boots, and can't grow afterwards.
+- The interactive prompt evaluates each line by itself, so a `(` comment must end on
+  the line where it starts.
 - `!` can overwrite word headers and compiled code, which can crash the process.
 
 ## Versioning

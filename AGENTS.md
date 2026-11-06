@@ -21,7 +21,7 @@ make ci        # Formatting, lints, build, debug and release tests, and docs
 make ci-all    # Also Miri, on 64-bit and 32-bit targets. Needs nightly
 make msrv      # Checks the oldest supported Rust version, from `rust-version`
 make mutants   # Mutation testing, which CI runs weekly. Needs cargo-mutants
-make demo      # Runs the demo
+make demo      # Opens the demo menu
 make doc-serve # Serves the docs on localhost, including private items. Needs python3
 ```
 
@@ -93,7 +93,7 @@ Every new word or feature includes:
 2. Plan first for anything beyond a small fix, and agree on it before writing code.
 3. Create or use a GitHub issue, stating the problem and the acceptance criteria.
 4. Work on a branch, never directly on `main`.
-5. Update `CHANGELOG.md`, run `make ci`, and compare the `make demo` output with `main`. Only the intended changes may appear.
+5. Update `CHANGELOG.md`, run `make ci`, and compare the `printf '0\nq\n' | make demo` output with `main`. Only the intended changes may appear.
 6. For behaviour changes, temporarily break the code to confirm the tests catch it. `make mutants` skips every `unsafe fn`, which includes all primitives, so it doesn't replace this step. Use `--no-fail-fast` and check the exit code, because a crash in a test binary prints no `FAILED` lines.
 7. Open a PR that closes the issue, then stop. The project owner reviews and merges.
 8. After the merge, sync `main`, and delete the branch once asked. The PR head can differ from the last local commit, because of review suggestions.

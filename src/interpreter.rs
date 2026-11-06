@@ -48,15 +48,25 @@ unsafe fn interpret_token(regs: &mut Registers, token: &str) {
     }
 }
 
-/// ABORT: Resets the VM after an error and discards any half-built definition.
+/// QUIT: Clears the return stack and returns to interpreting, discarding any half-built
+/// definition, which could never be finished or used.
+///
+/// # Safety
+///
+/// `regs` must come from [`boot`](crate::boot).
+unsafe fn quit(regs: &mut Registers) {
+    regs.return_stack.clear();
+    regs.compiler.abort(&mut regs.dictionary);
+}
+
+/// ABORT: Resets the VM after an error, by clearing the data stack and doing a [`quit`].
 ///
 /// # Safety
 ///
 /// `regs` must come from [`boot`](crate::boot).
 unsafe fn abort(regs: &mut Registers) {
     regs.data_stack.clear();
-    regs.return_stack.clear();
-    regs.compiler.abort(&mut regs.dictionary);
+    quit(regs);
 }
 
 /// Evaluates all of `input`, which can span several lines, stopping at the first error.
@@ -67,10 +77,14 @@ unsafe fn abort(regs: &mut Registers) {
 /// An error discards the rest of `input`, clears both stacks, and rolls back any unfinished
 /// colon definition. Words that were already finished stay, and the VM can still be used.
 ///
+/// The word `QUIT` does the same, except that it keeps the data stack. It isn't a failure, but
+/// it's reported as [`ForthError::Quit`] so that a host knows the input didn't finish.
+///
 /// # Errors
 ///
 /// Returns the first [`ForthError`] that a word or token causes, such as
-/// [`ForthError::UnknownWord`]. Returns [`ForthError::Output`] if the writer given to
+/// [`ForthError::UnknownWord`], and [`ForthError::Quit`] if `QUIT` ran.
+/// Returns [`ForthError::Output`] if the writer given to
 /// [`boot`](crate::boot) fails. A failed flush is ignored after another error, so the
 /// original error is the one reported.
 ///
@@ -128,7 +142,11 @@ pub unsafe fn outer_interpreter(regs: &mut Registers, input: &str) -> Result<(),
     while let Some(token) = regs.input.parse_name() {
         interpret_token(regs, &token);
         if let Some(error) = regs.error.take() {
-            abort(regs);
+            if matches!(error, ForthError::Quit) {
+                quit(regs);
+            } else {
+                abort(regs);
+            }
             let _ = regs.output.flush(); // Keep earlier output, but report the original error
             return Err(error);
         }

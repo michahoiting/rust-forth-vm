@@ -39,6 +39,13 @@ pub(super) unsafe fn exit(regs: &mut Registers) {
     }
 }
 
+/// `QUIT ( -- )`: Stops the threaded code and the current input, and returns to the text
+/// interpreter. The interpreter does the rest: see
+/// [`outer_interpreter`](crate::outer_interpreter).
+pub(super) unsafe fn quit(regs: &mut Registers) {
+    regs.set_error(ForthError::Quit);
+}
+
 /// `EXECUTE ( i*x xt -- j*x )`: Pops an execution token and runs that word.
 pub(super) unsafe fn execute(regs: &mut Registers) {
     if let Some(xt) = regs.pop() {
@@ -85,6 +92,18 @@ mod tests {
             assert!(regs.error.is_none(), "got: {:?}", regs.error);
             assert_eq!(regs.data_stack, [1, 42]);
             assert_eq!(word, [0, 42, 99]);
+        }
+    }
+
+    #[test]
+    fn quit_stops_the_vm_and_leaves_the_data_stack_alone() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            regs.data_stack.push(7);
+
+            quit(&mut regs);
+            assert!(matches!(regs.error, Some(ForthError::Quit)));
+            assert_eq!(regs.data_stack, [7]);
         }
     }
 
