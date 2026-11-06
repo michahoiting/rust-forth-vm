@@ -183,16 +183,16 @@ pub(crate) unsafe fn enter_word(regs: &mut Registers) {
     // Fetch the contents of the CFA Cell (the raw bits of the machine-code pointer)
     let code_bits = *regs.w;
 
+    // A null pointer is undefined behaviour, and `!` can write zero here.
+    if code_bits == 0 {
+        regs.set_error(ForthError::EmptyCodeField(regs.w as Cell));
+        return;
+    }
+
     // Primitives are compiled into the binary, so their address is never in the dictionary,
     // and DOES> only stores addresses of threads, which always are.
     if regs.dictionary.is_in_arena(code_bits) {
         dodoes(regs);
-        return;
-    }
-
-    // A null function pointer is undefined behaviour, and `!` can write zero here.
-    if code_bits == 0 {
-        regs.set_error(ForthError::EmptyCodeField(regs.w as Cell));
         return;
     }
 
