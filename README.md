@@ -51,10 +51,15 @@ COUNTER @ .                       \ 48
 : ANNOUNCE 99 . ; IMMEDIATE
 : USES-ANNOUNCE ANNOUNCE 1 ;      \ 99, printed while compiling
 USES-ANNOUNCE .                   \ 1
+
+: ADD5 ( n -- n+5 ) 5 + ;         \ a stack effect comment
+2 ADD5 .                          \ 7
 ```
 
-The `\` comments are for this README only, because the interpreter does not
-support comments yet.
+Everything after `\` on a line is a comment, and so is anything between `(` and
+`)`. Both need whitespace after them, so `(comment)` is not a comment. Source can
+span several lines, and is evaluated as one block: an error discards the rest of
+it.
 
 ## Words
 
@@ -74,6 +79,8 @@ support comments yet.
 | `:NONAME` | `( -- xt )` | Starts a definition without a name, and pushes its execution token |
 | `EXECUTE` | `( i*x xt -- j*x )` | Runs the word that an execution token refers to |
 | `EXIT`   | `( -- )`     | Returns from the current definition               |
+| `(`      | `( -- )`     | Skips the input up to and including the next `)` (immediate) |
+| `\`      | `( -- )`     | Skips the rest of the line (immediate)            |
 | `DUP`    | `( x -- x x )` | Copies the top Cell                             |
 | `?DUP`   | `( x -- 0 \| x x )` | Copies the top Cell if it isn't zero       |
 | `DROP`   | `( x -- )`   | Removes the top Cell                              |

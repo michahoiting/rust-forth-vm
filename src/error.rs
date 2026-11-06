@@ -32,6 +32,8 @@ pub enum ForthError {
     InvalidAddress(Cell),
     /// `EXECUTE` was given a Cell, held here, that isn't the code field of a finished word.
     InvalidExecutionToken(Cell),
+    /// `(` found no closing `)` in the input.
+    UnterminatedComment,
     /// The output writer failed.
     Output(io::Error),
 }
@@ -58,6 +60,7 @@ impl fmt::Display for ForthError {
             ForthError::InvalidExecutionToken(xt) => {
                 write!(f, "Invalid execution token {:#x}.", xt)
             }
+            ForthError::UnterminatedComment => write!(f, "Comment has no closing parenthesis."),
             ForthError::Output(_) => write!(f, "Output error."),
         }
     }

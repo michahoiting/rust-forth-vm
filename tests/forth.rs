@@ -297,6 +297,10 @@ fn errors_have_stable_messages() {
             ForthError::InvalidExecutionToken(0x2a),
             "Invalid execution token 0x2a.",
         ),
+        (
+            ForthError::UnterminatedComment,
+            "Comment has no closing parenthesis.",
+        ),
         (ForthError::Output(io::Error::other("x")), "Output error."),
     ];
     for (error, message) in cases {
@@ -902,4 +906,149 @@ fn error_in_an_immediate_word_rolls_back_the_definition() {
 #[test]
 fn immediate_keeps_a_noname_xt_working() {
     assert_eq!(output_of(&[":NONAME 5 ; IMMEDIATE EXECUTE ."]), "5 ");
+}
+
+#[test]
+fn paren_comment_is_ignored_when_interpreting() {
+    assert_eq!(output_of(&["1 ( ignored ) ."]), "1 ");
+}
+
+#[test]
+fn paren_comment_is_ignored_in_a_definition() {
+    assert_eq!(output_of(&[": A 1 ( ignored ) 2 + ;", "A ."]), "3 ");
+}
+
+#[test]
+fn stack_effect_comment_documents_a_word() {
+    assert_eq!(output_of(&[": ADD5 ( n -- n+5 ) 5 + ;", "2 ADD5 ."]), "7 ");
+}
+
+#[test]
+fn comment_text_does_not_run() {
+    assert_eq!(output_of(&["( 1 . NOPE ; ) 2 ."]), "2 ");
+    assert_eq!(output_of(&[r"2 . \ 3 . NOPE ;"]), "2 ");
+}
+
+#[test]
+fn empty_paren_comment_is_allowed() {
+    assert_eq!(output_of(&["( ) 1 ."]), "1 ");
+}
+
+#[test]
+fn comment_words_need_whitespace_after_them() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        assert_error!(
+            &mut regs,
+            "(comment)",
+            ForthError::UnknownWord(name) if name == "(comment)"
+        );
+        assert_error!(
+            &mut regs,
+            r"\comment",
+            ForthError::UnknownWord(name) if name == r"\comment"
+        );
+    }
+}
+
+#[test]
+fn paren_comment_ends_at_the_first_closing_parenthesis() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        assert_error!(
+            &mut regs,
+            "( outer ( inner ) rest )",
+            ForthError::UnknownWord(name) if name == "rest"
+        );
+    }
+}
+
+#[test]
+fn paren_comment_can_span_lines_within_a_string() {
+    assert_eq!(output_of(&["1 ( spans\nseveral\nlines ) ."]), "1 ");
+}
+
+#[test]
+fn line_comment_stops_at_the_end_of_the_line() {
+    assert_eq!(output_of(&["1 . \\ 2 .\n3 ."]), "1 3 ");
+}
+
+#[test]
+fn line_comment_handles_windows_line_endings() {
+    assert_eq!(output_of(&["1 . \\ 2 .\r\n3 ."]), "1 3 ");
+}
+
+#[test]
+fn line_comment_can_end_the_input() {
+    assert_eq!(output_of(&[r"1 . \"]), "1 ");
+    assert_eq!(output_of(&[r"\"]), "");
+}
+
+#[test]
+fn line_comment_is_ignored_in_a_definition() {
+    assert_eq!(output_of(&[": A 1 \\ ignored\n2 + ;\nA ."]), "3 ");
+}
+
+#[test]
+fn comments_can_hold_non_ascii_text() {
+    assert_eq!(output_of(&["1 ( één ) . \\ één\n2 ."]), "1 2 ");
+}
+
+#[test]
+fn definition_can_span_lines_within_a_string() {
+    assert_eq!(output_of(&[": A\n    1\n    2 +\n;\nA ."]), "3 ");
+}
+
+#[test]
+fn commented_program_runs_as_one_block() {
+    let program = r"
+\ Add to a variable
+VARIABLE X
+: +! ( n addr -- )
+    SWAP OVER @ +  \ work out the new value
+    SWAP !
+;
+40 X !
+2 X +!
+X @ .              \ prints 42
+";
+    assert_eq!(output_of(&[program]), "42 ");
+}
+
+#[test]
+fn error_discards_the_rest_of_a_multi_line_string() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        assert_error!(&mut regs, "1 .\nNOPE 2 .\n3 .", ForthError::UnknownWord(_));
+        assert_eq!(output.text(), "1 ");
+    }
+}
+
+#[test]
+fn unterminated_comment_is_an_error() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        assert_error!(
+            &mut regs,
+            "1 ( never closed",
+            ForthError::UnterminatedComment
+        );
+        outer_interpreter(&mut regs, "DEPTH . 1 2 + .").unwrap();
+        assert_eq!(output.text(), "0 3 ");
+    }
+}
+
+#[test]
+fn unterminated_comment_rolls_back_an_open_definition() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        assert_error!(
+            &mut regs,
+            ": A 1 ( never closed",
+            ForthError::UnterminatedComment
+        );
+        assert_error!(&mut regs, "A", ForthError::UnknownWord(name) if name == "A");
+    }
 }

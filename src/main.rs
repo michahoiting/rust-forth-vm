@@ -5,10 +5,170 @@ use rust_forth_vm::{boot, outer_interpreter, Registers};
 // The size of the demo's Forth dictionary.
 const DICTIONARY_CELLS: usize = 1024;
 
-// Echoes a line of input, evaluates it, and ends the line with its result.
-// Output from Forth words appears between the two.
+// The demo sections, each with its title and one block of Forth source. All of them run in the
+// same VM, so later sections can use words from earlier ones.
+const SECTIONS: [(&str, &str); 9] = [
+    (
+        "Evaluating Text Operations",
+        r"
+40 2 +            \ leaves 42 on the stack
+.                 \ prints 42
+-5 3 + .          \ prints -2
+",
+    ),
+    (
+        "Dynamic Creation via Text Interpreter",
+        r"
+CREATE STATIONARY-SOURCE     \ creates a new word in the dictionary
+1337 ,                       \ compiles 1337 into the data field of the new word
+STATIONARY-SOURCE @ .        \ prints 1337
+",
+    ),
+    (
+        "Colon Definitions",
+        r"
+: ADD3 3 + ;
+: ADD6 ADD3 ADD3 ;
+36 ADD6 .         \ prints 42
+",
+    ),
+    (
+        "Defining Words with DOES>",
+        r"
+: CONSTANT CREATE , DOES> @ ;
+42 CONSTANT ANSWER
+7 CONSTANT LUCKY
+ANSWER . LUCKY .  \ prints 42 7
+",
+    ),
+    (
+        "Variables with ! and @",
+        r"
+VARIABLE COUNTER
+COUNTER @ .                        \ prints 0: a new variable starts at zero
+42 COUNTER !
+COUNTER @ .                        \ prints 42
+COUNTER @ 1 + COUNTER !            \ read, change, and write back
+COUNTER @ .                        \ prints 43
+: BUMP COUNTER @ 1 + COUNTER ! ;   \ a variable used from a colon word
+BUMP BUMP COUNTER @ .              \ prints 45
+VARIABLE OTHER                     \ each variable has its own Cell
+7 OTHER !
+OTHER @ . COUNTER @ .              \ prints 7 45
+",
+    ),
+    (
+        "Stack Words",
+        r"
+1 2 DROP .                    \ prints 1
+1 2 SWAP . .                  \ prints 1 2
+3 4 OVER . . .                \ prints 3 4 3
+1 2 3 ROT . . .               \ prints 1 3 2
+5 ?DUP . .                    \ prints 5 5
+0 ?DUP .                      \ prints 0
+10 20 30 2 PICK . . . .       \ prints 10 30 20 10
+1 2 3 2 ROLL . . .            \ prints 1 3 2
+1 2 3 DEPTH . . . .           \ prints 3 3 2 1
+: DOUBLE DUP + ;              \ reuse a value without naming it
+21 DOUBLE .                   \ prints 42
+: +! SWAP OVER @ + SWAP ! ;   \ add to a variable
+5 COUNTER +!
+COUNTER @ .                   \ prints 50
+",
+    ),
+    (
+        "Execution Tokens",
+        r"
+\ Run an unnamed definition straight away
+:NONAME 1 2 + ; EXECUTE .     \ prints 3
+
+\ Pass arguments and results through the stack
+5 :NONAME DUP + ; EXECUTE .   \ prints 10
+
+\ Keep an execution token under a name
+:NONAME 3 + ; CONSTANT ADD3-XT
+4 ADD3-XT EXECUTE .           \ prints 7
+
+\ Pass behaviour to a word, as a callback
+: TWICE DUP ROT SWAP EXECUTE SWAP EXECUTE ;
+5 :NONAME DUP + ; TWICE .     \ prints 20
+1 ADD3-XT TWICE .             \ prints 7
+
+\ Change what a word does at runtime, through a variable
+VARIABLE ACTION
+:NONAME 42 ; ACTION !
+: RUN-ACTION ACTION @ EXECUTE ;
+RUN-ACTION .                  \ prints 42
+:NONAME 7 ; ACTION !
+RUN-ACTION .                  \ prints 7
+",
+    ),
+    (
+        "Immediate Words",
+        r"
+\ An immediate word runs during compilation
+: ANNOUNCE 99 . ; IMMEDIATE
+: USES-ANNOUNCE ANNOUNCE 1 ;  \ prints 99 while compiling
+USES-ANNOUNCE .               \ prints 1
+
+\ A normal word only runs when called, for comparison
+: QUIET 99 . ;
+: USES-QUIET QUIET 1 ;        \ prints nothing while compiling
+USES-QUIET .                  \ prints 99 1
+
+\ Count something at compile time
+VARIABLE USES
+: COUNTED USES @ 1 + USES ! ; IMMEDIATE
+: FIRST COUNTED 1 ;
+: SECOND COUNTED COUNTED 2 ;
+USES @ .                      \ prints 3
+
+\ An immediate word still runs normally when interpreted
+ANNOUNCE                      \ prints 99
+",
+    ),
+    (
+        "Comments",
+        r"
+\ A whole line can be a comment
+1 2 + . ( a comment can sit in the middle of a line ) 4 .  \ prints 3 4
+5 . \ the rest of this line is ignored: 6 .
+
+( a parenthesis comment
+  can span several lines )
+
+: ADD5 ( n -- n+5 ) 5 + ;  \ a stack effect comment documents a word
+2 ADD5 .                   \ prints 7
+
+: PAIR ( n -- n n )
+    DUP  \ keep a copy for later
+;
+3 PAIR . .                 \ prints 3 3
+",
+    ),
+];
+
+// The error handling tests. An error discards the rest of its text, so each one is a separate
+// block.
+const ERROR_TESTS: [&str; 8] = [
+    ": BROKEN 1 NO-SUCH-WORD ;",
+    "BROKEN",
+    "+",
+    "1 5 !",
+    "DROP",
+    "9 PICK",
+    "5 EXECUTE",
+    "1 ( never closed",
+];
+
+// Echoes a block of Forth source and evaluates it. Output from Forth words follows on one line,
+// which ends with the result.
 unsafe fn evaluate(regs: &mut Registers, input: &str) {
-    print!("Input: '{}' ", input);
+    println!("Input:");
+    for line in input.trim().lines() {
+        println!("{}", format!("    {}", line).trim_end());
+    }
+    print!("Output: ");
     match outer_interpreter(regs, input) {
         Ok(()) => println!("ok"),
         Err(error) => println!("Forth Error: {}", error),
@@ -23,112 +183,16 @@ fn main() {
         println!("--- FORTH BOOTSEQUENCE COMPLETED ---");
         println!("The Text Interpreter (Outer Interpreter) is online.\n");
 
-        // --- TEST RUN 1: Evaluating Text Operations ---
-        evaluate(&mut regs, "40 2 +");
-        // Parameter stack now contains 42. Print it out using the Forth '.' primitive
-        evaluate(&mut regs, ".");
-        evaluate(&mut regs, "-5 3 + .");
-        println!("-------------------------------------\n");
+        for (number, (title, source)) in SECTIONS.iter().enumerate() {
+            println!("--- TEST RUN {}: {} ---", number + 1, title);
+            evaluate(&mut regs, source);
+            println!("-------------------------------------\n");
+        }
 
-        // --- TEST RUN 2: Dynamic Creation via Text interpreter ---
-        evaluate(&mut regs, "CREATE STATIONARY-SOURCE"); // Creates a new word in the dictionary
-        evaluate(&mut regs, "1337 ,"); // Compiles the value 1337 into the Data Field of the new word
-                                       // We can now reference our dynamically generated word directly via text input!
-        evaluate(&mut regs, "STATIONARY-SOURCE @ .");
-        println!("-------------------------------------\n");
-
-        // --- TEST RUN 3: Colon Definitions ---
-        evaluate(&mut regs, ": ADD3 3 + ;");
-        evaluate(&mut regs, ": ADD6 ADD3 ADD3 ;");
-        evaluate(&mut regs, "36 ADD6 .");
-        println!("-------------------------------------\n");
-
-        // --- TEST RUN 4: Defining Words with DOES> ---
-        evaluate(&mut regs, ": CONSTANT CREATE , DOES> @ ;");
-        evaluate(&mut regs, "42 CONSTANT ANSWER");
-        evaluate(&mut regs, "7 CONSTANT LUCKY");
-        evaluate(&mut regs, "ANSWER . LUCKY .");
-        println!("-------------------------------------\n");
-
-        // --- TEST RUN 5: Variables with ! and @ ---
-        evaluate(&mut regs, "VARIABLE COUNTER");
-        evaluate(&mut regs, "COUNTER @ ."); // A new variable starts at zero
-        evaluate(&mut regs, "42 COUNTER !");
-        evaluate(&mut regs, "COUNTER @ .");
-        evaluate(&mut regs, "COUNTER @ 1 + COUNTER !"); // Read, change, and write back
-        evaluate(&mut regs, "COUNTER @ .");
-        evaluate(&mut regs, ": BUMP COUNTER @ 1 + COUNTER ! ;"); // Used from a colon word
-        evaluate(&mut regs, "BUMP BUMP COUNTER @ .");
-        evaluate(&mut regs, "VARIABLE OTHER"); // Each variable has its own Cell
-        evaluate(&mut regs, "7 OTHER !");
-        evaluate(&mut regs, "OTHER @ . COUNTER @ .");
-        println!("-------------------------------------\n");
-
-        // --- TEST RUN 6: Stack Words ---
-        evaluate(&mut regs, "1 2 DROP .");
-        evaluate(&mut regs, "1 2 SWAP . .");
-        evaluate(&mut regs, "3 4 OVER . . .");
-        evaluate(&mut regs, "1 2 3 ROT . . .");
-        evaluate(&mut regs, "5 ?DUP . .");
-        evaluate(&mut regs, "0 ?DUP .");
-        evaluate(&mut regs, "10 20 30 2 PICK . . . .");
-        evaluate(&mut regs, "1 2 3 2 ROLL . . .");
-        evaluate(&mut regs, "1 2 3 DEPTH . . . .");
-        evaluate(&mut regs, ": DOUBLE DUP + ;"); // Reuse a value without naming it
-        evaluate(&mut regs, "21 DOUBLE .");
-        evaluate(&mut regs, ": +! SWAP OVER @ + SWAP ! ;"); // Add to a variable
-        evaluate(&mut regs, "5 COUNTER +!");
-        evaluate(&mut regs, "COUNTER @ .");
-        println!("-------------------------------------\n");
-
-        // --- TEST RUN 7: Execution Tokens ---
-        // Run an unnamed definition straight away
-        evaluate(&mut regs, ":NONAME 1 2 + ; EXECUTE .");
-        // Pass arguments and results through the stack
-        evaluate(&mut regs, "5 :NONAME DUP + ; EXECUTE .");
-        // Keep an execution token under a name
-        evaluate(&mut regs, ":NONAME 3 + ; CONSTANT ADD3-XT");
-        evaluate(&mut regs, "4 ADD3-XT EXECUTE .");
-        // Pass behaviour to a word, as a callback
-        evaluate(&mut regs, ": TWICE DUP ROT SWAP EXECUTE SWAP EXECUTE ;");
-        evaluate(&mut regs, "5 :NONAME DUP + ; TWICE .");
-        evaluate(&mut regs, "1 ADD3-XT TWICE .");
-        // Change what a word does at runtime, through a variable
-        evaluate(&mut regs, "VARIABLE ACTION");
-        evaluate(&mut regs, ":NONAME 42 ; ACTION !");
-        evaluate(&mut regs, ": RUN-ACTION ACTION @ EXECUTE ;");
-        evaluate(&mut regs, "RUN-ACTION .");
-        evaluate(&mut regs, ":NONAME 7 ; ACTION !");
-        evaluate(&mut regs, "RUN-ACTION .");
-        println!("-------------------------------------\n");
-
-        // --- TEST RUN 8: Immediate Words ---
-        // An immediate word runs during compilation
-        evaluate(&mut regs, ": ANNOUNCE 99 . ; IMMEDIATE");
-        evaluate(&mut regs, ": USES-ANNOUNCE ANNOUNCE 1 ;");
-        evaluate(&mut regs, "USES-ANNOUNCE .");
-        // A normal word only runs when called, for comparison
-        evaluate(&mut regs, ": QUIET 99 . ;");
-        evaluate(&mut regs, ": USES-QUIET QUIET 1 ;");
-        evaluate(&mut regs, "USES-QUIET .");
-        // Count something at compile time
-        evaluate(&mut regs, "VARIABLE USES");
-        evaluate(&mut regs, ": COUNTED USES @ 1 + USES ! ; IMMEDIATE");
-        evaluate(&mut regs, ": FIRST COUNTED 1 ;");
-        evaluate(&mut regs, ": SECOND COUNTED COUNTED 2 ;");
-        evaluate(&mut regs, "USES @ .");
-        // An immediate word still runs normally when interpreted
-        evaluate(&mut regs, "ANNOUNCE");
-        println!("-------------------------------------\n");
-
-        // --- TEST RUN 9: Error Handling ---
-        evaluate(&mut regs, ": BROKEN 1 NO-SUCH-WORD ;");
-        evaluate(&mut regs, "BROKEN");
-        evaluate(&mut regs, "+");
-        evaluate(&mut regs, "1 5 !");
-        evaluate(&mut regs, "DROP");
-        evaluate(&mut regs, "9 PICK");
-        evaluate(&mut regs, "5 EXECUTE");
+        println!("--- TEST RUN {}: Error Handling ---", SECTIONS.len() + 1);
+        for source in ERROR_TESTS {
+            evaluate(&mut regs, source);
+        }
         println!("-------------------------------------\n");
     }
 }
