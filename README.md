@@ -132,6 +132,7 @@ it.
 | `ALIGNED` | `( addr -- a-addr )` | Rounds an address up to a cell-aligned address |
 | `CHAR+`  | `( c-addr1 -- c-addr2 )` | Adds the size of a character to an address |
 | `CHARS`  | `( n1 -- n2 )` | Gives the size of `n1` characters in bytes. A character is one byte |
+| `CELLS`  | `( n1 -- n2 )` | Gives the size of `n1` Cells in bytes             |
 | `CREATE` | `( -- )`     | Parses a name and creates a word that pushes its data address |
 | `VARIABLE` | `( -- )`   | Parses a name and creates a word holding one Cell, initially 0 |
 | `CONSTANT` | `( x -- )` | Parses a name and creates a word that pushes `x`  |

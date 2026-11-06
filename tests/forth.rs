@@ -1443,6 +1443,35 @@ fn allot_and_c_comma_report_a_full_dictionary() {
 }
 
 #[test]
+fn cells_gives_a_size_in_bytes() {
+    let cell_size = mem::size_of::<Cell>();
+    assert_eq!(output_of(&["0 CELLS ."]), "0 ");
+    assert_eq!(output_of(&["3 CELLS ."]), format!("{} ", 3 * cell_size));
+    assert_eq!(output_of(&["-1 CELLS ."]), format!("-{} ", cell_size));
+}
+
+#[test]
+fn cells_indexes_a_table() {
+    assert_eq!(
+        output_of(&[
+            "CREATE T 3 CELLS ALLOT",
+            "5 T 2 CELLS + !",
+            "T 2 CELLS + @ . T 1 CELLS + @ .",
+        ]),
+        "5 0 "
+    );
+    assert_same_cells(&["CREATE T 3 CELLS ALLOT", "T 3 CELLS + . HERE ."]);
+}
+
+#[test]
+fn cells_reports_underflow() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        assert_error!(&mut regs, "CELLS", ForthError::DataStackUnderflow);
+    }
+}
+
+#[test]
 fn aligned_finds_the_next_cell_boundary() {
     let cell_size = mem::size_of::<Cell>();
     assert_eq!(output_of(&["0 ALIGNED ."]), "0 ");

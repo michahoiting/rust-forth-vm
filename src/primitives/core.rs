@@ -3,6 +3,7 @@
 //! Words that work on the data stack and on memory.
 
 use std::io::Write;
+use std::mem;
 
 use crate::cell::Cell;
 use crate::dictionary::{self, pfa_of};
@@ -79,6 +80,13 @@ pub(super) unsafe fn char_plus(regs: &mut Registers) {
 /// so this only checks that the Cell is there.
 pub(super) unsafe fn chars(regs: &mut Registers) {
     regs.require(1);
+}
+
+/// `CELLS ( n1 -- n2 )`: Gives the size of `n1` Cells in bytes, wrapping on overflow.
+pub(super) unsafe fn cells(regs: &mut Registers) {
+    if let Some(n) = regs.pop() {
+        regs.data_stack.push(n.wrapping_mul(mem::size_of::<Cell>()));
+    }
 }
 
 /// `>BODY ( xt -- pfa )`: Replaces an execution token with the address of that word's Parameter
@@ -286,6 +294,26 @@ mod tests {
     }
 
     #[test]
+    fn cells_multiplies_by_the_size_of_a_cell() {
+        unsafe {
+            let cell_size = mem::size_of::<Cell>();
+            assert_eq!(stack_after(cells, &[9, 0]), [9, 0]);
+            assert_eq!(stack_after(cells, &[9, 3]), [9, 3 * cell_size]);
+        }
+    }
+
+    #[test]
+    fn cells_wraps_on_overflow() {
+        unsafe {
+            let cell_size = mem::size_of::<Cell>();
+            assert_eq!(
+                stack_after(cells, &[Cell::MAX]),
+                [0usize.wrapping_sub(cell_size)]
+            );
+        }
+    }
+
+    #[test]
     fn byte_words_need_enough_cells() {
         unsafe {
             assert_underflow(c_fetch, &[]);
@@ -294,6 +322,7 @@ mod tests {
             assert_underflow(aligned, &[]);
             assert_underflow(char_plus, &[]);
             assert_underflow(chars, &[]);
+            assert_underflow(cells, &[]);
         }
     }
 

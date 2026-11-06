@@ -36,6 +36,8 @@ pub(crate) unsafe fn install(regs: &mut Registers) -> Result<(), ForthError> {
     regs.dictionary
         .add_primitive_word("CHARS", code_cell(core::chars), 0)?;
     regs.dictionary
+        .add_primitive_word("CELLS", code_cell(core::cells), 0)?;
+    regs.dictionary
         .add_primitive_word(">BODY", code_cell(core::to_body), 0)?;
     regs.dictionary
         .add_primitive_word("!", code_cell(core::store), 0)?;

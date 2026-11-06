@@ -231,6 +231,13 @@ ALIGN HERE 99 , @ .           \ prints 99
 : SEVEN 7 ;
 SEVEN .                       \ prints 7
 
+\ CELLS gives the size of some Cells in bytes, which is how to index a table of them
+CREATE TABLE 3 CELLS ALLOT
+11 TABLE !
+22 TABLE 1 CELLS + !
+TABLE @ .                     \ prints 11
+TABLE 1 CELLS + @ .           \ prints 22
+
 \ A negative ALLOT gives back data of the newest word made by CREATE
 CREATE SCRATCH 16 ALLOT
 -16 ALLOT
