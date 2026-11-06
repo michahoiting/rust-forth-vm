@@ -39,8 +39,8 @@ it. CI still runs the same checks.
 4. Add an entry under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for anything a user
    would notice. Everything is part of the unreleased `0.1.0` until the project owner
    releases it. Until then, all entries go under `### Added`, including fixes and changes,
-   and nothing is marked as breaking. After the first release, start breaking changes with
-   `**Breaking:**`.
+   and nothing is marked as breaking. After the first release, this project adheres to
+   Semantic Versioning, and breaking changes start with `**Breaking:**`.
 5. Run `make ci`.
 6. Open a PR that closes the issue. The project owner reviews and merges.
 

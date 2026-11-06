@@ -135,14 +135,14 @@ Every dictionary entry has the same header. The name bytes are stored in the
 dictionary directly in front of it.
 
 ```
-LFA        Link to the previous word
-NFA        Pointer to the name bytes
+LFA        Link Field Address (LFA) Link to the previous word
+NFA        Name Field Address (NFA) Pointer to the name bytes
 LEN_FLAGS  Length of the name, and F_IMMEDIATE, F_HIDDEN, F_CREATED, F_PENDING
-CFA        Pointer to the machine code
+CFA        Code Field Address (CFA) Pointer to the machine code
 ...        Parameter Field
 ```
 
-The Parameter Field always starts at `CFA + 1`, which `>BODY` gives from an execution
+The Parameter Field Address (PFA) always starts at `CFA + 1`, which `>BODY` gives from an execution
 token. What it holds depends on how the word was defined:
 
 - **Primitives** have no Parameter Field, so `>BODY` gives whatever comes next in the
@@ -150,6 +150,15 @@ token. What it holds depends on how the word was defined:
 - **Colon words** hold a thread of CFAs, ending in `EXIT`. Literals are compiled
   as `LIT` followed by the value.
 - **`CREATE`d words** hold their data.
+
+An execution token (xt) identifies a word, and is that word's CFA. `'`, `[']` and
+`:NONAME` give one, and `EXECUTE` runs it. `EXECUTE` and `>BODY` reject anything that
+isn't the xt of a finished word.
+
+A thread is a list of xts. The inner interpreter takes each one and runs the machine
+code that its Code Field points to. For a primitive, that code is the whole word. For a
+colon word, it is `DOCOL`, which continues with the thread in the Parameter Field. For a
+`CREATE`d word, it is `DOVAR`, which pushes the PFA.
 
 `DOES>` changes the CFA of a `CREATE`d word to the address of the thread behind
 `DOES>`. That address is in the dictionary and machine code never is, so `enter_word`

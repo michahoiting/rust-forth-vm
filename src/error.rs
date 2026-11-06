@@ -62,8 +62,8 @@ pub enum ForthError {
     InvalidExecutionToken(Cell),
     /// `(` found no closing `)` in the input.
     UnterminatedComment,
-    /// A word, whose execution token is held here, has zero in its code field.
-    EmptyCodeField(Cell),
+    /// A word, whose execution token is held here, has a null pointer in its code field.
+    NullPointerCheck(Cell),
     /// The output writer failed.
     Output(io::Error),
 }
@@ -94,7 +94,9 @@ impl fmt::Display for ForthError {
                 write!(f, "Invalid execution token {:#x}.", xt)
             }
             ForthError::UnterminatedComment => write!(f, "Comment has no closing parenthesis."),
-            ForthError::EmptyCodeField(xt) => write!(f, "Word at {:#x} has no code.", xt),
+            ForthError::NullPointerCheck(xt) => {
+                write!(f, "Null pointer in the code field at {:#x}.", xt)
+            }
             ForthError::Output(_) => write!(f, "Output error."),
         }
     }

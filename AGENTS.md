@@ -71,7 +71,7 @@ main → lib → interpreter, primitives → vm → compiler → dictionary → 
 - Public API changes update the doc examples, which run as doctests.
 - Docs describe behaviour, and link to the README for the word list and limitations instead of copying them.
 - Breaking changes are fine until the project owner says otherwise.
-- Everything is part of the unreleased `0.1.0` until the project owner releases it. Until then, all changelog entries go under `### Added`, including fixes and changes, and nothing is marked as breaking. After the first release, start breaking changes with `**Breaking:**`.
+- Everything is part of the unreleased `0.1.0` until the project owner releases it. Until then, all changelog entries go under `### Added`, including fixes and changes, and nothing is marked as breaking. After the first release, this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), and breaking changes start with `**Breaking:**`.
 - Every user-visible change adds an entry under `[Unreleased]` in `CHANGELOG.md`.
 - Don't bump the version or create tags unless asked. Only the project owner decides when to release.
 - Stay within the requested scope. Report anything else you find instead of fixing it in passing.
