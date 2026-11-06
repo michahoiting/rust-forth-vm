@@ -119,7 +119,9 @@ mod tests {
             outer_interpreter(&mut regs, ": NOOP ;").unwrap();
             let cfa = cfa_of(regs.dictionary.find_word("NOOP").unwrap());
 
-            let mut thread = vec![cfa as Cell; 5_000_000];
+            // Miri is far too slow for the full length, but still checks each step.
+            let cells = if cfg!(miri) { 1_000 } else { 5_000_000 };
+            let mut thread = vec![cfa as Cell; cells];
             thread.push(0);
             regs.ip = thread.as_ptr();
             run(&mut regs);

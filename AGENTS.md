@@ -12,16 +12,16 @@ See `README.md` for the word list and internals, and the GitHub issues for known
 
 ## Commands
 
-These run in CI, and must pass before a PR:
+CI runs these same `Makefile` targets:
 
 ```sh
-cargo fmt --all --check
-cargo clippy --all-targets --locked -- -D warnings
-cargo build --locked
-cargo test --locked
+make ci        # Formatting, lints, build, debug and release tests, and docs
+make ci-all    # Also Miri, on 64-bit and 32-bit targets. Needs nightly
+make mutants   # Mutation testing, which CI runs weekly. Needs cargo-mutants
+make demo      # Runs the demo
 ```
 
-`cargo run` runs the demo.
+`make ci` must pass before a PR. Each step is also its own target, such as `make test`. Add new CI steps to the `Makefile`, not directly to the workflows.
 
 ## Architecture
 
@@ -66,7 +66,7 @@ Every new word or feature includes:
 2. Plan first for anything beyond a small fix, and agree on it before writing code.
 3. Create or use a GitHub issue, stating the problem and the acceptance criteria.
 4. Work on a branch, never directly on `main`.
-5. Run the CI commands, and compare the `cargo run` output with `main`. Only the intended changes may appear.
+5. Run `make ci`, and compare the `make demo` output with `main`. Only the intended changes may appear.
 6. For behaviour changes, temporarily break the code to confirm the tests catch it. Use `--no-fail-fast` and check the exit code, because a crash in a test binary prints no `FAILED` lines.
 7. Open a PR that closes the issue, then stop. The project owner reviews and merges.
 8. After the merge, sync `main`, and delete the branch once asked. The PR head can differ from the last local commit, because of review suggestions.
