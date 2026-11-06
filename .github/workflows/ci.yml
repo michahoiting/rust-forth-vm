@@ -33,7 +33,7 @@ jobs:
 
       - name: Check for changes besides Markdown
         id: diff
-        run: echo "code=$(make -s code-changed BASE=HEAD^1)" >> "$GITHUB_OUTPUT"
+        run: exit 1
 
   build-and-test:
     runs-on: ubuntu-latest
