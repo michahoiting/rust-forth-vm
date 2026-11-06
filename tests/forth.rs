@@ -352,3 +352,86 @@ fn invalid_address_leaves_a_usable_vm() {
         assert_eq!(output.text(), "3 ");
     }
 }
+
+#[test]
+fn store_writes_a_cell() {
+    assert_eq!(output_of(&["CREATE X 0 , 42 X ! X @ ."]), "42 ");
+}
+
+#[test]
+fn store_writes_aligned_cells_behind_the_first() {
+    let size = mem::size_of::<Cell>();
+    let line = format!("CREATE X 1 , 2 , 9 X {size} + ! X @ . X {size} + @ .");
+    assert_eq!(output_of(&[&line]), "1 9 ");
+}
+
+#[test]
+fn store_changes_a_does_child() {
+    let lines = [": VAR CREATE , DOES> ;", "5 VAR V", "9 V !", "V @ ."];
+    assert_eq!(output_of(&lines), "9 ");
+}
+
+#[test]
+fn store_rejects_addresses_outside_the_dictionary() {
+    unsafe {
+        let mut regs = boot(io::sink());
+        assert_error!(&mut regs, "1 0 !", ForthError::InvalidAddress(0));
+        assert_error!(&mut regs, "1 5 !", ForthError::InvalidAddress(5));
+        assert_error!(&mut regs, "1 -1 !", ForthError::InvalidAddress(Cell::MAX));
+    }
+}
+
+#[test]
+fn store_rejects_misaligned_addresses() {
+    unsafe {
+        let mut regs = boot(io::sink());
+        for offset in 1..mem::size_of::<Cell>() {
+            let line = format!("CREATE X 7 , 9 X {} + !", offset);
+            assert_error!(&mut regs, &line, ForthError::InvalidAddress(_));
+        }
+    }
+}
+
+#[test]
+fn store_rejects_here() {
+    unsafe {
+        let mut regs = boot(io::sink());
+        assert_error!(&mut regs, "CREATE X 5 X !", ForthError::InvalidAddress(_));
+    }
+}
+
+#[test]
+fn store_needs_two_stack_items() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = boot(output.clone());
+        outer_interpreter(&mut regs, "CREATE X 7 ,").unwrap();
+        assert_error!(&mut regs, "X !", ForthError::DataStackUnderflow);
+        outer_interpreter(&mut regs, "X @ .").unwrap();
+        assert_eq!(output.text(), "7 ");
+    }
+}
+
+#[test]
+fn failed_definition_invalidates_its_addresses_for_store() {
+    unsafe {
+        let mut regs = boot(io::sink());
+        outer_interpreter(&mut regs, "CREATE X 7 ,").unwrap();
+        assert_error!(&mut regs, ": BROKEN NOPE ;", ForthError::UnknownWord(_));
+
+        // The definition wrote behind the data of X, and is gone again.
+        let line = format!("9 X {} + !", mem::size_of::<Cell>());
+        assert_error!(&mut regs, &line, ForthError::InvalidAddress(_));
+    }
+}
+
+#[test]
+fn invalid_store_leaves_a_usable_vm() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = boot(output.clone());
+        assert_error!(&mut regs, "1 5 !", ForthError::InvalidAddress(5));
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}

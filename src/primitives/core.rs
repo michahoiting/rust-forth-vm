@@ -15,6 +15,18 @@ pub(super) unsafe fn fetch(regs: &mut Registers) {
     }
 }
 
+// STORE ( ! ): Pops a dictionary address and a Cell from the stack, and stores the Cell there.
+pub(super) unsafe fn store(regs: &mut Registers) {
+    if regs.data_stack.len() < 2 {
+        regs.set_error(ForthError::DataStackUnderflow);
+        return;
+    }
+    if let (Some(addr), Some(value)) = (regs.data_stack.pop(), regs.data_stack.pop()) {
+        let result = regs.dictionary.store(addr, value);
+        regs.check(result);
+    }
+}
+
 // PLUS ( + ): Pops two Cells from the stack, adds them, and pushes the result.
 pub(super) unsafe fn plus(regs: &mut Registers) {
     if regs.data_stack.len() < 2 {

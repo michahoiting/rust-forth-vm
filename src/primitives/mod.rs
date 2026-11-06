@@ -16,6 +16,8 @@ pub(crate) unsafe fn install(regs: &mut Registers) {
     regs.dictionary
         .add_primitive_word("@", code_cell(core::fetch), 0);
     regs.dictionary
+        .add_primitive_word("!", code_cell(core::store), 0);
+    regs.dictionary
         .add_primitive_word(",", code_cell(compiler::comma), 0);
     regs.dictionary
         .add_primitive_word("CREATE", code_cell(compiler::create), 0);
