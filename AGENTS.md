@@ -10,6 +10,8 @@ The FORTH-83 standard is the reference for how words behave. Later ANS Forth wor
 
 See `README.md` for the word list and internals, and the GitHub issues for known problems. Don't copy either into this file, because they change.
 
+See `CONTRIBUTING.md` for setup, the release steps, and the versioning policy. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
 ## Commands
 
 CI runs these same `Makefile` targets:
@@ -25,7 +27,17 @@ make doc-serve # Serves the docs on localhost, including private items. Needs py
 
 `make ci` must pass before a PR. Each step is also its own target, such as `make test`. Add new CI steps to the `Makefile`, not directly to the workflows.
 
-CI uses the latest stable toolchain on purpose, so a new lint can fail it with no code change. Raise `rust-version` when code needs a newer feature, and check it with a run on GitHub.
+CI uses the latest stable toolchain on purpose, so a new lint can fail it with no code change. Raise `rust-version` when code needs a newer feature, and check it with a PR's CI run. CI runs on PRs and on pushes to `main`, not on other branches.
+
+These three aren't part of CI:
+
+```sh
+make setup-dev # Installs the developer tools and the git hooks. Run it once after cloning
+make hooks     # Installs only the git hooks from `.githooks/`
+make protect   # Applies the ruleset for `main`. Needs gh and admin access
+```
+
+`main` is protected by the ruleset in `.github/rulesets/protect-main.json`. Renaming a CI job means updating its required check there too. Never bypass the hooks with `--no-verify` unless asked, and don't run `make protect` unless asked.
 
 ## Architecture
 
@@ -58,7 +70,9 @@ main → lib → interpreter, primitives → vm → compiler → dictionary → 
 - Doc comments on primitives start with the word and its stack effect in one code span, such as `` `@ ( addr -- x )`: ``. Outside a code span, rustdoc would change `--` and `*`.
 - Public API changes update the doc examples, which run as doctests.
 - Docs describe behaviour, and link to the README for the word list and limitations instead of copying them.
-- Breaking changes are fine until the project owner says otherwise.
+- Breaking changes are fine until the project owner says otherwise. Mark them with `**Breaking:**` in the changelog.
+- Every user-visible change adds an entry under `[Unreleased]` in `CHANGELOG.md`.
+- Don't bump the version or create tags unless asked. Releases are the project owner's.
 - Stay within the requested scope. Report anything else you find instead of fixing it in passing.
 
 ## New Forth words
@@ -70,6 +84,7 @@ Every new word or feature includes:
 - API tests in `tests/forth.rs`, using only the public API.
 - Normal use cases in the demo, as a commented block in `SECTIONS` in `src/main.rs`.
 - README updates: the word table, and the limitations if they change.
+- A `CHANGELOG.md` entry.
 
 ## Working on changes
 
@@ -77,7 +92,7 @@ Every new word or feature includes:
 2. Plan first for anything beyond a small fix, and agree on it before writing code.
 3. Create or use a GitHub issue, stating the problem and the acceptance criteria.
 4. Work on a branch, never directly on `main`.
-5. Run `make ci`, and compare the `make demo` output with `main`. Only the intended changes may appear.
+5. Update `CHANGELOG.md`, run `make ci`, and compare the `make demo` output with `main`. Only the intended changes may appear.
 6. For behaviour changes, temporarily break the code to confirm the tests catch it. `make mutants` skips every `unsafe fn`, which includes all primitives, so it doesn't replace this step. Use `--no-fail-fast` and check the exit code, because a crash in a test binary prints no `FAILED` lines.
 7. Open a PR that closes the issue, then stop. The project owner reviews and merges.
 8. After the merge, sync `main`, and delete the branch once asked. The PR head can differ from the last local commit, because of review suggestions.

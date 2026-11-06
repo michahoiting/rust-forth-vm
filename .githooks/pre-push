@@ -1,0 +1,30 @@
+#!/bin/sh
+# Copyright (c) 2026 M.W.R. Hoiting
+
+# Refuses pushes to main, and runs the lints and tests. Install with `make hooks`.
+#
+# Git passes one line per ref: <local ref> <local sha> <remote ref> <remote sha>.
+# The remote ref is what counts, because it also catches `git push origin HEAD:main`.
+
+set -eu
+
+refused=false
+needs_checks=false
+
+while read -r local_ref _ remote_ref _; do
+    if [ "$remote_ref" = "refs/heads/main" ]; then
+        refused=true
+    fi
+    if [ "$local_ref" != "(delete)" ]; then
+        needs_checks=true
+    fi
+done
+
+if [ "$refused" = true ]; then
+    echo "Refusing to push to main. Push a branch and open a PR instead." >&2
+    exit 1
+fi
+
+if [ "$needs_checks" = true ]; then
+    make clippy test
+fi
