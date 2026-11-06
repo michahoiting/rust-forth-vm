@@ -1,0 +1,310 @@
+--- FORTH BOOTSEQUENCE COMPLETED ---
+The Text Interpreter (Outer Interpreter) is online.
+
+Demo sections:
+   0. All sections
+   1. Evaluating Text Operations
+   2. Dynamic Creation via Text Interpreter
+   3. Colon Definitions
+   4. Constants
+   5. Defining Words with DOES>
+   6. Variables with ! and @
+   7. Stack Words
+   8. Execution Tokens
+   9. Immediate Words
+  10. Comments
+  11. Reaching a Word's Parameter Field
+  12. Bytes and Reserved Memory
+  13. Returning to the Interpreter with QUIT and ABORT
+  14. Error Handling
+Enter a section number, Q to quit [0]: --- TEST RUN 1: Evaluating Text Operations ---
+Input:
+    40 2 +            \ leaves 42 on the stack
+    .                 \ prints 42
+    -5 3 + .          \ prints -2
+Output: 42 -2 ok
+-------------------------------------
+
+--- TEST RUN 2: Dynamic Creation via Text Interpreter ---
+Input:
+    CREATE STATIONARY-SOURCE     \ creates a new word in the dictionary
+    1337 ,                       \ compiles 1337 into the data field of the new word
+    STATIONARY-SOURCE @ .        \ prints 1337
+Output: 1337 ok
+-------------------------------------
+
+--- TEST RUN 3: Colon Definitions ---
+Input:
+    : ADD3 3 + ;
+    : ADD6 ADD3 ADD3 ;
+    36 ADD6 .         \ prints 42
+Output: 42 ok
+-------------------------------------
+
+--- TEST RUN 4: Constants ---
+Input:
+    42 CONSTANT ANSWER
+    7 CONSTANT LUCKY
+    ANSWER . LUCKY .              \ prints 42 7
+    40 2 + CONSTANT COMPUTED      \ the value can come from a calculation
+    COMPUTED .                    \ prints 42
+    : ANSWER+1 ANSWER 1 + ;       \ a constant used from a colon word
+    ANSWER+1 .                    \ prints 43
+Output: 42 7 42 43 ok
+-------------------------------------
+
+--- TEST RUN 5: Defining Words with DOES> ---
+Input:
+    : ADDER CREATE , DOES> @ + ;
+    3 ADDER PLUS3
+    10 ADDER PLUS10
+    1 PLUS3 . 1 PLUS10 .          \ prints 4 11
+Output: 4 11 ok
+-------------------------------------
+
+--- TEST RUN 6: Variables with ! and @ ---
+Input:
+    VARIABLE COUNTER
+    COUNTER @ .                        \ prints 0: a new variable starts at zero
+    42 COUNTER !
+    COUNTER @ .                        \ prints 42
+    COUNTER @ 1 + COUNTER !            \ read, change, and write back
+    COUNTER @ .                        \ prints 43
+    : BUMP COUNTER @ 1 + COUNTER ! ;   \ a variable used from a colon word
+    BUMP BUMP COUNTER @ .              \ prints 45
+    VARIABLE OTHER                     \ each variable has its own Cell
+    7 OTHER !
+    OTHER @ . COUNTER @ .              \ prints 7 45
+Output: 0 42 43 45 7 45 ok
+-------------------------------------
+
+--- TEST RUN 7: Stack Words ---
+Input:
+    1 2 DROP .                    \ prints 1
+    1 2 SWAP . .                  \ prints 1 2
+    3 4 OVER . . .                \ prints 3 4 3
+    1 2 3 ROT . . .               \ prints 1 3 2
+    5 ?DUP . .                    \ prints 5 5
+    0 ?DUP .                      \ prints 0
+    10 20 30 2 PICK . . . .       \ prints 10 30 20 10
+    1 2 3 2 ROLL . . .            \ prints 1 3 2
+    1 2 3 DEPTH . . . .           \ prints 3 3 2 1
+    : DOUBLE DUP + ;              \ reuse a value without naming it
+    21 DOUBLE .                   \ prints 42
+    : +! SWAP OVER @ + SWAP ! ;   \ add to a variable
+    VARIABLE COUNTER
+    45 COUNTER !
+    5 COUNTER +!
+    COUNTER @ .                   \ prints 50
+Output: 1 1 2 3 4 3 1 3 2 5 5 0 10 30 20 10 1 3 2 3 3 2 1 42 50 ok
+-------------------------------------
+
+--- TEST RUN 8: Execution Tokens ---
+Input:
+    \ Run an unnamed definition straight away
+    :NONAME 1 2 + ; EXECUTE .     \ prints 3
+
+    \ Pass arguments and results through the stack
+    5 :NONAME DUP + ; EXECUTE .   \ prints 10
+
+    \ Keep an execution token under a name
+    :NONAME 3 + ; CONSTANT ADD3-XT
+    4 ADD3-XT EXECUTE .           \ prints 7
+
+    \ Pass behaviour to a word, as a callback
+    : TWICE DUP ROT SWAP EXECUTE SWAP EXECUTE ;
+    5 :NONAME DUP + ; TWICE .     \ prints 20
+    1 ADD3-XT TWICE .             \ prints 7
+
+    \ Change what a word does at runtime, through a variable
+    VARIABLE ACTION
+    :NONAME 42 ; ACTION !
+    : RUN-ACTION ACTION @ EXECUTE ;
+    RUN-ACTION .                  \ prints 42
+    :NONAME 7 ; ACTION !
+    RUN-ACTION .                  \ prints 7
+Output: 3 10 7 20 7 42 7 ok
+-------------------------------------
+
+--- TEST RUN 9: Immediate Words ---
+Input:
+    \ An immediate word runs during compilation
+    : ANNOUNCE 99 . ; IMMEDIATE
+    : USES-ANNOUNCE ANNOUNCE 1 ;  \ prints 99 while compiling
+    USES-ANNOUNCE .               \ prints 1
+
+    \ A normal word only runs when called, for comparison
+    : QUIET 99 . ;
+    : USES-QUIET QUIET 1 ;        \ prints nothing while compiling
+    USES-QUIET .                  \ prints 99 1
+
+    \ Count something at compile time
+    VARIABLE USES
+    : COUNTED USES @ 1 + USES ! ; IMMEDIATE
+    : FIRST COUNTED 1 ;
+    : SECOND COUNTED COUNTED 2 ;
+    USES @ .                      \ prints 3
+
+    \ An immediate word still runs normally when interpreted
+    ANNOUNCE                      \ prints 99
+Output: 99 1 99 1 3 99 ok
+-------------------------------------
+
+--- TEST RUN 10: Comments ---
+Input:
+    \ A whole line can be a comment
+    1 2 + . ( a comment can sit in the middle of a line ) 4 .  \ prints 3 4
+    5 . \ the rest of this line is ignored: 6 .
+
+    ( a parenthesis comment
+      can span several lines )
+
+    : ADD5 ( n -- n+5 ) 5 + ;  \ a stack effect comment documents a word
+    2 ADD5 .                   \ prints 7
+
+    : PAIR ( n -- n n )
+        DUP  \ keep a copy for later
+    ;
+    3 PAIR . .                 \ prints 3 3
+Output: 3 4 5 7 3 3 ok
+-------------------------------------
+
+--- TEST RUN 11: Reaching a Word's Parameter Field ---
+Input:
+    \ Some words to look into
+    : ADD3 3 + ;
+    VARIABLE COUNTER
+    50 COUNTER !
+    : ADDER CREATE , DOES> @ + ;
+    3 ADDER PLUS3
+
+    \ ' gives the execution token of a word, which :NONAME gives for an unnamed one
+    3 ' ADD3 EXECUTE .            \ prints 6
+
+    \ >BODY turns an execution token into the address of the word's Parameter Field
+    ' COUNTER >BODY @ .           \ prints 50
+
+    \ A word made with DOES> doesn't push that address, so this is the way to its data
+    1 PLUS3 .                     \ prints 4
+    ' PLUS3 >BODY @ .             \ prints 3
+    5 ' PLUS3 >BODY !
+    1 PLUS3 .                     \ prints 6
+
+    \ ['] does the same as ' inside a definition, using a name from the source
+    : SET-PLUS3 ['] PLUS3 >BODY ! ;
+    9 SET-PLUS3
+    1 PLUS3 .                     \ prints 10
+    : RUN-ADD3 ['] ADD3 EXECUTE ;
+    1 RUN-ADD3 .                  \ prints 4
+Output: 6 50 4 3 6 10 4 ok
+-------------------------------------
+
+--- TEST RUN 12: Bytes and Reserved Memory ---
+Input:
+    \ ALLOT reserves bytes after a word, and C! and C@ reach each one of them
+    CREATE LETTERS 3 CHARS ALLOT
+    72 LETTERS C!
+    105 LETTERS CHAR+ C!
+    LETTERS C@ .                  \ prints 72
+    LETTERS CHAR+ C@ .            \ prints 105
+    LETTERS CHAR+ CHAR+ C@ .      \ prints 0: ALLOT clears what it reserves
+
+    \ C, stores one byte at HERE, so a table can be built a byte at a time
+    CREATE PRIMES 2 C, 3 C, 5 C,
+    PRIMES CHAR+ CHAR+ C@ .       \ prints 5
+
+    \ A Cell needs an aligned address. ALIGN moves HERE to the next one
+    ALIGN HERE 99 , @ .           \ prints 99
+
+    \ ALIGNED gives that address without moving HERE, and , aligns HERE by itself
+    1 C, HERE ALIGNED 7 , @ .     \ prints 7
+
+    \ New words align HERE too, so they can follow bytes
+    1 C,
+    : SEVEN 7 ;
+    SEVEN .                       \ prints 7
+
+    \ CELLS gives the size of some Cells in bytes, which is how to index a table of them
+    CREATE TABLE 3 CELLS ALLOT
+    11 TABLE !
+    22 TABLE 1 CELLS + !
+    TABLE @ .                     \ prints 11
+    TABLE 1 CELLS + @ .           \ prints 22
+
+    \ A negative ALLOT gives back data of the newest word made by CREATE
+    CREATE SCRATCH 16 ALLOT
+    -16 ALLOT
+Output: 72 105 0 5 99 7 7 11 22 ok
+-------------------------------------
+
+--- TEST RUN 13: Returning to the Interpreter with QUIT and ABORT ---
+Input:
+    7 1 . QUIT 2 .                  \ prints 1, and leaves 7 on the stack
+Output: 1 
+Input:
+    .                               \ prints 7
+Output: 7 ok
+Input:
+    : STOP 3 . QUIT 4 . ; 8 STOP 5 .  \ prints 3: QUIT also leaves a definition
+Output: 3 
+Input:
+    .                               \ prints 8
+Output: 8 ok
+Input:
+    7 1 . ABORT 2 .                 \ prints 1, and clears the stack
+Output: 1 
+Input:
+    DEPTH .                         \ prints 0
+Output: 0 ok
+Input:
+    : GIVE-UP 3 . ABORT 4 . ; 8 GIVE-UP 5 .  \ prints 3: ABORT also leaves a definition
+Output: 3 
+Input:
+    DEPTH .                         \ prints 0
+Output: 0 ok
+-------------------------------------
+
+--- TEST RUN 14: Error Handling ---
+Input:
+    : BROKEN 1 NO-SUCH-WORD ;
+Output: Forth Error: Word or numeric literal 'NO-SUCH-WORD' not recognized.
+Input:
+    BROKEN
+Output: Forth Error: Word or numeric literal 'BROKEN' not recognized.
+Input:
+    +
+Output: Forth Error: Data stack underflow.
+Input:
+    1 5 !
+Output: Forth Error: Invalid address 0x5.
+Input:
+    DROP
+Output: Forth Error: Data stack underflow.
+Input:
+    9 PICK
+Output: Forth Error: Data stack underflow.
+Input:
+    5 EXECUTE
+Output: Forth Error: Invalid execution token 0x5.
+Input:
+    1 ( never closed
+Output: Forth Error: Comment has no closing parenthesis.
+-------------------------------------
+
+Demo sections:
+   0. All sections
+   1. Evaluating Text Operations
+   2. Dynamic Creation via Text Interpreter
+   3. Colon Definitions
+   4. Constants
+   5. Defining Words with DOES>
+   6. Variables with ! and @
+   7. Stack Words
+   8. Execution Tokens
+   9. Immediate Words
+  10. Comments
+  11. Reaching a Word's Parameter Field
+  12. Bytes and Reserved Memory
+  13. Returning to the Interpreter with QUIT and ABORT
+  14. Error Handling
+Enter a section number, Q to quit [0]: 

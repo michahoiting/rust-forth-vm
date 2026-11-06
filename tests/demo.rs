@@ -26,6 +26,13 @@ const INTERACTIVE_HINT: &str = "Press Ctrl-D to leave.\n\n";
 /// The prompt of the menu.
 const PROMPT: &str = "Enter a section number, Q to quit [0]: ";
 
+/// The expected output of the menu with all sections, which `make demo-expected` updates.
+const DEMO_OUTPUT: &str = include_str!("demo_output.txt");
+
+/// The README, for its Forth example. Keep tests of Markdown out of what Miri runs: CI skips
+/// Miri on PRs that only change Markdown, so such a test wouldn't run there.
+const README: &str = include_str!("../README.md");
+
 /// Runs the program with the given arguments and stdin.
 fn run(arguments: &[&str], stdin: &[u8]) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_forth-vm"))
@@ -262,4 +269,65 @@ fn unknown_arguments_print_the_usage() {
             "Usage: forth-vm [--interactive | --demo]\n"
         );
     }
+}
+
+/// Says whether a word is a whole number, with an optional minus sign.
+fn is_number(word: &str) -> bool {
+    let digits = word.strip_prefix('-').unwrap_or(word);
+    !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+/// Returns the Forth example from the README.
+fn readme_example() -> &'static str {
+    let (_, rest) = README
+        .split_once("```forth\n")
+        .expect("the README must have an example");
+    let (example, _) = rest.split_once("```").expect("the example must end");
+    example
+}
+
+/// Returns what a line of the README's example prints. A comment that starts with a number
+/// states the result of the line, and other lines only print `ok`.
+fn readme_line_output(line: &str) -> String {
+    let result = line
+        .split_once('\\')
+        .and_then(|(_, comment)| comment.split_whitespace().next())
+        .map(|word| word.trim_end_matches(','))
+        .filter(|word| is_number(word));
+    match result {
+        Some(number) => format!("{} ok\n", number),
+        None => "ok\n".to_string(),
+    }
+}
+
+#[test]
+fn demo_output_matches_the_expected_file() {
+    assert_eq!(
+        menu("0\nq\n"),
+        DEMO_OUTPUT,
+        "run `make demo-expected` if this change to the demo is intended"
+    );
+}
+
+#[test]
+fn readme_example_gives_the_results_it_states() {
+    let example = readme_example();
+    let expected: String = example.lines().map(readme_line_output).collect();
+    assert_eq!(session(example), format!("{}\n", expected));
+}
+
+#[test]
+fn readme_line_output_reads_the_comment() {
+    assert_eq!(readme_line_output(r"40 2 + .   \ 42"), "42 ok\n");
+    assert_eq!(readme_line_output(r"-5 3 + .   \ -2"), "-2 ok\n");
+    assert_eq!(
+        readme_line_output(r": A B ;    \ 99, printed while compiling"),
+        "99 ok\n"
+    );
+    assert_eq!(
+        readme_line_output(r": A 5 ;    \ a stack effect comment"),
+        "ok\n"
+    );
+    assert_eq!(readme_line_output(": A 5 ;"), "ok\n");
+    assert_eq!(readme_line_output(""), "ok\n");
 }

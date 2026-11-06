@@ -42,7 +42,9 @@ it. CI still runs the same checks.
    releases it. Until then, all entries go under `### Added`, including fixes and changes,
    and nothing is marked as breaking. After the first release, this project adheres to
    Semantic Versioning, and breaking changes start with `**Breaking:**`.
-5. Run `make ci`.
+5. Run `make ci`. If you changed the demo on purpose, run `make demo-expected` and check the
+   diff of `tests/demo_output.txt`. A test also runs the Forth example in the README, and
+   checks the results that its comments state.
 6. Open a PR that closes the issue. The project owner reviews and merges.
 
 If you use the Claude CLI, see [Working with Claude Code](README.md#working-with-claude-code)
