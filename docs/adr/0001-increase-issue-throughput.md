@@ -27,6 +27,33 @@ Keep every quality gate, and remove the waiting around them. Start with the shor
 
 Merging this ADR doesn't change CI. Each item is implemented through its own issue.
 
+## Baseline
+
+Measured with `make metrics` on 2026-11-06, for the 8 PRs merged after the ruleset arrived in #50 and before S1–S7 merged in #88. Earlier PRs had no CI gates, so they'd make this baseline look faster than it was.
+
+```sh
+make metrics ARGS="--since 2026-11-06T08:16:00Z --until 2026-11-06T16:00:00Z"
+```
+
+| Metric | Baseline | Sample |
+|---|---|---|
+| Median PR lead time | 44.5 min | 8 PRs |
+| Median open to first review | 24.5 min | 6 PRs, because 2 had no review |
+| Median first review to merge | 20 min | 6 PRs |
+| Mean CI reruns per PR | 0.88 | 8 PRs |
+| Issues completed in the window | 6 | One day, not a full week |
+
+Time before and after the first review is about equal, so this data doesn't show which is the bigger lever, and M4 stays unproven. The split also moves a lot with the window: including #88 and leaving out #50 gives 22 and 8 min.
+
+Limits of these numbers:
+
+- They cover one day and few PRs, with #50 and #52 far above the rest.
+- Agents and the owner share an account, so any review that isn't from a bot counts as the first review.
+- Time to first review includes the time spent reading, not only the wait.
+- Local hook times aren't on GitHub, so they aren't measured.
+
+Measure again from 2026-11-20, two weeks after #88, with `--since 2026-11-06T16:00:00Z`. Use medians over at least as many PRs as this baseline.
+
 ## Options
 
 Gain is an estimate unless it cites a measurement. Quality impact is the effect on what `main` guarantees.
