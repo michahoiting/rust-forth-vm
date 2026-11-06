@@ -47,6 +47,10 @@ COUNTER @ .                       \ 43
 COUNTER @ .                       \ 48
 
 :NONAME 1 2 + ; EXECUTE .         \ 3
+
+: ANNOUNCE 99 . ; IMMEDIATE
+: USES-ANNOUNCE ANNOUNCE 1 ;      \ 99, printed while compiling
+USES-ANNOUNCE .                   \ 1
 ```
 
 The `\` comments are for this README only, because the interpreter does not
@@ -66,6 +70,7 @@ support comments yet.
 | `DOES>`  | `( -- )`     | Inside a definition: gives the newest `CREATE`d word the code that follows |
 | `:`      | `( -- )`     | Parses a name and starts compiling a definition   |
 | `;`      | `( -- )`     | Ends the definition (immediate)                   |
+| `IMMEDIATE` | `( -- )`  | Marks the newest word, so that it runs during compilation |
 | `:NONAME` | `( -- xt )` | Starts a definition without a name, and pushes its execution token |
 | `EXECUTE` | `( i*x xt -- j*x )` | Runs the word that an execution token refers to |
 | `EXIT`   | `( -- )`     | Returns from the current definition               |
@@ -116,6 +121,10 @@ stacks, and rolls back any unfinished colon definition.
 
 - There are no return stack words, such as `>R` and `R>`.
 - There is no control flow, such as `IF` or `BEGIN`, and so no loops.
-- There is no `IMMEDIATE`, `[` or `]`.
+- There is no `[` or `]`.
+- Immediate words must not use `,` while a definition is being compiled, because it
+  writes into the thread and can crash the process (see issue #15). Using `CREATE`,
+  `VARIABLE`, `:` or `:NONAME` there leaves the open definition unfinished, so it
+  can't be found or executed.
 - The dictionary size is chosen when the VM boots, and can't grow afterwards.
 - `!` can overwrite word headers and compiled code, which can crash the process.

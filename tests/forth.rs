@@ -809,3 +809,97 @@ fn execute_rejects_a_pending_definition() {
         assert_eq!(output.text(), "3 ");
     }
 }
+
+#[test]
+fn immediate_word_runs_during_compilation_and_is_not_compiled() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        outer_interpreter(&mut regs, ": A 99 . ; IMMEDIATE").unwrap();
+        outer_interpreter(&mut regs, ": B A 1 ;").unwrap();
+        assert_eq!(output.text(), "99 ");
+
+        outer_interpreter(&mut regs, "B .").unwrap();
+        assert_eq!(output.text(), "99 1 ");
+    }
+}
+
+#[test]
+fn normal_word_runs_only_when_called() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        outer_interpreter(&mut regs, ": A 99 . ;").unwrap();
+        outer_interpreter(&mut regs, ": B A 1 ;").unwrap();
+        assert_eq!(output.text(), "");
+
+        outer_interpreter(&mut regs, "B .").unwrap();
+        assert_eq!(output.text(), "99 1 ");
+    }
+}
+
+#[test]
+fn immediate_word_runs_when_interpreted() {
+    assert_eq!(output_of(&[": A 7 . ; IMMEDIATE", "A"]), "7 ");
+}
+
+#[test]
+fn immediate_only_marks_the_newest_word() {
+    let lines = [": A 1 . ;", ": B 2 . ; IMMEDIATE", ": C A B ;", "C"];
+    assert_eq!(output_of(&lines), "2 1 ");
+}
+
+#[test]
+fn immediate_applies_to_created_words() {
+    // X runs during compilation and leaves its address, which Y then fetches from.
+    let lines = ["CREATE X 7 , IMMEDIATE", ": Y X @ ;", "Y ."];
+    assert_eq!(output_of(&lines), "7 ");
+}
+
+#[test]
+fn immediate_applies_to_the_newest_word_after_a_failed_definition() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        outer_interpreter(&mut regs, ": A 5 . ;").unwrap();
+        assert_error!(&mut regs, ": B NOPE ;", ForthError::UnknownWord(_));
+        outer_interpreter(&mut regs, "IMMEDIATE : C A ;").unwrap();
+        assert_eq!(output.text(), "5 ");
+    }
+}
+
+#[test]
+fn immediate_word_can_use_the_stack_during_compilation() {
+    let lines = [": PUSH 7 ; IMMEDIATE", ": C PUSH ;", ".", "C DEPTH ."];
+    assert_eq!(output_of(&lines), "7 0 ");
+}
+
+#[test]
+fn immediate_word_can_count_at_compile_time() {
+    let lines = [
+        "VARIABLE USES",
+        ": COUNTED USES @ 1 + USES ! ; IMMEDIATE",
+        ": FIRST COUNTED 1 ;",
+        ": SECOND COUNTED COUNTED 2 ;",
+        "USES @ .",
+    ];
+    assert_eq!(output_of(&lines), "3 ");
+}
+
+#[test]
+fn error_in_an_immediate_word_rolls_back_the_definition() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        outer_interpreter(&mut regs, ": BAD + ; IMMEDIATE").unwrap();
+        assert_error!(&mut regs, ": C BAD ;", ForthError::DataStackUnderflow);
+        assert_error!(&mut regs, "C", ForthError::UnknownWord(name) if name == "C");
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn immediate_keeps_a_noname_xt_working() {
+    assert_eq!(output_of(&[":NONAME 5 ; IMMEDIATE EXECUTE ."]), "5 ");
+}

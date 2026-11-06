@@ -102,7 +102,26 @@ fn main() {
         evaluate(&mut regs, "RUN-ACTION .");
         println!("-------------------------------------\n");
 
-        // --- TEST RUN 8: Error Handling ---
+        // --- TEST RUN 8: Immediate Words ---
+        // An immediate word runs during compilation
+        evaluate(&mut regs, ": ANNOUNCE 99 . ; IMMEDIATE");
+        evaluate(&mut regs, ": USES-ANNOUNCE ANNOUNCE 1 ;");
+        evaluate(&mut regs, "USES-ANNOUNCE .");
+        // A normal word only runs when called, for comparison
+        evaluate(&mut regs, ": QUIET 99 . ;");
+        evaluate(&mut regs, ": USES-QUIET QUIET 1 ;");
+        evaluate(&mut regs, "USES-QUIET .");
+        // Count something at compile time
+        evaluate(&mut regs, "VARIABLE USES");
+        evaluate(&mut regs, ": COUNTED USES @ 1 + USES ! ; IMMEDIATE");
+        evaluate(&mut regs, ": FIRST COUNTED 1 ;");
+        evaluate(&mut regs, ": SECOND COUNTED COUNTED 2 ;");
+        evaluate(&mut regs, "USES @ .");
+        // An immediate word still runs normally when interpreted
+        evaluate(&mut regs, "ANNOUNCE");
+        println!("-------------------------------------\n");
+
+        // --- TEST RUN 9: Error Handling ---
         evaluate(&mut regs, ": BROKEN 1 NO-SUCH-WORD ;");
         evaluate(&mut regs, "BROKEN");
         evaluate(&mut regs, "+");
