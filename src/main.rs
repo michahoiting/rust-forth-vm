@@ -22,7 +22,7 @@ const USAGE: &str = "Usage: forth-vm [--interactive | --demo]";
 
 /// The demo sections, each with its title and one block of Forth source. Each section runs in a
 /// new VM, so it must define everything it uses.
-const SECTIONS: [(&str, &str); 11] = [
+const SECTIONS: [(&str, &str); 12] = [
     (
         "Evaluating Text Operations",
         r"
@@ -203,6 +203,37 @@ VARIABLE COUNTER
 1 PLUS3 .                     \ prints 10
 : RUN-ADD3 ['] ADD3 EXECUTE ;
 1 RUN-ADD3 .                  \ prints 4
+",
+    ),
+    (
+        "Bytes and Reserved Memory",
+        r"
+\ ALLOT reserves bytes after a word, and C! and C@ reach each one of them
+CREATE LETTERS 3 CHARS ALLOT
+72 LETTERS C!
+105 LETTERS CHAR+ C!
+LETTERS C@ .                  \ prints 72
+LETTERS CHAR+ C@ .            \ prints 105
+LETTERS CHAR+ CHAR+ C@ .      \ prints 0: ALLOT clears what it reserves
+
+\ C, stores one byte at HERE, so a table can be built a byte at a time
+CREATE PRIMES 2 C, 3 C, 5 C,
+PRIMES CHAR+ CHAR+ C@ .       \ prints 5
+
+\ A Cell needs an aligned address. ALIGN moves HERE to the next one
+ALIGN HERE 99 , @ .           \ prints 99
+
+\ ALIGNED gives that address without moving HERE, and , aligns HERE by itself
+1 C, HERE ALIGNED 7 , @ .     \ prints 7
+
+\ New words align HERE too, so they can follow bytes
+1 C,
+: SEVEN 7 ;
+SEVEN .                       \ prints 7
+
+\ A negative ALLOT gives back data of the newest word made by CREATE
+CREATE SCRATCH 16 ALLOT
+-16 ALLOT
 ",
     ),
 ];

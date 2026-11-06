@@ -16,6 +16,46 @@ pub(super) unsafe fn comma(regs: &mut Registers) {
     }
 }
 
+/// Reports an error if a definition is open, and returns whether one is. `word` would put
+/// something other than a whole Cell into its thread, which would then run as code.
+fn refuse_in_definition(regs: &mut Registers, word: &'static str) -> bool {
+    let open = regs.compiler.is_compiling();
+    if open {
+        regs.set_error(ForthError::DefinitionOpen(word));
+    }
+    open
+}
+
+/// `C, ( char -- )`: Pops a Cell from the stack and presses its low byte into the dictionary
+/// at HERE, which can leave HERE unaligned. It can't be used while a definition is open.
+pub(super) unsafe fn c_comma(regs: &mut Registers) {
+    if refuse_in_definition(regs, "C,") {
+        return;
+    }
+    if let Some(value) = regs.pop() {
+        let result = regs.dictionary.char_comma(value as u8);
+        regs.check(result);
+    }
+}
+
+/// `ALLOT ( n -- )`: Reserves `n` bytes of the dictionary at HERE and clears them, which can
+/// leave HERE unaligned. A negative `n` gives back bytes, but only from the data of the newest
+/// word, and only if `CREATE` made it. It can't be used while a definition is open.
+pub(super) unsafe fn allot(regs: &mut Registers) {
+    if refuse_in_definition(regs, "ALLOT") {
+        return;
+    }
+    if let Some(bytes) = regs.pop() {
+        let result = regs.dictionary.allot(bytes as isize);
+        regs.check(result);
+    }
+}
+
+/// `ALIGN ( -- )`: Moves HERE to the next cell-aligned address, and clears the bytes it passes.
+pub(super) unsafe fn align(regs: &mut Registers) {
+    regs.dictionary.align();
+}
+
 /// Parses a name on behalf of `word`, and allocates a new word with default DOVAR semantics.
 unsafe fn create_word(regs: &mut Registers, word: &'static str) {
     let Some(name) = regs.input.parse_name() else {
@@ -129,13 +169,92 @@ pub(super) unsafe fn immediate(regs: &mut Registers) {
 #[cfg(test)]
 mod tests {
     use std::io;
+    use std::mem;
 
     use super::*;
     use crate::dictionary::{is_hidden, is_immediate, is_pending, pfa_of};
-    use crate::vm::enter_word;
+    use crate::vm::{enter_word, PrimitiveFn};
     use crate::{boot, outer_interpreter};
 
     const TEST_CELLS: usize = 1024;
+
+    #[test]
+    fn c_comma_presses_the_low_byte_and_pops_it() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let addr = regs.dictionary.here();
+            regs.data_stack.extend_from_slice(&[1, 0x1AB]);
+
+            c_comma(&mut regs);
+            assert!(regs.error.is_none(), "got: {:?}", regs.error);
+            assert_eq!(regs.data_stack, [1]);
+            assert_eq!(regs.dictionary.here(), addr + 1);
+            assert_eq!(regs.dictionary.fetch_byte(addr).unwrap(), 0xAB);
+        }
+    }
+
+    #[test]
+    fn allot_moves_here_and_pops_the_size() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let addr = regs.dictionary.here();
+            regs.data_stack.extend_from_slice(&[1, 3]);
+
+            allot(&mut regs);
+            assert!(regs.error.is_none(), "got: {:?}", regs.error);
+            assert_eq!(regs.data_stack, [1]);
+            assert_eq!(regs.dictionary.here(), addr + 3);
+        }
+    }
+
+    #[test]
+    fn allot_reads_its_size_as_a_signed_number() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            regs.input.load("X");
+            create(&mut regs);
+            let data = regs.dictionary.here();
+            regs.dictionary.allot(3).unwrap();
+            regs.data_stack.push(-2isize as Cell);
+
+            allot(&mut regs);
+            assert!(regs.error.is_none(), "got: {:?}", regs.error);
+            assert_eq!(regs.dictionary.here(), data + 1);
+        }
+    }
+
+    #[test]
+    fn align_aligns_here() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let addr = regs.dictionary.here();
+            regs.dictionary.char_comma(1).unwrap();
+
+            align(&mut regs);
+            assert_eq!(regs.dictionary.here(), addr + mem::size_of::<Cell>());
+        }
+    }
+
+    #[test]
+    fn words_that_break_up_cells_are_refused_in_a_definition() {
+        unsafe {
+            for (word, name) in [(c_comma as PrimitiveFn, "C,"), (allot, "ALLOT")] {
+                let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+                outer_interpreter(&mut regs, ": X").unwrap();
+                let before = regs.dictionary.mark();
+                regs.data_stack.push(1);
+
+                word(&mut regs);
+                assert!(
+                    matches!(regs.error, Some(ForthError::DefinitionOpen(n)) if n == name),
+                    "got: {:?}",
+                    regs.error
+                );
+                assert_eq!(regs.data_stack, [1]);
+                assert_eq!(regs.dictionary.mark(), before);
+            }
+        }
+    }
 
     #[test]
     fn constant_moves_its_value_into_a_new_word() {

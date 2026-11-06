@@ -24,6 +24,18 @@ pub(crate) unsafe fn install(regs: &mut Registers) -> Result<(), ForthError> {
     regs.dictionary
         .add_primitive_word("@", code_cell(core::fetch), 0)?;
     regs.dictionary
+        .add_primitive_word("C@", code_cell(core::c_fetch), 0)?;
+    regs.dictionary
+        .add_primitive_word("C!", code_cell(core::c_store), 0)?;
+    regs.dictionary
+        .add_primitive_word("HERE", code_cell(core::here), 0)?;
+    regs.dictionary
+        .add_primitive_word("ALIGNED", code_cell(core::aligned), 0)?;
+    regs.dictionary
+        .add_primitive_word("CHAR+", code_cell(core::char_plus), 0)?;
+    regs.dictionary
+        .add_primitive_word("CHARS", code_cell(core::chars), 0)?;
+    regs.dictionary
         .add_primitive_word(">BODY", code_cell(core::to_body), 0)?;
     regs.dictionary
         .add_primitive_word("!", code_cell(core::store), 0)?;
@@ -47,6 +59,12 @@ pub(crate) unsafe fn install(regs: &mut Registers) -> Result<(), ForthError> {
         .add_primitive_word("DEPTH", code_cell(core::depth), 0)?;
     regs.dictionary
         .add_primitive_word(",", code_cell(compiler::comma), 0)?;
+    regs.dictionary
+        .add_primitive_word("C,", code_cell(compiler::c_comma), 0)?;
+    regs.dictionary
+        .add_primitive_word("ALLOT", code_cell(compiler::allot), 0)?;
+    regs.dictionary
+        .add_primitive_word("ALIGN", code_cell(compiler::align), 0)?;
     regs.dictionary
         .add_primitive_word("CREATE", code_cell(compiler::create), 0)?;
     regs.dictionary

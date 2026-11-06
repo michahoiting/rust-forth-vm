@@ -19,6 +19,10 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 - Words for arithmetic and output: `+` and `.`.
 - Memory words: `@`, `!`, `,` and `VARIABLE`. `@` and `!` are limited to dictionary
   addresses below `HERE`.
+- Byte access to memory: `C@`, `C!`, `C,`, `HERE`, `ALLOT`, `ALIGN`, `ALIGNED`, `CHAR+` and
+  `CHARS`. `,` and defining words align `HERE` first, because `C,` and `ALLOT` can leave it
+  unaligned. `C,` and `ALLOT` give an error while a definition is open, and a negative
+  `ALLOT` can only give back data of the newest word made by `CREATE`.
 - The FORTH-83 data stack words: `DUP`, `?DUP`, `DROP`, `SWAP`, `OVER`, `ROT`, `PICK`,
   `ROLL` and `DEPTH`.
 - Defining words: `:`, `;`, `:NONAME`, `CREATE`, `CONSTANT`, `DOES>`, `IMMEDIATE` and

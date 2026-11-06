@@ -61,6 +61,13 @@ pub(crate) unsafe fn pfa_of(cfa: *const Cell) -> *const Cell {
     cfa.add(1)
 }
 
+/// Returns `addr` rounded up to the next cell-aligned address. Like other Cell arithmetic, this
+/// wraps at the top of the address range.
+pub(crate) fn aligned(addr: Cell) -> Cell {
+    let mask = mem::size_of::<Cell>() - 1;
+    addr.wrapping_add(mask) & !mask
+}
+
 /// Returns whether the word has [`F_IMMEDIATE`] set.
 ///
 /// # Safety
@@ -101,7 +108,7 @@ pub(crate) unsafe fn is_pending(header: *mut Cell) -> bool {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Mark {
     /// The saved [`Dictionary::here`].
-    here: *mut Cell,
+    here: *mut u8,
     /// The saved [`Dictionary::last_word`].
     last_word: *mut Cell,
 }
@@ -110,8 +117,9 @@ pub(crate) struct Mark {
 pub(crate) struct Dictionary {
     /// The first Cell of the arena.
     start: *mut Cell,
-    /// Dictionary pointer to the next free Cell.
-    here: *mut Cell,
+    /// Dictionary pointer to the next free byte. It is cell-aligned unless `C,` or `ALLOT` left
+    /// it unaligned.
+    here: *mut u8,
     /// Pointer to the LFA of the most recently created word.
     last_word: *mut Cell,
     /// One past the last usable Cell.
@@ -134,27 +142,100 @@ impl Dictionary {
             .map_err(|_| ForthError::DictionaryTooLarge(cells))?;
         storage.resize(cells, 0);
 
-        let here = storage.as_mut_ptr();
+        let start = storage.as_mut_ptr();
         Ok(Dictionary {
-            start: here,
-            here,
+            start,
+            here: start as *mut u8,
             last_word: ptr::null_mut(), // Dictionary starts out empty
-            end: here.add(storage.len()),
+            end: start.add(storage.len()),
             _storage: storage,
         })
     }
 
-    /// Presses a Cell into the dictionary at HERE.
+    /// Returns HERE, which is the address of the next free byte.
+    pub(crate) fn here(&self) -> Cell {
+        self.here as Cell
+    }
+
+    /// Returns the first cell-aligned address at or after HERE. The arena ends on a Cell
+    /// boundary, so this is never past its end.
+    fn next_cell(&self) -> *mut u8 {
+        let padding = aligned(self.here()) - self.here();
+        self.here.wrapping_add(padding)
+    }
+
+    /// Returns how many bytes are free from `from` to the end of the arena.
+    fn free_bytes(&self, from: *mut u8) -> usize {
+        self.end as Cell - from as Cell
+    }
+
+    /// Moves HERE to the next cell-aligned address, and clears the bytes it passes.
+    pub(crate) fn align(&mut self) {
+        let cell = self.next_cell();
+        // SAFETY: HERE and `cell` are both in the arena, and `cell` isn't before HERE.
+        unsafe { ptr::write_bytes(self.here, 0, cell as Cell - self.here as Cell) };
+        self.here = cell;
+    }
+
+    /// Presses a Cell into the dictionary at HERE, aligning HERE first.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::DictionaryOverflow`] if the Cell doesn't fit. HERE doesn't move.
+    pub(crate) unsafe fn comma(&mut self, value: Cell) -> Result<(), ForthError> {
+        if self.free_bytes(self.next_cell()) < mem::size_of::<Cell>() {
+            return Err(ForthError::DictionaryOverflow);
+        }
+        self.align();
+        *(self.here as *mut Cell) = value;
+        self.here = self.here.add(mem::size_of::<Cell>());
+        Ok(())
+    }
+
+    /// Presses one byte into the dictionary at HERE, which can leave HERE unaligned.
     ///
     /// # Errors
     ///
     /// Returns [`ForthError::DictionaryOverflow`] if the dictionary is full.
-    pub(crate) unsafe fn comma(&mut self, value: Cell) -> Result<(), ForthError> {
-        if self.here >= self.end {
+    pub(crate) unsafe fn char_comma(&mut self, value: u8) -> Result<(), ForthError> {
+        if self.free_bytes(self.here) == 0 {
             return Err(ForthError::DictionaryOverflow);
         }
         *self.here = value;
         self.here = self.here.add(1);
+        Ok(())
+    }
+
+    /// Moves HERE by `bytes`, which can leave it unaligned. Reserved bytes are cleared. Only
+    /// the data of the newest word can be given back, and only if `CREATE` made it. Any other
+    /// word ends in code or a value that would be overwritten.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::DictionaryOverflow`] if `bytes` doesn't fit, and
+    /// [`ForthError::AllotBelowData`] if it gives back more than that data.
+    ///
+    /// # Safety
+    ///
+    /// The newest word's header must be intact, as for [`find_word`](Self::find_word).
+    pub(crate) unsafe fn allot(&mut self, bytes: isize) -> Result<(), ForthError> {
+        let size = bytes.unsigned_abs();
+        if bytes >= 0 {
+            if size > self.free_bytes(self.here) {
+                return Err(ForthError::DictionaryOverflow);
+            }
+            ptr::write_bytes(self.here, 0, size);
+            self.here = self.here.add(size);
+        } else {
+            if self.last_word.is_null() || !is_created(self.last_word) {
+                return Err(ForthError::AllotBelowData(bytes));
+            }
+            let data = pfa_of(cfa_of(self.last_word)) as Cell;
+            if size > self.here() - data {
+                return Err(ForthError::AllotBelowData(bytes));
+            }
+            self.here = self.here.sub(size);
+        }
         Ok(())
     }
 
@@ -164,7 +245,7 @@ impl Dictionary {
         addr >= self.start as Cell && addr < self.end as Cell
     }
 
-    /// Returns the index of the Cell at `addr`, which must be a cell-aligned address below
+    /// Returns the index of the Cell at `addr`, which must be cell-aligned and end at or below
     /// HERE. This keeps the Cell inside the part of the arena that has been written.
     ///
     /// # Errors
@@ -178,10 +259,23 @@ impl Dictionary {
             return Err(ForthError::InvalidAddress(addr));
         }
         let offset = addr - start;
-        if !offset.is_multiple_of(cell_size) {
+        if !offset.is_multiple_of(cell_size) || addr + cell_size > here {
             return Err(ForthError::InvalidAddress(addr));
         }
         Ok(offset / cell_size)
+    }
+
+    /// Returns the offset of the byte at `addr`, which must be below HERE.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::InvalidAddress`] for any other address.
+    fn byte_offset(&self, addr: Cell) -> Result<usize, ForthError> {
+        let start = self.start as Cell;
+        if addr < start || addr >= self.here() {
+            return Err(ForthError::InvalidAddress(addr));
+        }
+        Ok(addr - start)
     }
 
     /// Reads the Cell at `addr`. The number from the stack is only used as an offset,
@@ -207,8 +301,34 @@ impl Dictionary {
         Ok(())
     }
 
-    /// Writes a complete word into the dictionary: the name bytes, then the header.
-    /// Returns the LFA of the new word.
+    /// Reads the byte at `addr`, which needn't be aligned.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::InvalidAddress`] if [`byte_offset`](Self::byte_offset) rejects
+    /// `addr`.
+    pub(crate) fn fetch_byte(&self, addr: Cell) -> Result<u8, ForthError> {
+        let offset = self.byte_offset(addr)?;
+        // SAFETY: `byte_offset` keeps the byte in the arena, and every byte there is initialized.
+        Ok(unsafe { *(self.start as *const u8).add(offset) })
+    }
+
+    /// Writes the byte at `addr`, checked in the same way as `fetch_byte`. Like `store`, this
+    /// can change word headers and compiled code.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::InvalidAddress`] if [`byte_offset`](Self::byte_offset) rejects
+    /// `addr`.
+    pub(crate) fn store_byte(&mut self, addr: Cell, value: u8) -> Result<(), ForthError> {
+        let offset = self.byte_offset(addr)?;
+        // SAFETY: `byte_offset` keeps the byte in the arena.
+        unsafe { *(self.start as *mut u8).add(offset) = value };
+        Ok(())
+    }
+
+    /// Writes a complete word into the dictionary: the name bytes, then the header, both at
+    /// the next cell-aligned address. Returns the LFA of the new word.
     ///
     /// # Errors
     ///
@@ -228,23 +348,24 @@ impl Dictionary {
             return Err(ForthError::NameTooLong(name.len()));
         }
 
-        let name_cells = name.len().div_ceil(mem::size_of::<Cell>());
-        let free_cells = self.end.offset_from(self.here) as usize;
-        if name_cells + HEADER_CELLS > free_cells {
+        let cell_size = mem::size_of::<Cell>();
+        let name_cells = name.len().div_ceil(cell_size);
+        if (name_cells + HEADER_CELLS) * cell_size > self.free_bytes(self.next_cell()) {
             return Err(ForthError::DictionaryOverflow);
         }
+        self.align();
 
         // The dictionary owns its own copy, because the input does not outlive this call.
-        let name_ptr = self.here as *mut u8;
+        let name_ptr = self.here;
         ptr::copy_nonoverlapping(name.as_ptr(), name_ptr, name.len());
 
-        let header = self.here.add(name_cells);
+        let header = (name_ptr as *mut Cell).add(name_cells);
         *header.add(LFA) = self.last_word as Cell;
         *header.add(NFA) = name_ptr as Cell;
         *header.add(LEN_FLAGS) = name.len() | flags;
         *header.add(CFA) = code;
 
-        self.here = header.add(HEADER_CELLS);
+        self.here = header.add(HEADER_CELLS) as *mut u8;
         self.last_word = header; // Update the head pointer of the dictionary
         Ok(header)
     }
@@ -386,6 +507,306 @@ mod tests {
             "got: {:?}",
             result
         );
+    }
+
+    #[test]
+    fn aligned_rounds_up_to_a_cell_boundary() {
+        assert_eq!(aligned(0), 0);
+        assert_eq!(aligned(1), CELL_SIZE);
+        assert_eq!(aligned(CELL_SIZE - 1), CELL_SIZE);
+        assert_eq!(aligned(CELL_SIZE), CELL_SIZE);
+        assert_eq!(aligned(CELL_SIZE + 1), 2 * CELL_SIZE);
+    }
+
+    #[test]
+    fn aligned_wraps_at_the_top_of_the_address_range() {
+        assert_eq!(aligned(Cell::MAX), 0);
+    }
+
+    #[test]
+    fn store_byte_changes_only_the_target_byte() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[0, 0]);
+            let start = dictionary.start as Cell;
+            dictionary.store_byte(start + 1, 0xAB).unwrap();
+
+            for offset in 0..2 * CELL_SIZE {
+                let expected = if offset == 1 { 0xAB } else { 0 };
+                assert_eq!(dictionary.fetch_byte(start + offset).unwrap(), expected);
+            }
+        }
+    }
+
+    #[test]
+    fn byte_access_covers_exactly_the_written_bytes() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[0]);
+            let start = dictionary.start as Cell;
+            let here = dictionary.here();
+
+            assert!(dictionary.fetch_byte(start).is_ok());
+            assert!(dictionary.fetch_byte(here - 1).is_ok());
+            for addr in [start - 1, here, Cell::MAX] {
+                assert!(matches!(
+                    dictionary.fetch_byte(addr),
+                    Err(ForthError::InvalidAddress(a)) if a == addr
+                ));
+                assert!(matches!(
+                    dictionary.store_byte(addr, 1),
+                    Err(ForthError::InvalidAddress(a)) if a == addr
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn a_cell_that_ends_past_here_is_rejected() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[1]);
+            let addr = dictionary.here();
+            dictionary.char_comma(2).unwrap();
+            assert!(addr < dictionary.here());
+
+            assert_invalid(&dictionary, addr);
+            assert_store_invalid(&mut dictionary, addr);
+        }
+    }
+
+    #[test]
+    fn char_comma_stores_one_byte_and_can_leave_here_unaligned() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[]);
+            let start = dictionary.here();
+            dictionary.char_comma(7).unwrap();
+
+            assert_eq!(dictionary.here(), start + 1);
+            assert_eq!(dictionary.fetch_byte(start).unwrap(), 7);
+        }
+    }
+
+    #[test]
+    fn char_comma_fills_the_arena_and_then_overflows() {
+        unsafe {
+            let mut dictionary = Dictionary::new(1).unwrap();
+            for byte in 0..CELL_SIZE {
+                dictionary.char_comma(byte as u8).unwrap();
+            }
+            let here = dictionary.here();
+
+            assert!(matches!(
+                dictionary.char_comma(0),
+                Err(ForthError::DictionaryOverflow)
+            ));
+            assert_eq!(dictionary.here(), here);
+        }
+    }
+
+    #[test]
+    fn align_moves_here_and_clears_the_bytes_it_passes() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[Cell::MAX]);
+            let start = dictionary.start as Cell;
+            let mark = dictionary.mark();
+            dictionary.restore(Mark {
+                here: dictionary.start as *mut u8,
+                ..mark
+            });
+            dictionary.char_comma(1).unwrap();
+            dictionary.align();
+
+            assert_eq!(dictionary.here(), start + CELL_SIZE);
+            assert_eq!(
+                dictionary.fetch(start).unwrap(),
+                Cell::from_ne_bytes({
+                    let mut bytes = [0; CELL_SIZE];
+                    bytes[0] = 1;
+                    bytes
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn align_leaves_an_aligned_here_alone() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[1]);
+            let here = dictionary.here();
+            dictionary.align();
+            assert_eq!(dictionary.here(), here);
+        }
+    }
+
+    #[test]
+    fn align_stops_at_the_end_of_the_arena() {
+        unsafe {
+            let mut dictionary = Dictionary::new(1).unwrap();
+            dictionary.char_comma(1).unwrap();
+            dictionary.align();
+            assert_eq!(dictionary.here(), dictionary.end as Cell);
+        }
+    }
+
+    #[test]
+    fn comma_aligns_here_first() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[]);
+            let start = dictionary.here();
+            dictionary.char_comma(1).unwrap();
+            dictionary.comma(7).unwrap();
+
+            assert_eq!(dictionary.here(), start + 2 * CELL_SIZE);
+            assert_eq!(dictionary.fetch(start + CELL_SIZE).unwrap(), 7);
+        }
+    }
+
+    #[test]
+    fn comma_that_does_not_fit_after_aligning_leaves_here_alone() {
+        unsafe {
+            let mut dictionary = Dictionary::new(1).unwrap();
+            dictionary.char_comma(1).unwrap();
+            let here = dictionary.here();
+
+            assert!(matches!(
+                dictionary.comma(2),
+                Err(ForthError::DictionaryOverflow)
+            ));
+            assert_eq!(dictionary.here(), here);
+        }
+    }
+
+    #[test]
+    fn write_header_aligns_here_first() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[]);
+            dictionary.char_comma(1).unwrap();
+            let header = dictionary.write_header("X", 0, 0).unwrap();
+
+            assert!((header as Cell).is_multiple_of(CELL_SIZE));
+            assert!(dictionary.find_word("X").is_some());
+            assert!(dictionary.here().is_multiple_of(CELL_SIZE));
+        }
+    }
+
+    #[test]
+    fn write_header_that_does_not_fit_after_aligning_changes_nothing() {
+        unsafe {
+            // The name and header fill the arena exactly when HERE starts aligned.
+            let mut dictionary = Dictionary::new(HEADER_CELLS + 1).unwrap();
+            dictionary.char_comma(1).unwrap();
+            let mark = dictionary.mark();
+
+            assert!(matches!(
+                dictionary.write_header("X", 0, 0),
+                Err(ForthError::DictionaryOverflow)
+            ));
+            assert_eq!(dictionary.mark(), mark);
+        }
+    }
+
+    #[test]
+    fn restore_returns_to_an_unaligned_here() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[]);
+            dictionary.char_comma(1).unwrap();
+            let mark = dictionary.mark();
+            dictionary.comma(2).unwrap();
+            dictionary.restore(mark);
+            assert_eq!(dictionary.mark(), mark);
+        }
+    }
+
+    #[test]
+    fn allot_reserves_and_clears_bytes() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[Cell::MAX]);
+            let start = dictionary.start as Cell;
+            let mark = dictionary.mark();
+            dictionary.restore(Mark {
+                here: dictionary.start as *mut u8,
+                ..mark
+            });
+            dictionary.allot(3).unwrap();
+
+            assert_eq!(dictionary.here(), start + 3);
+            for offset in 0..3 {
+                assert_eq!(dictionary.fetch_byte(start + offset).unwrap(), 0);
+            }
+        }
+    }
+
+    #[test]
+    fn allot_fills_the_arena_and_then_overflows() {
+        unsafe {
+            let mut dictionary = Dictionary::new(2).unwrap();
+            let here = dictionary.here();
+            let size = (2 * CELL_SIZE) as isize;
+
+            assert!(matches!(
+                dictionary.allot(size + 1),
+                Err(ForthError::DictionaryOverflow)
+            ));
+            assert!(matches!(
+                dictionary.allot(isize::MAX),
+                Err(ForthError::DictionaryOverflow)
+            ));
+            assert_eq!(dictionary.here(), here);
+
+            dictionary.allot(size).unwrap();
+            assert_eq!(dictionary.here(), dictionary.end as Cell);
+        }
+    }
+
+    #[test]
+    fn allot_gives_back_the_data_of_a_created_word() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[]);
+            dictionary.write_header("X", 0, F_CREATED).unwrap();
+            let data = dictionary.here();
+            dictionary.allot(5).unwrap();
+            dictionary.allot(-3).unwrap();
+            assert_eq!(dictionary.here(), data + 2);
+            dictionary.allot(-2).unwrap();
+            assert_eq!(dictionary.here(), data);
+        }
+    }
+
+    #[test]
+    fn allot_rejects_going_below_the_data_of_a_created_word() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[]);
+            dictionary.write_header("X", 0, F_CREATED).unwrap();
+            dictionary.allot(2).unwrap();
+            let here = dictionary.here();
+
+            for bytes in [-3, isize::MIN] {
+                assert!(matches!(
+                    dictionary.allot(bytes),
+                    Err(ForthError::AllotBelowData(b)) if b == bytes
+                ));
+            }
+            assert_eq!(dictionary.here(), here);
+        }
+    }
+
+    #[test]
+    fn allot_gives_nothing_back_after_other_words() {
+        unsafe {
+            let mut empty = dictionary_with(&[1]);
+            assert!(matches!(
+                empty.allot(-1),
+                Err(ForthError::AllotBelowData(-1))
+            ));
+
+            let mut dictionary = dictionary_with(&[]);
+            dictionary.write_header("X", 0, 0).unwrap();
+            dictionary.comma(1).unwrap();
+            let here = dictionary.here();
+            assert!(matches!(
+                dictionary.allot(-1),
+                Err(ForthError::AllotBelowData(-1))
+            ));
+            assert_eq!(dictionary.here(), here);
+        }
     }
 
     #[test]
