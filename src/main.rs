@@ -81,13 +81,35 @@ fn main() {
         evaluate(&mut regs, "COUNTER @ .");
         println!("-------------------------------------\n");
 
-        // --- TEST RUN 7: Error Handling ---
+        // --- TEST RUN 7: Execution Tokens ---
+        // Run an unnamed definition straight away
+        evaluate(&mut regs, ":NONAME 1 2 + ; EXECUTE .");
+        // Pass arguments and results through the stack
+        evaluate(&mut regs, "5 :NONAME DUP + ; EXECUTE .");
+        // Keep an execution token under a name
+        evaluate(&mut regs, ":NONAME 3 + ; CONSTANT ADD3-XT");
+        evaluate(&mut regs, "4 ADD3-XT EXECUTE .");
+        // Pass behaviour to a word, as a callback
+        evaluate(&mut regs, ": TWICE DUP ROT SWAP EXECUTE SWAP EXECUTE ;");
+        evaluate(&mut regs, "5 :NONAME DUP + ; TWICE .");
+        evaluate(&mut regs, "1 ADD3-XT TWICE .");
+        // Change what a word does at runtime, through a variable
+        evaluate(&mut regs, "VARIABLE ACTION");
+        evaluate(&mut regs, ":NONAME 42 ; ACTION !");
+        evaluate(&mut regs, ": RUN-ACTION ACTION @ EXECUTE ;");
+        evaluate(&mut regs, "RUN-ACTION .");
+        evaluate(&mut regs, ":NONAME 7 ; ACTION !");
+        evaluate(&mut regs, "RUN-ACTION .");
+        println!("-------------------------------------\n");
+
+        // --- TEST RUN 8: Error Handling ---
         evaluate(&mut regs, ": BROKEN 1 NO-SUCH-WORD ;");
         evaluate(&mut regs, "BROKEN");
         evaluate(&mut regs, "+");
         evaluate(&mut regs, "1 5 !");
         evaluate(&mut regs, "DROP");
         evaluate(&mut regs, "9 PICK");
+        evaluate(&mut regs, "5 EXECUTE");
         println!("-------------------------------------\n");
     }
 }

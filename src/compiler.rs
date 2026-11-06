@@ -2,7 +2,7 @@
 //! words and literals are written to the dictionary.
 
 use crate::cell::Cell;
-use crate::dictionary::{Dictionary, Mark, F_HIDDEN};
+use crate::dictionary::{cfa_of, Dictionary, Mark, F_PENDING};
 use crate::error::ForthError;
 
 #[derive(Default)]
@@ -24,22 +24,24 @@ impl Compiler {
         self.compiling
     }
 
-    // Starts compiling a word that runs `code` when it is entered.
-    // The word stays hidden until it ends, so a redefinition can still call the old word.
+    // Starts compiling a word that runs `code`, and returns its execution token. The word
+    // stays pending until it ends, so a redefinition can still call the old word. Any
+    // `flags` are kept: a word with F_HIDDEN stays hidden after it ends.
     pub(crate) unsafe fn begin_definition(
         &mut self,
         dictionary: &mut Dictionary,
         name: &str,
         code: Cell,
-    ) -> Result<(), ForthError> {
+        flags: Cell,
+    ) -> Result<Cell, ForthError> {
         let restore_point = dictionary.mark();
-        dictionary.write_header(name, code, F_HIDDEN)?;
+        let header = dictionary.write_header(name, code, flags | F_PENDING)?;
         self.definition = Some(restore_point);
         self.compiling = true;
-        Ok(())
+        Ok(cfa_of(header) as Cell)
     }
 
-    // Ends the current definition and makes the word visible.
+    // Ends the current definition and marks the word as finished.
     pub(crate) unsafe fn end_definition(
         &mut self,
         dictionary: &mut Dictionary,
@@ -48,7 +50,7 @@ impl Compiler {
             return Err(ForthError::NotCompiling);
         }
         dictionary.comma(self.exit_cfa)?;
-        dictionary.reveal_last();
+        dictionary.finish_last();
         self.definition = None;
         self.compiling = false;
         Ok(())
@@ -78,6 +80,59 @@ impl Compiler {
         self.compiling = false;
         if let Some(mark) = self.definition.take() {
             dictionary.restore(mark);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dictionary::{is_hidden, is_pending, F_HIDDEN};
+
+    const TEST_CELLS: usize = 1024;
+
+    #[test]
+    fn begin_definition_sets_pending_and_not_hidden() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let mut compiler = Compiler::default();
+            compiler
+                .begin_definition(&mut dictionary, "X", 0, 0)
+                .unwrap();
+
+            let header = dictionary.last_word();
+            assert!(is_pending(header));
+            assert!(!is_hidden(header));
+        }
+    }
+
+    #[test]
+    fn end_definition_clears_only_pending() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let mut compiler = Compiler::default();
+            compiler
+                .begin_definition(&mut dictionary, "", 0, F_HIDDEN)
+                .unwrap();
+            let header = dictionary.last_word();
+            assert!(is_pending(header));
+            assert!(is_hidden(header));
+
+            compiler.end_definition(&mut dictionary).unwrap();
+            assert!(!is_pending(header));
+            assert!(is_hidden(header));
+        }
+    }
+
+    #[test]
+    fn begin_definition_returns_the_code_field() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let mut compiler = Compiler::default();
+            let xt = compiler
+                .begin_definition(&mut dictionary, "X", 0, 0)
+                .unwrap();
+            assert_eq!(xt, cfa_of(dictionary.last_word()) as Cell);
         }
     }
 }
