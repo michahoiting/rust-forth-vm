@@ -45,6 +45,8 @@ COUNTER @ .                       \ 43
 : +! SWAP OVER @ + SWAP ! ;
 5 COUNTER +!
 COUNTER @ .                       \ 48
+
+:NONAME 1 2 + ; EXECUTE .         \ 3
 ```
 
 The `\` comments are for this README only, because the interpreter does not
@@ -64,6 +66,8 @@ support comments yet.
 | `DOES>`  | `( -- )`     | Inside a definition: gives the newest `CREATE`d word the code that follows |
 | `:`      | `( -- )`     | Parses a name and starts compiling a definition   |
 | `;`      | `( -- )`     | Ends the definition (immediate)                   |
+| `:NONAME` | `( -- xt )` | Starts a definition without a name, and pushes its execution token |
+| `EXECUTE` | `( i*x xt -- j*x )` | Runs the word that an execution token refers to |
 | `EXIT`   | `( -- )`     | Returns from the current definition               |
 | `DUP`    | `( x -- x x )` | Copies the top Cell                             |
 | `?DUP`   | `( x -- 0 \| x x )` | Copies the top Cell if it isn't zero       |
@@ -86,7 +90,7 @@ dictionary directly in front of it.
 LFA     Link to the previous word
 NFA     Pointer to the name bytes
 LEN     Length of the name in bytes
-FLAGS   F_IMMEDIATE, F_HIDDEN, F_CREATED
+FLAGS   F_IMMEDIATE, F_HIDDEN, F_CREATED, F_PENDING
 CFA     Pointer to the machine code
 ...     Body
 ```
@@ -102,7 +106,7 @@ The body depends on how the word was defined:
 Primitives return to the `run` loop instead of calling `next` themselves, so
 threaded code does not grow the Rust call stack. A zero Cell ends a thread.
 
-A word being defined stays hidden until `;`, so a redefinition can call the
+A word being defined stays pending until `;`, so a redefinition can call the
 previous word of the same name. This also means a word cannot call itself.
 
 If an error occurs, the interpreter discards the rest of the line, clears both

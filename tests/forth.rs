@@ -293,6 +293,10 @@ fn errors_have_stable_messages() {
             "Cannot allocate a dictionary of 42 Cells.",
         ),
         (ForthError::InvalidAddress(0x2a), "Invalid address 0x2a."),
+        (
+            ForthError::InvalidExecutionToken(0x2a),
+            "Invalid execution token 0x2a.",
+        ),
         (ForthError::Output(io::Error::other("x")), "Output error."),
     ];
     for (error, message) in cases {
@@ -669,5 +673,139 @@ fn pick_and_roll_reject_a_negative_n() {
         let mut regs = test_vm(io::sink());
         assert_error!(&mut regs, "1 -1 PICK", ForthError::DataStackUnderflow);
         assert_error!(&mut regs, "1 -1 ROLL", ForthError::DataStackUnderflow);
+    }
+}
+
+#[test]
+fn word_is_only_found_after_its_definition_ends() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        assert_error!(&mut regs, ": X X ;", ForthError::UnknownWord(name) if name == "X");
+        outer_interpreter(&mut regs, ": X 7 ; X .").unwrap();
+        assert_eq!(output.text(), "7 ");
+    }
+}
+
+#[test]
+fn noname_leaves_an_xt_that_execute_runs() {
+    assert_eq!(output_of(&[":NONAME 1 2 + ; EXECUTE ."]), "3 ");
+}
+
+#[test]
+fn noname_leaves_only_the_xt_on_the_stack() {
+    assert_eq!(output_of(&[":NONAME ; DEPTH ."]), "1 ");
+}
+
+#[test]
+fn execute_passes_cells_through_the_stack() {
+    assert_eq!(output_of(&["5 :NONAME DUP + ; EXECUTE ."]), "10 ");
+}
+
+#[test]
+fn execute_consumes_the_xt() {
+    assert_eq!(output_of(&[":NONAME ; EXECUTE DEPTH ."]), "0 ");
+}
+
+#[test]
+fn xt_works_from_a_variable() {
+    let lines = ["VARIABLE V", ":NONAME 42 ; V !", "V @ EXECUTE ."];
+    assert_eq!(output_of(&lines), "42 ");
+}
+
+#[test]
+fn xt_works_from_a_constant() {
+    let lines = [
+        ": CONSTANT CREATE , DOES> @ ;",
+        ":NONAME 3 + ; CONSTANT ADD3",
+        "4 ADD3 EXECUTE .",
+    ];
+    assert_eq!(output_of(&lines), "7 ");
+}
+
+#[test]
+fn xt_works_from_a_colon_word() {
+    let lines = [
+        "VARIABLE V",
+        ":NONAME 42 ; V !",
+        ": RUN V @ EXECUTE ;",
+        "RUN .",
+    ];
+    assert_eq!(output_of(&lines), "42 ");
+}
+
+#[test]
+fn xt_works_as_a_callback() {
+    let lines = [
+        ": TWICE DUP ROT SWAP EXECUTE SWAP EXECUTE ;",
+        "5 :NONAME DUP + ; TWICE .",
+    ];
+    assert_eq!(output_of(&lines), "20 ");
+}
+
+#[test]
+fn replacing_an_xt_changes_behaviour_at_runtime() {
+    let lines = [
+        "VARIABLE V",
+        ": RUN V @ EXECUTE ;",
+        ":NONAME 1 ; V ! RUN .",
+        ":NONAME 2 ; V ! RUN .",
+    ];
+    assert_eq!(output_of(&lines), "1 2 ");
+}
+
+#[test]
+fn noname_definitions_stay_separate() {
+    let line = ":NONAME 1 ; :NONAME 2 ; EXECUTE . EXECUTE .";
+    assert_eq!(output_of(&[line]), "2 1 ");
+}
+
+#[test]
+fn noname_can_span_lines() {
+    assert_eq!(output_of(&[":NONAME 1", "2 + ;", "EXECUTE ."]), "3 ");
+}
+
+#[test]
+fn failed_noname_clears_the_xt_and_leaves_a_usable_vm() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        assert_error!(&mut regs, ":NONAME NOPE ;", ForthError::UnknownWord(_));
+        outer_interpreter(&mut regs, "DEPTH . 1 2 + .").unwrap();
+        assert_eq!(output.text(), "0 3 ");
+    }
+}
+
+#[test]
+fn execute_rejects_cells_that_are_not_execution_tokens() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        assert_error!(&mut regs, "0 EXECUTE", ForthError::InvalidExecutionToken(0));
+        assert_error!(&mut regs, "5 EXECUTE", ForthError::InvalidExecutionToken(5));
+        assert_error!(
+            &mut regs,
+            "-1 EXECUTE",
+            ForthError::InvalidExecutionToken(Cell::MAX)
+        );
+    }
+}
+
+#[test]
+fn execute_reports_underflow() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        assert_error!(&mut regs, "EXECUTE", ForthError::DataStackUnderflow);
+    }
+}
+
+#[test]
+fn execute_rejects_a_pending_definition() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        outer_interpreter(&mut regs, ": N :NONAME EXECUTE ;").unwrap();
+        assert_error!(&mut regs, "N", ForthError::InvalidExecutionToken(_));
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
     }
 }

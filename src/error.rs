@@ -30,6 +30,8 @@ pub enum ForthError {
     /// `@` or `!` was given an address, held here, that it may not access: one outside
     /// the written part of the dictionary, or one that is not cell-aligned.
     InvalidAddress(Cell),
+    /// `EXECUTE` was given a Cell, held here, that isn't the code field of a finished word.
+    InvalidExecutionToken(Cell),
     /// The output writer failed.
     Output(io::Error),
 }
@@ -53,6 +55,9 @@ impl fmt::Display for ForthError {
                 write!(f, "Word or numeric literal '{}' not recognized.", token)
             }
             ForthError::InvalidAddress(addr) => write!(f, "Invalid address {:#x}.", addr),
+            ForthError::InvalidExecutionToken(xt) => {
+                write!(f, "Invalid execution token {:#x}.", xt)
+            }
             ForthError::Output(_) => write!(f, "Output error."),
         }
     }

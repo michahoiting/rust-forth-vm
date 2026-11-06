@@ -120,6 +120,12 @@ unsafe fn next(regs: &mut Registers) {
     // IP++ (Step to the next Cell in the currently executing thread)
     regs.ip = regs.ip.add(1);
 
+    enter_word(regs);
+}
+
+// Runs the word that W points to.
+#[inline(always)]
+pub(crate) unsafe fn enter_word(regs: &mut Registers) {
     // Fetch the contents of the CFA Cell (the raw bits of the machine-code pointer)
     let code_bits = *regs.w as *const ();
 

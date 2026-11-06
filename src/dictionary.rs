@@ -19,8 +19,9 @@ const CFA: usize = 4; // Code Field: the machine-code pointer
 const HEADER_CELLS: usize = 5;
 
 pub(crate) const F_IMMEDIATE: Cell = 1; // Executes even while compiling
-pub(crate) const F_HIDDEN: Cell = 2; // Invisible to dictionary lookups
+pub(crate) const F_HIDDEN: Cell = 2; // Can never be found by name
 pub(crate) const F_CREATED: Cell = 4; // Made by CREATE, so it owns an action cell for DOES>
+pub(crate) const F_PENDING: Cell = 8; // Still being defined, so it can't be found or executed
 
 // Returns the CFA of the word with this header.
 pub(crate) unsafe fn cfa_of(header: *mut Cell) -> *mut Cell {
@@ -35,8 +36,12 @@ pub(crate) unsafe fn is_created(header: *mut Cell) -> bool {
     *header.add(FLAGS) & F_CREATED != 0
 }
 
-unsafe fn is_hidden(header: *mut Cell) -> bool {
+pub(crate) unsafe fn is_hidden(header: *mut Cell) -> bool {
     *header.add(FLAGS) & F_HIDDEN != 0
+}
+
+pub(crate) unsafe fn is_pending(header: *mut Cell) -> bool {
+    *header.add(FLAGS) & F_PENDING != 0
 }
 
 // A saved dictionary state, used to discard everything written after it.
@@ -164,6 +169,7 @@ impl Dictionary {
 
             // Reconstruct the name from raw dictionary data pointers
             if !is_hidden(current_lfa)
+                && !is_pending(current_lfa)
                 && std::slice::from_raw_parts(nfa_ptr, len) == token.as_bytes()
             {
                 return Some(current_lfa);
@@ -179,9 +185,22 @@ impl Dictionary {
         self.last_word
     }
 
-    // Makes the most recently created word visible to lookups.
-    pub(crate) unsafe fn reveal_last(&mut self) {
-        *self.last_word.add(FLAGS) &= !F_HIDDEN;
+    // Marks the most recently created word as finished. Its other flags stay as they are.
+    pub(crate) unsafe fn finish_last(&mut self) {
+        *self.last_word.add(FLAGS) &= !F_PENDING;
+    }
+
+    // Returns whether `xt` is the code field of a finished word, hidden or not.
+    pub(crate) unsafe fn is_execution_token(&self, xt: Cell) -> bool {
+        let mut current_lfa = self.last_word;
+
+        while !current_lfa.is_null() {
+            if cfa_of(current_lfa) as Cell == xt {
+                return !is_pending(current_lfa);
+            }
+            current_lfa = *current_lfa.add(LFA) as *mut Cell;
+        }
+        false
     }
 
     // Saves the current state, for a later `restore`.
@@ -421,6 +440,88 @@ mod tests {
                 dictionary.write_header(&name, 0, 0),
                 Err(ForthError::DictionaryOverflow)
             ));
+        }
+    }
+
+    #[test]
+    fn find_word_skips_a_pending_word_until_it_is_finished() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            dictionary.write_header("X", 0, F_PENDING).unwrap();
+            assert!(dictionary.find_word("X").is_none());
+
+            dictionary.finish_last();
+            assert!(dictionary.find_word("X").is_some());
+        }
+    }
+
+    #[test]
+    fn find_word_skips_a_hidden_word() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            dictionary.write_header("X", 0, F_HIDDEN).unwrap();
+            assert!(dictionary.find_word("X").is_none());
+        }
+    }
+
+    #[test]
+    fn finish_last_keeps_the_hidden_flag() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let header = dictionary
+                .write_header("X", 0, F_HIDDEN | F_PENDING)
+                .unwrap();
+
+            dictionary.finish_last();
+            assert!(!is_pending(header));
+            assert!(is_hidden(header));
+        }
+    }
+
+    #[test]
+    fn execution_tokens_include_finished_and_hidden_words() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let named = dictionary.write_header("X", 0, 0).unwrap();
+            let hidden = dictionary.write_header("", 0, F_HIDDEN).unwrap();
+            assert!(dictionary.is_execution_token(cfa_of(named) as Cell));
+            assert!(dictionary.is_execution_token(cfa_of(hidden) as Cell));
+        }
+    }
+
+    #[test]
+    fn execution_tokens_exclude_pending_words() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let header = dictionary.write_header("X", 0, F_PENDING).unwrap();
+            assert!(!dictionary.is_execution_token(cfa_of(header) as Cell));
+
+            dictionary.finish_last();
+            assert!(dictionary.is_execution_token(cfa_of(header) as Cell));
+        }
+    }
+
+    #[test]
+    fn execution_tokens_exclude_other_addresses_and_numbers() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let header = dictionary.write_header("X", 0, 0).unwrap();
+            assert!(!dictionary.is_execution_token(header as Cell));
+            assert!(!dictionary.is_execution_token(5));
+            assert!(!dictionary.is_execution_token(0));
+        }
+    }
+
+    #[test]
+    fn execution_tokens_exclude_words_after_a_restore() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let mark = dictionary.mark();
+            let header = dictionary.write_header("X", 0, 0).unwrap();
+            let xt = cfa_of(header) as Cell;
+
+            dictionary.restore(mark);
+            assert!(!dictionary.is_execution_token(xt));
         }
     }
 }
