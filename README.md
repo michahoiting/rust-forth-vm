@@ -14,6 +14,8 @@ cargo run    # Run the demo
 cargo test   # Run the unit tests
 ```
 
+Contributors and coding agents should follow [AGENTS.md](AGENTS.md).
+
 ## Example
 
 The demo evaluates lines of Forth like these:
