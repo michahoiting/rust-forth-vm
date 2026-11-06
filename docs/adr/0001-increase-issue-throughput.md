@@ -1,6 +1,6 @@
 # ADR 0001: Increase issue throughput without weakening `main`
 
-- **Status:** Proposed. The owner has yet to decide on `strict`, see [#76](https://github.com/michahoiting/rust-forth-vm/issues/76).
+- **Status:** Accepted. The owner chose to keep `strict`, see [#76](https://github.com/michahoiting/rust-forth-vm/issues/76).
 - **Date:** 2026-11-06
 
 ## Context
@@ -23,7 +23,7 @@ Not measured: how long PRs wait for review versus how long agents spend fixing f
 
 ## Decision
 
-Keep every quality gate, and remove the waiting around them. Start with the short-term items, which cost little and don't weaken `main`. Keep `strict` for now, see [The `strict` decision](#the-strict-decision).
+Keep every quality gate, and remove the waiting around them. Start with the short-term items, which cost little and don't weaken `main`. Keep `strict`, see [The `strict` decision](#the-strict-decision).
 
 Merging this ADR doesn't change CI. Each item is implemented through its own issue.
 
@@ -49,7 +49,7 @@ Gain is an estimate unless it cites a measurement. Quality impact is the effect 
 
 | ID | Issue | Idea | Solves | Expected gain | Effort | Quality impact |
 |---|---|---|---|---|---|---|
-| M1 | [#76](https://github.com/michahoiting/rust-forth-vm/issues/76) | **Decide how to handle `strict`** | Rerun after every merge | Largest CI saving once PRs run in parallel | S–M | Depends on the option |
+| M1 | [#76](https://github.com/michahoiting/rust-forth-vm/issues/76) | **Decide how to handle `strict`**. Decided: keep it | Rerun after every merge | No saving, because reruns stay. S2 and S3 reduce their cost | S | None |
 | M2 | [#85](https://github.com/michahoiting/rust-forth-vm/issues/85) | **Run Miri under cargo-nextest** | Miri runs tests one at a time | nextest reports up to 3–4x. Expect less on small runners, so measure it | M | Low. Loses race detection between tests, but the code has no threads. Adds a CI-only tool, not a crate dependency |
 | M3 | [#34](https://github.com/michahoiting/rust-forth-vm/issues/34) | **Automate the demo comparison** | Manual demo diff against `main` on every change | Removes a manual step per PR | M | Positive |
 | M4 | [#77](https://github.com/michahoiting/rust-forth-vm/issues/77) | **Risk-based review**: low-risk PRs merge on Claude review plus green CI, the owner reviews the rest | Review is likely the largest wait | Potentially the largest gain overall | S to set up | Medium. An owner policy change, so limit it to low-risk paths |
@@ -74,11 +74,13 @@ Dependency caching and bigger runners. There are no crate dependencies, and the 
 
 | Option | Throughput | Guarantee |
 |---|---|---|
-| **A. Keep `strict` for now (recommended)** | Reruns after each merge, with the cost cut by S2 and S3 | Every commit on `main` was tested as merged |
+| **A. Keep `strict` (chosen)** | Reruns after each merge, with the cost cut by S2 and S3 | Every commit on `main` was tested as merged |
 | B. Turn `strict` off, keep the `main` push run | Best without moving the repo | Two green PRs can combine into a broken `main`, found only after merging |
 | C. Move to an organization with a merge queue (L1) | Best long term | Same as A |
 
-Recommendation: A now, then C when several PRs are regularly open at once. This fits the requirement that `main` must stay qualified. With about 1–3 PRs open, the reruns cost roughly 2 min each after S2.
+The owner chose A in [#76](https://github.com/michahoiting/rust-forth-vm/issues/76). This fits the requirement that `main` must stay qualified. With about 1–3 PRs open, the reruns cost roughly 3 min each after S2, measured once on PR #88.
+
+C stays a separate decision in [#79](https://github.com/michahoiting/rust-forth-vm/issues/79), to revisit when several PRs are regularly open at once.
 
 ## Recommended roadmap
 
