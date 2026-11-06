@@ -142,8 +142,26 @@ fn quit_does_not_end_the_session() {
 }
 
 #[test]
+fn abort_prints_no_ok_and_clears_the_data_stack() {
+    assert_eq!(session("7 1 . ABORT 2 .\nDEPTH .\n"), "1 \n0 ok\n\n");
+}
+
+#[test]
+fn abort_works_from_a_definition() {
+    assert_eq!(
+        session(": GIVE-UP 3 . ABORT 4 . ;\n8 GIVE-UP 5 .\nDEPTH .\n"),
+        "ok\n3 \n0 ok\n\n"
+    );
+}
+
+#[test]
+fn abort_does_not_end_the_session() {
+    assert_eq!(session("ABORT\n1 .\n"), "\n1 ok\n\n");
+}
+
+#[test]
 fn end_of_input_ends_the_session_with_code_zero() {
-    for stdin in ["", "QUIT\n", ": OPEN\n"] {
+    for stdin in ["", "QUIT\n", "ABORT\n", ": OPEN\n"] {
         stdout_of(&[], stdin);
     }
 }
@@ -153,7 +171,7 @@ fn menu_lists_every_section() {
     let output = menu("q\n");
     assert!(output.contains("   0. All sections\n"));
     assert!(output.contains("   1. Evaluating Text Operations\n"));
-    assert!(output.contains("  12. Returning to the Interpreter with QUIT\n"));
+    assert!(output.contains("  12. Returning to the Interpreter with QUIT and ABORT\n"));
     assert!(output.contains("  13. Error Handling\n"));
     assert!(output.ends_with(PROMPT));
 }

@@ -46,6 +46,12 @@ pub(super) unsafe fn quit(regs: &mut Registers) {
     regs.set_error(ForthError::Quit);
 }
 
+/// `ABORT ( i*x -- )`: Does the same as `QUIT`, and also clears the data stack. The
+/// interpreter does that part too, so that a host can tell the two apart.
+pub(super) unsafe fn abort(regs: &mut Registers) {
+    regs.set_error(ForthError::Abort);
+}
+
 /// `EXECUTE ( i*x xt -- j*x )`: Pops an execution token and runs that word.
 pub(super) unsafe fn execute(regs: &mut Registers) {
     if let Some(xt) = regs.pop() {
@@ -103,6 +109,18 @@ mod tests {
 
             quit(&mut regs);
             assert!(matches!(regs.error, Some(ForthError::Quit)));
+            assert_eq!(regs.data_stack, [7]);
+        }
+    }
+
+    #[test]
+    fn abort_stops_the_vm_and_leaves_the_stack_to_the_interpreter() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            regs.data_stack.push(7);
+
+            abort(&mut regs);
+            assert!(matches!(regs.error, Some(ForthError::Abort)));
             assert_eq!(regs.data_stack, [7]);
         }
     }

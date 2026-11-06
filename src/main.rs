@@ -207,13 +207,17 @@ VARIABLE COUNTER
     ),
 ];
 
-/// The `QUIT` examples. `QUIT` discards the rest of its text and keeps the data stack, so each
-/// one is a separate block, followed by a block that prints what was left.
-const QUIT_TESTS: [&str; 4] = [
+/// The `QUIT` and `ABORT` examples. Both discard the rest of their text, so each one is a
+/// separate block, followed by a block that shows what's left on the data stack.
+const RESTART_TESTS: [&str; 8] = [
     r"7 1 . QUIT 2 .                  \ prints 1, and leaves 7 on the stack",
     r".                               \ prints 7",
     r": STOP 3 . QUIT 4 . ; 8 STOP 5 .  \ prints 3: QUIT also leaves a definition",
     r".                               \ prints 8",
+    r"7 1 . ABORT 2 .                 \ prints 1, and clears the stack",
+    r"DEPTH .                         \ prints 0",
+    r": GIVE-UP 3 . ABORT 4 . ; 8 GIVE-UP 5 .  \ prints 3: ABORT also leaves a definition",
+    r"DEPTH .                         \ prints 0",
 ];
 
 /// The error handling tests. An error discards the rest of its text, so each one is a separate
@@ -232,7 +236,10 @@ const ERROR_TESTS: [&str; 8] = [
 /// The sections with several blocks of source, which run after [`SECTIONS`]. Each one has its
 /// title and its blocks, which share a VM.
 const BLOCK_SECTIONS: [(&str, &[&str]); 2] = [
-    ("Returning to the Interpreter with QUIT", &QUIT_TESTS),
+    (
+        "Returning to the Interpreter with QUIT and ABORT",
+        &RESTART_TESTS,
+    ),
     ("Error Handling", &ERROR_TESTS),
 ];
 
@@ -258,7 +265,8 @@ unsafe fn new_vm() -> Registers {
 }
 
 /// Evaluates some Forth source and ends the output line with the result. That's `ok` if all of
-/// it ran, unless a definition is still open. After `QUIT`, the standard allows no message.
+/// it ran, unless a definition is still open. After `QUIT` and `ABORT`, the standard allows no
+/// message.
 ///
 /// # Safety
 ///
@@ -267,7 +275,7 @@ unsafe fn interpret(regs: &mut Registers, input: &str) {
     match outer_interpreter(regs, input) {
         Ok(()) if regs.is_compiling() => {}
         Ok(()) => println!("ok"),
-        Err(ForthError::Quit) => println!(),
+        Err(ForthError::Quit | ForthError::Abort) => println!(),
         Err(error) => println!("Forth Error: {}", error),
     }
 }
@@ -445,7 +453,7 @@ mod tests {
         assert_eq!(section(1).0, SECTIONS[0].0);
         assert_eq!(section(1).1, [SECTIONS[0].1]);
         assert_eq!(section(SECTIONS.len()).0, SECTIONS[SECTIONS.len() - 1].0);
-        assert_eq!(section(SECTION_COUNT - 1).1, QUIT_TESTS);
+        assert_eq!(section(SECTION_COUNT - 1).1, RESTART_TESTS);
         assert_eq!(section(SECTION_COUNT).1, ERROR_TESTS);
     }
 }

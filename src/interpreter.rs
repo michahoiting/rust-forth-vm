@@ -78,12 +78,14 @@ unsafe fn abort(regs: &mut Registers) {
 /// colon definition. Words that were already finished stay, and the VM can still be used.
 ///
 /// The word `QUIT` does the same, except that it keeps the data stack. It isn't a failure, but
-/// it's reported as [`ForthError::Quit`] so that a host knows the input didn't finish.
+/// it's reported as [`ForthError::Quit`] so that a host knows the input didn't finish. The
+/// word `ABORT` does what an error does, and is reported as [`ForthError::Abort`].
 ///
 /// # Errors
 ///
 /// Returns the first [`ForthError`] that a word or token causes, such as
-/// [`ForthError::UnknownWord`], and [`ForthError::Quit`] if `QUIT` ran.
+/// [`ForthError::UnknownWord`], and [`ForthError::Quit`] or [`ForthError::Abort`] if that
+/// word ran.
 /// Returns [`ForthError::Output`] if the writer given to
 /// [`boot`](crate::boot) fails. A failed flush is ignored after another error, so the
 /// original error is the one reported.

@@ -137,6 +137,7 @@ it.
 | `>BODY`  | `( xt -- addr )` | Replaces an execution token with the address of that word's Parameter Field |
 | `EXIT`   | `( -- )`     | Returns from the current definition               |
 | `QUIT`   | `( -- )`     | Clears the return stack, discards the rest of the input, and returns to interpreting. Keeps the data stack, and doesn't leave the program |
+| `ABORT`  | `( i*x -- )` | Clears the data stack, then does the same as `QUIT` |
 | `(`      | `( -- )`     | Skips the input up to and including the next `)` (immediate) |
 | `\`      | `( -- )`     | Skips the rest of the line (immediate)            |
 | `DUP`    | `( x -- x x )` | Copies the top Cell                             |
