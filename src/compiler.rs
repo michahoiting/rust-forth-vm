@@ -5,28 +5,42 @@ use crate::cell::Cell;
 use crate::dictionary::{cfa_of, Dictionary, Mark, F_PENDING};
 use crate::error::ForthError;
 
+/// The compilation state of a VM.
 #[derive(Default)]
 pub(crate) struct Compiler {
-    compiling: bool,          // STATE: true between `:` and `;`
-    definition: Option<Mark>, // Dictionary state to restore if a definition fails
-    lit_cfa: Cell,            // CFA compiled in front of inline literals
-    exit_cfa: Cell,           // CFA compiled by `;`
+    /// STATE: true between `:` and `;`.
+    compiling: bool,
+    /// Dictionary state to restore if a definition fails.
+    definition: Option<Mark>,
+    /// CFA compiled in front of inline literals.
+    lit_cfa: Cell,
+    /// CFA compiled by `;`.
+    exit_cfa: Cell,
 }
 
 impl Compiler {
-    // Records the primitives that compiled code depends on.
+    /// Records the primitives that compiled code depends on.
     pub(crate) fn link_primitives(&mut self, lit_cfa: Cell, exit_cfa: Cell) {
         self.lit_cfa = lit_cfa;
         self.exit_cfa = exit_cfa;
     }
 
+    /// Returns whether a definition is being compiled.
     pub(crate) fn is_compiling(&self) -> bool {
         self.compiling
     }
 
-    // Starts compiling a word that runs `code`, and returns its execution token. The word
-    // stays pending until it ends, so a redefinition can still call the old word. Any
-    // `flags` are kept: a word with F_HIDDEN stays hidden after it ends.
+    /// Starts compiling a word that runs `code`, and returns its execution token. The word
+    /// stays pending until it ends, so a redefinition can still call the old word. Any
+    /// `flags` are kept: a word with F_HIDDEN stays hidden after it ends.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::DictionaryOverflow`] if the word doesn't fit in the dictionary.
+    ///
+    /// # Safety
+    ///
+    /// `code` must come from [`code_cell`](crate::vm::code_cell), because the VM calls it.
     pub(crate) unsafe fn begin_definition(
         &mut self,
         dictionary: &mut Dictionary,
@@ -41,7 +55,16 @@ impl Compiler {
         Ok(cfa_of(header) as Cell)
     }
 
-    // Ends the current definition and marks the word as finished.
+    /// Ends the current definition and marks the word as finished.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::NotCompiling`] if no definition is in progress, and
+    /// [`ForthError::DictionaryOverflow`] if `EXIT` doesn't fit in the dictionary.
+    ///
+    /// # Safety
+    ///
+    /// The dictionary must hold at least one word.
     pub(crate) unsafe fn end_definition(
         &mut self,
         dictionary: &mut Dictionary,
@@ -56,7 +79,11 @@ impl Compiler {
         Ok(())
     }
 
-    // Compiles a call to the word with this CFA.
+    /// Compiles a call to the word with this CFA.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::DictionaryOverflow`] if the call doesn't fit in the dictionary.
     pub(crate) unsafe fn compile_word(
         &self,
         dictionary: &mut Dictionary,
@@ -65,7 +92,11 @@ impl Compiler {
         dictionary.comma(cfa)
     }
 
-    // Compiles code that pushes `number` when it runs.
+    /// Compiles code that pushes `number` when it runs.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::DictionaryOverflow`] if the literal doesn't fit in the dictionary.
     pub(crate) unsafe fn compile_literal(
         &self,
         dictionary: &mut Dictionary,
@@ -75,7 +106,7 @@ impl Compiler {
         dictionary.comma(number)
     }
 
-    // Leaves compile mode and discards any half-built definition.
+    /// Leaves compile mode and discards any half-built definition.
     pub(crate) fn abort(&mut self, dictionary: &mut Dictionary) {
         self.compiling = false;
         if let Some(mark) = self.definition.take() {

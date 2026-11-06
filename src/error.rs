@@ -6,7 +6,30 @@ use std::io;
 
 use crate::cell::Cell;
 
-/// An error that stopped the evaluation of a line.
+/// An error that stopped the evaluation of some input.
+///
+/// [`outer_interpreter`](crate::outer_interpreter) returns these, and so does
+/// [`boot`](crate::boot). `Display` gives a message for the user.
+///
+/// # Examples
+///
+/// ```
+/// use std::io;
+///
+/// use rust_forth_vm::{boot, outer_interpreter, ForthError};
+///
+/// // SAFETY: this VM is only used through the crate's functions.
+/// let result = unsafe {
+///     let mut regs = boot(io::sink(), 1024)?;
+///     outer_interpreter(&mut regs, "HELLO")
+/// };
+///
+/// match result {
+///     Err(ForthError::UnknownWord(token)) => assert_eq!(token, "HELLO"),
+///     other => panic!("unexpected result: {:?}", other),
+/// }
+/// # Ok::<(), ForthError>(())
+/// ```
 #[derive(Debug)]
 pub enum ForthError {
     /// A word needed more Cells than the data stack holds.

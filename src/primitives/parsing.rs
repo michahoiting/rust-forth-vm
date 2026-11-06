@@ -4,14 +4,14 @@
 use crate::error::ForthError;
 use crate::vm::Registers;
 
-// PAREN ( ( ): Skips the input up to and including the next `)`. Comments don't nest.
+/// `( ( -- )`: Skips the input up to and including the next `)`. Comments don't nest.
 pub(super) unsafe fn paren_comment(regs: &mut Registers) {
     if !regs.input.skip_past(')') {
         regs.set_error(ForthError::UnterminatedComment);
     }
 }
 
-// BACKSLASH ( \ ): Skips the rest of the line.
+/// `\ ( -- )`: Skips the rest of the line.
 pub(super) unsafe fn line_comment(regs: &mut Registers) {
     regs.input.skip_line();
 }

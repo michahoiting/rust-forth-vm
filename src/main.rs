@@ -1,12 +1,15 @@
+//! A scripted demo of the Forth VM. Each section shows the normal use of some words, and
+//! the last one shows how errors are handled.
+
 use std::io;
 
 use rust_forth_vm::{boot, outer_interpreter, Registers};
 
-// The size of the demo's Forth dictionary.
+/// The size of the demo's Forth dictionary.
 const DICTIONARY_CELLS: usize = 1024;
 
-// The demo sections, each with its title and one block of Forth source. All of them run in the
-// same VM, so later sections can use words from earlier ones.
+/// The demo sections, each with its title and one block of Forth source. All of them run in
+/// the same VM, so later sections can use words from earlier ones.
 const SECTIONS: [(&str, &str); 9] = [
     (
         "Evaluating Text Operations",
@@ -148,8 +151,8 @@ ANNOUNCE                      \ prints 99
     ),
 ];
 
-// The error handling tests. An error discards the rest of its text, so each one is a separate
-// block.
+/// The error handling tests. An error discards the rest of its text, so each one is a separate
+/// block.
 const ERROR_TESTS: [&str; 8] = [
     ": BROKEN 1 NO-SUCH-WORD ;",
     "BROKEN",
@@ -161,8 +164,12 @@ const ERROR_TESTS: [&str; 8] = [
     "1 ( never closed",
 ];
 
-// Echoes a block of Forth source and evaluates it. Output from Forth words follows on one line,
-// which ends with the result.
+/// Echoes a block of Forth source and evaluates it. Output from Forth words follows on one
+/// line, which ends with the result.
+///
+/// # Safety
+///
+/// `regs` must come from [`boot`].
 unsafe fn evaluate(regs: &mut Registers, input: &str) {
     println!("Input:");
     for line in input.trim().lines() {
@@ -175,6 +182,7 @@ unsafe fn evaluate(regs: &mut Registers, input: &str) {
     }
 }
 
+/// Boots a VM and runs every section of the demo in it.
 fn main() {
     unsafe {
         let mut regs = boot(io::stdout(), DICTIONARY_CELLS)

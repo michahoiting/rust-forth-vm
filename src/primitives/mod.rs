@@ -9,7 +9,11 @@ use crate::dictionary::{F_HIDDEN, F_IMMEDIATE};
 use crate::error::ForthError;
 use crate::vm::{code_cell, Registers};
 
-// Registers the core primitives under their official text names.
+/// Registers the core primitives under their official text names.
+///
+/// # Errors
+///
+/// Returns [`ForthError::DictionaryOverflow`] if they don't fit in the dictionary.
 pub(crate) unsafe fn install(regs: &mut Registers) -> Result<(), ForthError> {
     regs.dictionary
         .add_primitive_word("+", code_cell(core::plus), 0)?;
