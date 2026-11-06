@@ -56,6 +56,32 @@ pub struct Registers {
 }
 
 impl Registers {
+    /// Returns whether a definition is open, so that the VM is compiling rather than
+    /// interpreting. A definition can continue in the next call to
+    /// [`outer_interpreter`](crate::outer_interpreter).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::io;
+    ///
+    /// use rust_forth_vm::{boot, outer_interpreter, ForthError};
+    ///
+    /// // SAFETY: this VM is only used through the crate's functions.
+    /// unsafe {
+    ///     let mut regs = boot(io::sink(), 1024)?;
+    ///     assert!(!regs.is_compiling());
+    ///     outer_interpreter(&mut regs, ": THREE 3")?;
+    ///     assert!(regs.is_compiling());
+    ///     outer_interpreter(&mut regs, ";")?;
+    ///     assert!(!regs.is_compiling());
+    /// }
+    /// # Ok::<(), ForthError>(())
+    /// ```
+    pub fn is_compiling(&self) -> bool {
+        self.compiler.is_compiling()
+    }
+
     /// Creates a VM with an empty dictionary of `dictionary_cells` Cells.
     ///
     /// # Errors

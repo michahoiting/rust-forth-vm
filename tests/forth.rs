@@ -276,6 +276,114 @@ fn output_error_keeps_its_cause() {
 }
 
 #[test]
+fn quit_stops_the_input_and_keeps_the_data_stack() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+
+        let error = outer_interpreter(&mut regs, "7 1 . QUIT 2 .").unwrap_err();
+        assert!(matches!(error, ForthError::Quit));
+
+        outer_interpreter(&mut regs, ".").unwrap();
+        assert_eq!(output.text(), "1 7 ");
+    }
+}
+
+#[test]
+fn quit_leaves_nested_definitions_and_clears_the_return_stack() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        outer_interpreter(&mut regs, ": INNER 2 . QUIT 3 . ;").unwrap();
+        outer_interpreter(&mut regs, ": OUTER INNER 4 . ;").unwrap();
+
+        let error = outer_interpreter(&mut regs, "8 OUTER 5 .").unwrap_err();
+        assert!(matches!(error, ForthError::Quit));
+
+        outer_interpreter(&mut regs, ".").unwrap();
+        assert_eq!(output.text(), "2 8 ");
+
+        let error = outer_interpreter(&mut regs, "EXIT").unwrap_err();
+        assert!(matches!(error, ForthError::ReturnStackUnderflow));
+    }
+}
+
+#[test]
+fn quit_rolls_back_an_open_definition() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        outer_interpreter(&mut regs, ": BAIL QUIT ; IMMEDIATE").unwrap();
+
+        let error = outer_interpreter(&mut regs, ": UNFINISHED 1 BAIL").unwrap_err();
+        assert!(matches!(error, ForthError::Quit));
+        assert!(!regs.is_compiling());
+
+        let error = outer_interpreter(&mut regs, "UNFINISHED").unwrap_err();
+        assert!(matches!(error, ForthError::UnknownWord(name) if name == "UNFINISHED"));
+    }
+}
+
+#[test]
+fn abort_stops_the_input_and_clears_the_data_stack() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+
+        let error = outer_interpreter(&mut regs, "7 1 . ABORT 2 .").unwrap_err();
+        assert!(matches!(error, ForthError::Abort));
+
+        outer_interpreter(&mut regs, "DEPTH .").unwrap();
+        assert_eq!(output.text(), "1 0 ");
+    }
+}
+
+#[test]
+fn abort_leaves_nested_definitions_and_clears_the_return_stack() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        outer_interpreter(&mut regs, ": INNER 2 . ABORT 3 . ;").unwrap();
+        outer_interpreter(&mut regs, ": OUTER INNER 4 . ;").unwrap();
+
+        let error = outer_interpreter(&mut regs, "8 OUTER 5 .").unwrap_err();
+        assert!(matches!(error, ForthError::Abort));
+
+        outer_interpreter(&mut regs, "DEPTH .").unwrap();
+        assert_eq!(output.text(), "2 0 ");
+
+        let error = outer_interpreter(&mut regs, "EXIT").unwrap_err();
+        assert!(matches!(error, ForthError::ReturnStackUnderflow));
+    }
+}
+
+#[test]
+fn abort_rolls_back_an_open_definition() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        outer_interpreter(&mut regs, ": BAIL ABORT ; IMMEDIATE").unwrap();
+
+        let error = outer_interpreter(&mut regs, ": UNFINISHED 1 BAIL").unwrap_err();
+        assert!(matches!(error, ForthError::Abort));
+        assert!(!regs.is_compiling());
+
+        let error = outer_interpreter(&mut regs, "UNFINISHED").unwrap_err();
+        assert!(matches!(error, ForthError::UnknownWord(name) if name == "UNFINISHED"));
+    }
+}
+
+#[test]
+fn is_compiling_follows_an_open_definition() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        assert!(!regs.is_compiling());
+        outer_interpreter(&mut regs, ": X").unwrap();
+        assert!(regs.is_compiling());
+        outer_interpreter(&mut regs, ";").unwrap();
+        assert!(!regs.is_compiling());
+    }
+}
+
+#[test]
 fn errors_have_stable_messages() {
     let cases = [
         (ForthError::DataStackUnderflow, "Data stack underflow."),
@@ -324,6 +432,8 @@ fn errors_have_stable_messages() {
             "Comment has no closing parenthesis.",
         ),
         (ForthError::Output(io::Error::other("x")), "Output error."),
+        (ForthError::Quit, "QUIT was executed."),
+        (ForthError::Abort, "ABORT was executed."),
     ];
     for (error, message) in cases {
         assert_eq!(error.to_string(), message);

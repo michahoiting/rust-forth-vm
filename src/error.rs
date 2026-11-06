@@ -8,7 +8,8 @@ use std::io;
 
 use crate::cell::Cell;
 
-/// An error that stopped the evaluation of some input.
+/// An error that stopped the evaluation of some input. [`ForthError::Quit`] and
+/// [`ForthError::Abort`] also stop it, but aren't failures.
 ///
 /// [`outer_interpreter`](crate::outer_interpreter) returns these, and so does
 /// [`boot`](crate::boot). `Display` gives a message for the user.
@@ -66,6 +67,14 @@ pub enum ForthError {
     NullPointerCheck(Cell),
     /// The output writer failed.
     Output(io::Error),
+    /// `QUIT` ran, which isn't a failure. The VM is ready for new input, and the data stack is
+    /// kept. The standard says that no message is displayed, so a host should show nothing and
+    /// read on.
+    Quit,
+    /// `ABORT` ran, which isn't a failure. The VM is ready for new input, and the data stack is
+    /// clear. The standard says that no message is displayed, so a host should show nothing and
+    /// read on.
+    Abort,
 }
 
 impl fmt::Display for ForthError {
@@ -98,6 +107,8 @@ impl fmt::Display for ForthError {
                 write!(f, "Null pointer in the code field at {:#x}.", xt)
             }
             ForthError::Output(_) => write!(f, "Output error."),
+            ForthError::Quit => write!(f, "QUIT was executed."),
+            ForthError::Abort => write!(f, "ABORT was executed."),
         }
     }
 }

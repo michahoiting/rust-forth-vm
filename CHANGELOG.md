@@ -24,11 +24,18 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 - Defining words: `:`, `;`, `:NONAME`, `CREATE`, `CONSTANT`, `DOES>`, `IMMEDIATE` and
   `EXIT`.
 - `EXECUTE`, which runs a word from its execution token.
+- `QUIT`, which clears the return stack, discards the rest of the input, and returns to
+  interpreting. It's reported as `ForthError::Quit`, and keeps the data stack.
+- `ABORT`, which clears the data stack and does the same as `QUIT`. It's reported as
+  `ForthError::Abort`.
 - `'` and `[']`, which give the execution token of a named word.
 - `>BODY`, which gives the address of a word's Parameter Field from its execution token.
 - Word names of up to 255 bytes.
 - Comments with `(` and `\`.
-- A `forth-vm` binary that runs a scripted demo.
+- A `forth-vm` binary that starts as an interactive Forth prompt. It prints `ok` after a
+  line that succeeds, and `Registers::is_compiling` tells it when a definition is open.
+- A `--demo` option with a menu to run all the demo sections or one of them, each in a new
+  VM. `make demo` opens this menu.
 - The MIT licence, and a minimum supported Rust version.
 - This changelog, a contributing guide, a versioning policy, and getting-started steps in
   the README.

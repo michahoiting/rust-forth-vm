@@ -1,0 +1,265 @@
+// Copyright (c) 2026 M.W.R. Hoiting
+
+//! Tests of the `forth-vm` program, which run its binary. Miri can't start processes, so they
+//! don't run there.
+
+#![cfg(not(miri))]
+
+use std::io::Write;
+use std::process::{Command, Output, Stdio};
+
+/// The number of sections in the menu.
+const SECTION_COUNT: usize = 13;
+
+/// The number of the error handling section, the only one that should report errors.
+const ERROR_SECTION: usize = 13;
+
+/// The line that ends a section.
+const FOOTER: &str = "-------------------------------------\n";
+
+/// The first line of the menu.
+const MENU: &str = "Demo sections:";
+
+/// The end of the start-up text in interactive mode.
+const INTERACTIVE_HINT: &str = "Press Ctrl-D to leave.\n\n";
+
+/// The prompt of the menu.
+const PROMPT: &str = "Enter a section number, Q to quit [0]: ";
+
+/// Runs the program with the given arguments and stdin.
+fn run(arguments: &[&str], stdin: &[u8]) -> Output {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_forth-vm"))
+        .args(arguments)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(stdin).unwrap();
+    child.wait_with_output().unwrap()
+}
+
+/// Runs the program, checks that it exited with code 0, and returns its stdout.
+fn stdout_of(arguments: &[&str], stdin: &str) -> String {
+    let output = run(arguments, stdin.as_bytes());
+    assert_eq!(output.status.code(), Some(0));
+    String::from_utf8(output.stdout).unwrap()
+}
+
+/// Runs the demo menu with the given stdin and returns its stdout.
+fn menu(stdin: &str) -> String {
+    stdout_of(&["--demo"], stdin)
+}
+
+/// Runs an interactive session with the given stdin, and returns its stdout after the
+/// start-up text. A session ends with an empty line, for the end of the input.
+fn session(stdin: &str) -> String {
+    let output = stdout_of(&[], stdin);
+    let (_, rest) = output.split_once(INTERACTIVE_HINT).unwrap();
+    rest.to_string()
+}
+
+/// Returns the given section, numbered from 1, from the output of the menu. If it's there more
+/// than once, this returns the first.
+fn section(output: &str, number: usize) -> &str {
+    let header = format!("--- TEST RUN {}: ", number);
+    let start = output.find(&header).expect("the section must be there");
+    let length = output[start..].find(FOOTER).expect("the section must end");
+    &output[start..start + length + FOOTER.len()]
+}
+
+#[test]
+fn a_line_prints_its_output_and_ok() {
+    for arguments in [&[][..], &["--interactive"][..]] {
+        let output = stdout_of(arguments, "40 2 + .\n");
+        assert!(output.ends_with(&format!("{}42 ok\n\n", INTERACTIVE_HINT)));
+        assert!(!output.contains(MENU));
+    }
+}
+
+#[test]
+fn an_empty_line_prints_ok() {
+    assert_eq!(session("\n"), "ok\n\n");
+}
+
+#[test]
+fn a_last_line_without_a_newline_is_evaluated() {
+    assert_eq!(session("1 ."), "1 ok\n\n");
+}
+
+#[test]
+fn definitions_and_the_stack_carry_over_between_lines() {
+    assert_eq!(session(": ADD3 3 + ;\n4\nADD3 .\n"), "ok\nok\n7 ok\n\n");
+}
+
+#[test]
+fn a_definition_can_span_lines_and_prints_ok_when_it_ends() {
+    assert_eq!(session(": ADD3\n3 +\n;\n1 ADD3 .\n"), "ok\n4 ok\n\n");
+}
+
+#[test]
+fn an_error_prints_no_ok_and_the_session_continues() {
+    assert_eq!(
+        session("1 NOPE\n.\n2 .\n"),
+        "Forth Error: Word or numeric literal 'NOPE' not recognized.\n\
+         Forth Error: Data stack underflow.\n\
+         2 ok\n\n"
+    );
+}
+
+#[test]
+fn an_error_ends_an_open_definition() {
+    assert_eq!(
+        session(": X\nNOPE\n1 .\n"),
+        "Forth Error: Word or numeric literal 'NOPE' not recognized.\n1 ok\n\n"
+    );
+}
+
+#[test]
+fn a_paren_comment_must_end_on_its_line() {
+    assert_eq!(
+        session("( open\n1 .\n"),
+        "Forth Error: Comment has no closing parenthesis.\n1 ok\n\n"
+    );
+}
+
+#[test]
+fn quit_prints_no_ok_and_keeps_the_data_stack() {
+    assert_eq!(session("7 1 . QUIT 2 .\n.\n"), "1 \n7 ok\n\n");
+}
+
+#[test]
+fn quit_works_from_a_definition() {
+    assert_eq!(
+        session(": STOP 3 . QUIT 4 . ;\n8 STOP 5 .\n.\n"),
+        "ok\n3 \n8 ok\n\n"
+    );
+}
+
+#[test]
+fn quit_does_not_end_the_session() {
+    assert_eq!(session("QUIT\n1 .\n"), "\n1 ok\n\n");
+}
+
+#[test]
+fn abort_prints_no_ok_and_clears_the_data_stack() {
+    assert_eq!(session("7 1 . ABORT 2 .\nDEPTH .\n"), "1 \n0 ok\n\n");
+}
+
+#[test]
+fn abort_works_from_a_definition() {
+    assert_eq!(
+        session(": GIVE-UP 3 . ABORT 4 . ;\n8 GIVE-UP 5 .\nDEPTH .\n"),
+        "ok\n3 \n0 ok\n\n"
+    );
+}
+
+#[test]
+fn abort_does_not_end_the_session() {
+    assert_eq!(session("ABORT\n1 .\n"), "\n1 ok\n\n");
+}
+
+#[test]
+fn end_of_input_ends_the_session_with_code_zero() {
+    for stdin in ["", "QUIT\n", "ABORT\n", ": OPEN\n"] {
+        stdout_of(&[], stdin);
+    }
+}
+
+#[test]
+fn menu_lists_every_section() {
+    let output = menu("q\n");
+    assert!(output.contains("   0. All sections\n"));
+    assert!(output.contains("   1. Evaluating Text Operations\n"));
+    assert!(output.contains("  12. Returning to the Interpreter with QUIT and ABORT\n"));
+    assert!(output.contains("  13. Error Handling\n"));
+    assert!(output.ends_with(PROMPT));
+}
+
+#[test]
+fn quitting_the_menu_runs_no_section() {
+    for stdin in ["q\n", "Q\n", ""] {
+        let output = menu(stdin);
+        assert!(output.contains(MENU));
+        assert!(!output.contains("--- TEST RUN "));
+    }
+}
+
+#[test]
+fn enter_and_zero_run_all_sections_in_order() {
+    let enter = menu("\nq\n");
+    assert_eq!(enter.matches("--- TEST RUN ").count(), SECTION_COUNT);
+    for number in 1..SECTION_COUNT {
+        assert!(enter.contains(section(&enter, number)));
+        let this = enter.find(section(&enter, number)).unwrap();
+        let next = enter.find(section(&enter, number + 1)).unwrap();
+        assert!(this < next);
+    }
+    assert_eq!(menu("0\nq\n"), enter);
+}
+
+#[test]
+fn each_section_runs_alone_as_it_does_among_all_sections() {
+    let all = menu("\nq\n");
+    for number in 1..=SECTION_COUNT {
+        let output = menu(&format!("{}\nq\n", number));
+        assert_eq!(section(&output, number), section(&all, number));
+        assert_eq!(output.matches("--- TEST RUN ").count(), 1);
+    }
+}
+
+#[test]
+fn only_the_error_section_reports_errors() {
+    for number in 1..=SECTION_COUNT {
+        let output = menu(&format!("{}\nq\n", number));
+        assert_eq!(output.contains("Forth Error"), number == ERROR_SECTION);
+    }
+}
+
+#[test]
+fn a_section_gives_the_same_output_each_time() {
+    let output = menu("11\n11\nq\n");
+    assert_eq!(output.matches(section(&output, 11)).count(), 2);
+}
+
+#[test]
+fn the_menu_comes_back_after_a_run() {
+    let output = menu("1\n2\nq\n");
+    assert_eq!(output.matches(MENU).count(), 3);
+    assert_eq!(output.matches("--- TEST RUN ").count(), 2);
+}
+
+#[test]
+fn an_invalid_choice_shows_the_menu_again() {
+    let output = menu("14\nabc\nq\n");
+    assert!(output.contains("Invalid choice: 14\n"));
+    assert!(output.contains("Invalid choice: abc\n"));
+    assert_eq!(output.matches(MENU).count(), 3);
+    assert!(!output.contains("--- TEST RUN "));
+}
+
+#[test]
+fn input_that_cannot_be_read_fails_without_a_panic() {
+    for arguments in [&[][..], &["--demo"][..]] {
+        let output = run(arguments, &[0xff, b'\n']);
+        assert_eq!(output.status.code(), Some(1));
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            stderr.starts_with("Cannot read the input: "),
+            "got: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn unknown_arguments_print_the_usage() {
+    for arguments in [&["--nope"][..], &["--demo", "1"][..]] {
+        let output = run(arguments, b"");
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+        assert_eq!(
+            String::from_utf8(output.stderr).unwrap(),
+            "Usage: forth-vm [--interactive | --demo]\n"
+        );
+    }
+}
