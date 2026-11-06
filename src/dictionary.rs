@@ -95,10 +95,14 @@ impl Dictionary {
         let start = self.start as Cell;
         let here = self.here as Cell;
         let cell_size = mem::size_of::<Cell>();
-        if addr < start || addr >= here || !(addr - start).is_multiple_of(cell_size) {
+        if addr < start || addr >= here {
             return Err(ForthError::InvalidAddress(addr));
         }
-        Ok((addr - start) / cell_size)
+        let offset = addr - start;
+        if !offset.is_multiple_of(cell_size) {
+            return Err(ForthError::InvalidAddress(addr));
+        }
+        Ok(offset / cell_size)
     }
 
     // Reads the Cell at `addr`. The number from the stack is only used as an offset,
