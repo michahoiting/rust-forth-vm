@@ -19,7 +19,8 @@ and after the first release, this project adheres to
   addresses below `HERE`.
 - The FORTH-83 data stack words: `DUP`, `?DUP`, `DROP`, `SWAP`, `OVER`, `ROT`, `PICK`,
   `ROLL` and `DEPTH`.
-- Defining words: `:`, `;`, `:NONAME`, `CREATE`, `DOES>`, `IMMEDIATE` and `EXIT`.
+- Defining words: `:`, `;`, `:NONAME`, `CREATE`, `CONSTANT`, `DOES>`, `IMMEDIATE` and
+  `EXIT`.
 - `EXECUTE`, which runs a word from its execution token.
 - `'` and `[']`, which give the execution token of a named word.
 - `>BODY`, which gives the address of a word's Parameter Field from its execution token.

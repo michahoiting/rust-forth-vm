@@ -61,9 +61,12 @@ STATIONARY-SOURCE @ .             \ 1337
 : ADD6 ADD3 ADD3 ;
 36 ADD6 .                         \ 42
 
-: CONSTANT CREATE , DOES> @ ;
 42 CONSTANT ANSWER
 ANSWER .                          \ 42
+
+: ADDER CREATE , DOES> @ + ;
+3 ADDER PLUS3
+1 PLUS3 .                         \ 4
 
 VARIABLE COUNTER
 42 COUNTER !
@@ -104,6 +107,7 @@ it.
 | `,`      | `( x -- )`   | Stores a Cell at `HERE` and advances it           |
 | `CREATE` | `( -- )`     | Parses a name and creates a word that pushes its data address |
 | `VARIABLE` | `( -- )`   | Parses a name and creates a word holding one Cell, initially 0 |
+| `CONSTANT` | `( x -- )` | Parses a name and creates a word that pushes `x`  |
 | `DOES>`  | `( -- )`     | Inside a definition: gives the newest `CREATE`d word the code that follows |
 | `:`      | `( -- )`     | Parses a name and starts compiling a definition   |
 | `;`      | `( -- )`     | Ends the definition (immediate)                   |
@@ -150,6 +154,7 @@ token. What it holds depends on how the word was defined:
 - **Colon words** hold a thread of CFAs, ending in `EXIT`. Literals are compiled
   as `LIT` followed by the value.
 - **`CREATE`d words** hold their data.
+- **`CONSTANT` words** hold their value.
 
 An execution token (xt) identifies a word, and is that word's CFA. `'`, `[']` and
 `:NONAME` give one, and `EXECUTE` runs it. `EXECUTE` and `>BODY` reject anything that
@@ -158,7 +163,8 @@ isn't the xt of a finished word.
 A thread is a list of xts. The inner interpreter takes each one and runs the machine
 code that its Code Field points to. For a primitive, that code is the whole word. For a
 colon word, it is `DOCOL`, which continues with the thread in the Parameter Field. For a
-`CREATE`d word, it is `DOVAR`, which pushes the PFA.
+`CREATE`d word, it is `DOVAR`, which pushes the PFA. For a `CONSTANT` word, it is
+`DOCON`, which pushes the value in the Parameter Field.
 
 `DOES>` changes the CFA of a `CREATE`d word to the address of the thread behind
 `DOES>`. That address is in the dictionary and machine code never is, so `enter_word`
@@ -180,8 +186,8 @@ stacks, and rolls back any unfinished colon definition.
 - There is no `[` or `]`.
 - Immediate words must not use `,` while a definition is being compiled, because it
   writes into the thread and can crash the process (see issue #15). Using `CREATE`,
-  `VARIABLE`, `:` or `:NONAME` there leaves the open definition unfinished, so it
-  can't be found or executed.
+  `VARIABLE`, `CONSTANT`, `:` or `:NONAME` there leaves the open definition unfinished,
+  so it can't be found or executed.
 - The dictionary size is chosen when the VM boots, and can't grow afterwards.
 - `!` can overwrite word headers and compiled code, which can crash the process.
 

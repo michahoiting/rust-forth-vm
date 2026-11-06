@@ -25,6 +25,12 @@ pub(super) unsafe fn dovar(regs: &mut Registers) {
     regs.data_stack.push(pfa_of(regs.w) as Cell);
 }
 
+/// `DOCON`: Execution semantics of a word made by CONSTANT.
+/// It pushes the value held in the word's Parameter Field.
+pub(super) unsafe fn docon(regs: &mut Registers) {
+    regs.data_stack.push(*pfa_of(regs.w));
+}
+
 /// `EXIT ( -- )`: Cleans up and exits a nested `:` word (compiled by `;`).
 pub(super) unsafe fn exit(regs: &mut Registers) {
     match regs.return_stack.pop() {
@@ -65,6 +71,21 @@ mod tests {
 
     unsafe fn xt_of(regs: &Registers, name: &str) -> Cell {
         cfa_of(regs.dictionary.find_word(name).unwrap()) as Cell
+    }
+
+    #[test]
+    fn docon_pushes_the_cell_behind_the_code_field() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let word: [Cell; 3] = [0, 42, 99];
+            regs.w = word.as_ptr();
+            regs.data_stack.push(1);
+
+            docon(&mut regs);
+            assert!(regs.error.is_none(), "got: {:?}", regs.error);
+            assert_eq!(regs.data_stack, [1, 42]);
+            assert_eq!(word, [0, 42, 99]);
+        }
     }
 
     #[test]

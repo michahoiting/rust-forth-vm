@@ -2,7 +2,7 @@
 
 //! Words that build the dictionary.
 
-use super::runtime::{docol, dovar, exit};
+use super::runtime::{docol, docon, dovar, exit};
 use crate::cell::Cell;
 use crate::dictionary::{cfa_of, is_created, F_CREATED, F_HIDDEN};
 use crate::error::ForthError;
@@ -41,6 +41,27 @@ pub(super) unsafe fn variable(regs: &mut Registers) {
         let result = regs.dictionary.comma(0);
         if regs.check(result).is_none() {
             regs.dictionary.restore(mark); // Don't leave a word without its value
+        }
+    }
+}
+
+/// `CONSTANT ( x -- )`: Parses a name and creates a word that pushes `x`. The word is not
+/// marked as made by CREATE, so DOES> can't overwrite its value.
+pub(super) unsafe fn constant(regs: &mut Registers) {
+    let Some(value) = regs.pop() else {
+        return;
+    };
+    let Some(name) = regs.input.parse_name() else {
+        regs.set_error(ForthError::MissingName("CONSTANT"));
+        return;
+    };
+    let restore_point = regs.dictionary.mark();
+    let result = regs.dictionary.write_header(&name, code_cell(docon), 0);
+    if regs.check(result).is_some() {
+        let result = regs.dictionary.comma(value);
+        if regs.check(result).is_none() {
+            // A word without its value would read past the dictionary when it ran.
+            regs.dictionary.restore(restore_point);
         }
     }
 }
@@ -111,9 +132,91 @@ mod tests {
 
     use super::*;
     use crate::dictionary::{is_hidden, is_immediate, is_pending, pfa_of};
+    use crate::vm::enter_word;
     use crate::{boot, outer_interpreter};
 
     const TEST_CELLS: usize = 1024;
+
+    #[test]
+    fn constant_moves_its_value_into_a_new_word() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            regs.input.load("X");
+            regs.data_stack.extend_from_slice(&[1, 42]);
+
+            constant(&mut regs);
+            assert!(regs.error.is_none(), "got: {:?}", regs.error);
+            assert_eq!(regs.data_stack, [1]);
+            let header = regs.dictionary.last_word();
+            assert_eq!(regs.dictionary.find_word("X"), Some(header));
+            assert_eq!(*pfa_of(cfa_of(header)), 42);
+            assert!(!is_created(header));
+            assert!(!is_hidden(header));
+            assert!(!is_immediate(header));
+            assert!(!is_pending(header));
+
+            // Running the word shows which code it has. Function addresses can't show it,
+            // because Rust doesn't guarantee that they compare equal.
+            regs.w = cfa_of(header);
+            enter_word(&mut regs);
+            assert_eq!(regs.data_stack, [1, 42]);
+        }
+    }
+
+    #[test]
+    fn constant_needs_a_value_and_writes_nothing_without_one() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            regs.input.load("X");
+            let before = regs.dictionary.mark();
+
+            constant(&mut regs);
+            assert!(matches!(regs.error, Some(ForthError::DataStackUnderflow)));
+            assert_eq!(regs.dictionary.mark(), before);
+        }
+    }
+
+    #[test]
+    fn constant_needs_a_name_and_writes_nothing_without_one() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            regs.input.load("");
+            regs.data_stack.push(42);
+            let before = regs.dictionary.mark();
+
+            constant(&mut regs);
+            assert!(matches!(
+                regs.error,
+                Some(ForthError::MissingName("CONSTANT"))
+            ));
+            assert_eq!(regs.dictionary.mark(), before);
+        }
+    }
+
+    #[test]
+    fn constant_that_does_not_fit_writes_nothing() {
+        unsafe {
+            // The last size that fails has room for the header, but not for the value.
+            let smallest = (0..TEST_CELLS)
+                .find(|cells| boot(io::sink(), *cells).is_ok())
+                .unwrap();
+            for cells in smallest..TEST_CELLS {
+                let mut regs = boot(io::sink(), cells).unwrap();
+                regs.input.load("X");
+                regs.data_stack.push(42);
+                let before = regs.dictionary.mark();
+
+                constant(&mut regs);
+                if regs.error.is_none() {
+                    assert!(cells > smallest);
+                    return;
+                }
+                assert!(matches!(regs.error, Some(ForthError::DictionaryOverflow)));
+                assert_eq!(regs.dictionary.mark(), before);
+            }
+            panic!("no dictionary size was large enough");
+        }
+    }
 
     #[test]
     fn noname_starts_a_hidden_pending_definition_and_pushes_its_xt() {

@@ -12,7 +12,7 @@ const DICTIONARY_CELLS: usize = 1024;
 
 /// The demo sections, each with its title and one block of Forth source. All of them run in
 /// the same VM, so later sections can use words from earlier ones.
-const SECTIONS: [(&str, &str); 10] = [
+const SECTIONS: [(&str, &str); 11] = [
     (
         "Evaluating Text Operations",
         r"
@@ -38,12 +38,24 @@ STATIONARY-SOURCE @ .        \ prints 1337
 ",
     ),
     (
-        "Defining Words with DOES>",
+        "Constants",
         r"
-: CONSTANT CREATE , DOES> @ ;
 42 CONSTANT ANSWER
 7 CONSTANT LUCKY
-ANSWER . LUCKY .  \ prints 42 7
+ANSWER . LUCKY .              \ prints 42 7
+40 2 + CONSTANT COMPUTED      \ the value can come from a calculation
+COMPUTED .                    \ prints 42
+: ANSWER+1 ANSWER 1 + ;       \ a constant used from a colon word
+ANSWER+1 .                    \ prints 43
+",
+    ),
+    (
+        "Defining Words with DOES>",
+        r"
+: ADDER CREATE , DOES> @ + ;
+3 ADDER PLUS3
+10 ADDER PLUS10
+1 PLUS3 . 1 PLUS10 .          \ prints 4 11
 ",
     ),
     (
@@ -161,15 +173,15 @@ ANNOUNCE                      \ prints 99
 ' COUNTER >BODY @ .           \ prints 50
 
 \ A word made with DOES> doesn't push that address, so this is the way to its data
-LUCKY .                       \ prints 7
-' LUCKY >BODY @ .             \ prints 7
-8 ' LUCKY >BODY !
-LUCKY .                       \ prints 8
+1 PLUS3 .                     \ prints 4
+' PLUS3 >BODY @ .             \ prints 3
+5 ' PLUS3 >BODY !
+1 PLUS3 .                     \ prints 6
 
 \ ['] does the same as ' inside a definition, using a name from the source
-: SET-LUCKY ['] LUCKY >BODY ! ;
-9 SET-LUCKY
-LUCKY .                       \ prints 9
+: SET-PLUS3 ['] PLUS3 >BODY ! ;
+9 SET-PLUS3
+1 PLUS3 .                     \ prints 10
 : RUN-ADD3 ['] ADD3 EXECUTE ;
 1 RUN-ADD3 .                  \ prints 4
 ",
