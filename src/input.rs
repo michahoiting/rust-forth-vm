@@ -1,20 +1,23 @@
 //! The input source: the text being read by the outer interpreter and by parsing
 //! words such as `:`, `CREATE` and `(`.
 
+/// The text being read, and how far parsing has got.
 #[derive(Default)]
 pub(crate) struct InputSource {
-    text: String, // The text being interpreted, which can span several lines
-    pos: usize,   // Parse offset into `text`
+    /// The text being interpreted, which can span several lines.
+    text: String,
+    /// Parse offset into `text`.
+    pos: usize,
 }
 
 impl InputSource {
-    // Replaces the current text and starts parsing from its beginning.
+    /// Replaces the current text and starts parsing from its beginning.
     pub(crate) fn load(&mut self, text: &str) {
         self.text = text.to_string();
         self.pos = 0;
     }
 
-    // Parses the next whitespace-delimited token.
+    /// Parses the next whitespace-delimited token. Returns `None` at the end of the text.
     pub(crate) fn parse_name(&mut self) -> Option<String> {
         let rest = &self.text[self.pos..];
         let start = rest.find(|c: char| !c.is_whitespace())?;
@@ -25,8 +28,8 @@ impl InputSource {
         Some(token)
     }
 
-    // Skips up to and including the next `delimiter`. Returns false, without moving, if there
-    // isn't one.
+    /// Skips up to and including the next `delimiter`. Returns false, without moving, if there
+    /// isn't one.
     pub(crate) fn skip_past(&mut self, delimiter: char) -> bool {
         match self.text[self.pos..].find(delimiter) {
             Some(offset) => {
@@ -37,7 +40,7 @@ impl InputSource {
         }
     }
 
-    // Skips the rest of the current line.
+    /// Skips the rest of the current line.
     pub(crate) fn skip_line(&mut self) {
         if !self.skip_past('\n') {
             self.pos = self.text.len();

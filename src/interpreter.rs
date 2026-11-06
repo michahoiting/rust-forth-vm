@@ -1,3 +1,6 @@
+//! The text interpreter, also known as the outer interpreter. It reads tokens from the
+//! input, and either interprets or compiles each one.
+
 use std::io::Write;
 
 use crate::cell::Cell;
@@ -5,15 +8,18 @@ use crate::dictionary::{cfa_of, is_immediate};
 use crate::error::ForthError;
 use crate::vm::{execute, Registers};
 
-// --- THE TEXT INTERPRETER / OUTER INTERPRETER ---
-
-// Accepts negative numbers as well as the full unsigned range of a Cell.
+/// Parses a decimal number. Accepts negative numbers as well as the full unsigned range of
+/// a Cell.
 fn parse_number(token: &str) -> Option<Cell> {
     let signed = token.parse::<isize>().map(|number| number as Cell);
     signed.or_else(|_| token.parse::<Cell>()).ok()
 }
 
-// Handles a single token, either interpreting or compiling it.
+/// Handles a single token, either interpreting or compiling it.
+///
+/// # Safety
+///
+/// `regs` must come from [`boot`](crate::boot).
 unsafe fn interpret_token(regs: &mut Registers, token: &str) {
     if let Some(header) = regs.dictionary.find_word(token) {
         // --- CASE A: THE TOKEN IS A DICTIONARY WORD ---
@@ -40,19 +46,79 @@ unsafe fn interpret_token(regs: &mut Registers, token: &str) {
     }
 }
 
-// ABORT: Resets the VM after an error and discards any half-built definition.
+/// ABORT: Resets the VM after an error and discards any half-built definition.
+///
+/// # Safety
+///
+/// `regs` must come from [`boot`](crate::boot).
 unsafe fn abort(regs: &mut Registers) {
     regs.data_stack.clear();
     regs.return_stack.clear();
     regs.compiler.abort(&mut regs.dictionary);
 }
 
-/// Evaluates a line of Forth, stopping at the first error.
+/// Evaluates all of `input`, which can span several lines, stopping at the first error.
+///
+/// Numbers and definitions persist between calls, so the stack and the dictionary carry over,
+/// and a definition can continue in the next call. Output is flushed before this returns.
+///
+/// An error discards the rest of `input`, clears both stacks, and rolls back any unfinished
+/// colon definition. Words that were already finished stay, and the VM can still be used.
+///
+/// # Errors
+///
+/// Returns the first [`ForthError`] that a word or token causes, such as
+/// [`ForthError::UnknownWord`]. Returns [`ForthError::Output`] if the writer given to
+/// [`boot`](crate::boot) fails. A failed flush is ignored after another error, so the
+/// original error is the one reported.
 ///
 /// # Safety
 ///
 /// `regs` must come from [`boot`](crate::boot). The VM runs threaded code through
 /// raw pointers into its dictionary, which only this crate's functions keep valid.
+/// Some Forth input can still crash the process: see the limitations in the README.
+///
+/// # Examples
+///
+/// ```
+/// # use std::cell::RefCell;
+/// # use std::io::{self, Write};
+/// # use std::rc::Rc;
+/// # #[derive(Clone, Default)]
+/// # struct Output(Rc<RefCell<Vec<u8>>>);
+/// # impl Write for Output {
+/// #     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+/// #         self.0.borrow_mut().write(bytes)
+/// #     }
+/// #     fn flush(&mut self) -> io::Result<()> {
+/// #         Ok(())
+/// #     }
+/// # }
+/// use rust_forth_vm::{boot, outer_interpreter, ForthError};
+///
+/// let output = Output::default();
+///
+/// // SAFETY: this VM is only used through the crate's functions.
+/// unsafe {
+///     let mut regs = boot(output.clone(), 1024)?;
+///     outer_interpreter(&mut regs, "40 2 + .")?;
+///
+///     // The error discards the rest of the input, so the second `.` never runs.
+///     let error = outer_interpreter(&mut regs, "7 . 8 NO-SUCH-WORD .").unwrap_err();
+///     assert!(matches!(error, ForthError::UnknownWord(_)));
+///
+///     // The stacks are clear, so the 8 is gone, but the VM still works.
+///     let error = outer_interpreter(&mut regs, ".").unwrap_err();
+///     assert!(matches!(error, ForthError::DataStackUnderflow));
+///
+///     // A definition can continue in the next call.
+///     outer_interpreter(&mut regs, ": THREE 3")?;
+///     outer_interpreter(&mut regs, "; THREE .")?;
+/// }
+///
+/// assert_eq!(output.0.borrow().as_slice(), b"42 7 3 ");
+/// # Ok::<(), ForthError>(())
+/// ```
 pub unsafe fn outer_interpreter(regs: &mut Registers, input: &str) -> Result<(), ForthError> {
     regs.input.load(input);
 
