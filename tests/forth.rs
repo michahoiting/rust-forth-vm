@@ -1,3 +1,5 @@
+// (C) Copyright 2026 M.W.R. Hoiting
+
 //! Tests of Forth behaviour, using only the public API. Results are checked
 //! through `.` and the output writer.
 

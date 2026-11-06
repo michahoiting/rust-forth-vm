@@ -1,3 +1,5 @@
+// (C) Copyright 2026 M.W.R. Hoiting
+
 //! The dictionary: its storage, the word header layout, and the functions that
 //! write to and search the linked list of words. Nothing outside this module
 //! knows how a header is laid out, except that a word's body follows its CFA.

@@ -1,3 +1,5 @@
+// (C) Copyright 2026 M.W.R. Hoiting
+
 //! The foundation: the Forth Cell.
 
 /// A Cell is the universal basic unit of Forth (64-bit on a 64-bit CPU).

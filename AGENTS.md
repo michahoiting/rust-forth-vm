@@ -17,12 +17,15 @@ CI runs these same `Makefile` targets:
 ```sh
 make ci        # Formatting, lints, build, debug and release tests, and docs
 make ci-all    # Also Miri, on 64-bit and 32-bit targets. Needs nightly
+make msrv      # Checks the oldest supported Rust version, from `rust-version`
 make mutants   # Mutation testing, which CI runs weekly. Needs cargo-mutants
 make demo      # Runs the demo
 make doc-serve # Serves the docs on localhost, including private items. Needs python3
 ```
 
 `make ci` must pass before a PR. Each step is also its own target, such as `make test`. Add new CI steps to the `Makefile`, not directly to the workflows.
+
+CI uses the latest stable toolchain on purpose, so a new lint can fail it with no code change. Raise `rust-version` when code needs a newer feature, and check it with a run on GitHub.
 
 ## Architecture
 
@@ -48,6 +51,7 @@ main → lib → interpreter, primitives → vm → compiler → dictionary → 
 - Use `Cell` and `size_of::<Cell>()` for anything Cell-sized, never 64-bit types or hard-coded sizes. This includes tests.
 - Errors are `ForthError` variants, not strings. Their messages are pinned in `errors_have_stable_messages`.
 - Bad Forth input should give a `ForthError`, not a panic or a crash. Known exceptions need a GitHub issue.
+- New source files start with the copyright header `(C) Copyright 2026 M.W.R. Hoiting`, as a comment, followed by a blank line. Config and Markdown files don't need it.
 - New `unsafe` code needs a comment saying why it holds.
 - Every item, public or private, has a doc comment. `make clippy` enforces this, except in test code.
 - Doc comments on `unsafe fn` have a `# Safety` section when the caller has something to uphold. The contract shared by primitives is on `PrimitiveFn`.

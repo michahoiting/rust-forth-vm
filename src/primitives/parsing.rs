@@ -1,3 +1,5 @@
+// (C) Copyright 2026 M.W.R. Hoiting
+
 //! Words that read the input themselves, instead of leaving it to the text interpreter.
 //! They are immediate, so that they also work inside definitions.
 
