@@ -15,8 +15,8 @@ make setup-dev
 
 It installs or updates the stable and nightly toolchains, the oldest supported Rust version,
 Miri, and `cargo-mutants`, and installs the git hooks. It's safe to run again. It needs
-`git` and `rustup`, and tells you if `python3` or `gh` is missing, which only `make doc-serve`
-and `make protect` need.
+`git` and `rustup`, and tells you if `python3` or `gh` is missing, which only `make doc-serve`,
+`make protect` and `make metrics` need.
 
 The hooks catch problems before CI does:
 
