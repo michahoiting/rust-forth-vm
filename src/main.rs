@@ -1,4 +1,4 @@
-// (C) Copyright 2026 M.W.R. Hoiting
+// Copyright (c) 2026 M.W.R. Hoiting
 
 //! A scripted demo of the Forth VM. Each section shows the normal use of some words, and
 //! the last one shows how errors are handled.

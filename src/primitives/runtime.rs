@@ -1,4 +1,4 @@
-// (C) Copyright 2026 M.W.R. Hoiting
+// Copyright (c) 2026 M.W.R. Hoiting
 
 //! Words that drive threaded code. Their addresses are stored in Code Fields
 //! or compiled into threads.

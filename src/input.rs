@@ -1,4 +1,4 @@
-// (C) Copyright 2026 M.W.R. Hoiting
+// Copyright (c) 2026 M.W.R. Hoiting
 
 //! The input source: the text being read by the outer interpreter and by parsing
 //! words such as `:`, `CREATE` and `(`.

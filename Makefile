@@ -1,4 +1,4 @@
-# (C) Copyright 2026 M.W.R. Hoiting
+# Copyright (c) 2026 M.W.R. Hoiting
 
 # Local versions of the CI steps. CI calls these same targets, so the two can't drift apart.
 #

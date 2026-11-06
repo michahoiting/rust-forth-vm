@@ -1,4 +1,4 @@
-// (C) Copyright 2026 M.W.R. Hoiting
+// Copyright (c) 2026 M.W.R. Hoiting
 
 //! The errors a Forth VM can report.
 

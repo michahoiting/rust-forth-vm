@@ -1,4 +1,4 @@
-// (C) Copyright 2026 M.W.R. Hoiting
+// Copyright (c) 2026 M.W.R. Hoiting
 
 //! The dictionary: its storage, the word header layout, and the functions that
 //! write to and search the linked list of words. Nothing outside this module

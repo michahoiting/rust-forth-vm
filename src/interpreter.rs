@@ -1,4 +1,4 @@
-// (C) Copyright 2026 M.W.R. Hoiting
+// Copyright (c) 2026 M.W.R. Hoiting
 
 //! The text interpreter, also known as the outer interpreter. It reads tokens from the
 //! input, and either interprets or compiles each one.

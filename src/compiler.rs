@@ -1,4 +1,4 @@
-// (C) Copyright 2026 M.W.R. Hoiting
+// Copyright (c) 2026 M.W.R. Hoiting
 
 //! The compiler: whether a definition is being compiled, and how definitions,
 //! words and literals are written to the dictionary.

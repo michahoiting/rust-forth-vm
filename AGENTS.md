@@ -51,7 +51,7 @@ main → lib → interpreter, primitives → vm → compiler → dictionary → 
 - Use `Cell` and `size_of::<Cell>()` for anything Cell-sized, never 64-bit types or hard-coded sizes. This includes tests.
 - Errors are `ForthError` variants, not strings. Their messages are pinned in `errors_have_stable_messages`.
 - Bad Forth input should give a `ForthError`, not a panic or a crash. Known exceptions need a GitHub issue.
-- New source files start with the copyright header `(C) Copyright 2026 M.W.R. Hoiting`, as a comment, followed by a blank line. Config and Markdown files don't need it.
+- New source files start with the copyright header `Copyright (c) 2026 M.W.R. Hoiting`, as a comment, followed by a blank line. Config and Markdown files don't need it.
 - New `unsafe` code needs a comment saying why it holds.
 - Every item, public or private, has a doc comment. `make clippy` enforces this, except in test code.
 - Doc comments on `unsafe fn` have a `# Safety` section when the caller has something to uphold. The contract shared by primitives is on `PrimitiveFn`.
