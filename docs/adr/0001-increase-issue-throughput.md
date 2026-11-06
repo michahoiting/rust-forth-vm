@@ -31,14 +31,12 @@ Merging this ADR doesn't change CI. Each item is implemented through its own iss
 
 Gain is an estimate unless it cites a measurement. Quality impact is the effect on what `main` guarantees.
 
-"Not created" means the issue doesn't exist yet.
-
 ### Short term (days, mostly small config changes)
 
 | ID | Issue | Idea | Solves | Expected gain | Effort | Quality impact |
 |---|---|---|---|---|---|---|
 | S1 | [#71](https://github.com/michahoiting/rust-forth-vm/issues/71) | **Enable auto-merge and the update-branch button** | Coming back to merge by hand | Removes idle time after approval, no extra CI | XS | None. All checks stay required |
-| S2 | Not created | **Run the two Miri targets as parallel jobs** | Sequential Miri | CI from 3–5 min to about 2–2.5 min | S | None. Same tests. Adds a required `miri-32` check to the ruleset |
+| S2 | [#95](https://github.com/michahoiting/rust-forth-vm/issues/95) | **Run the two Miri targets as parallel jobs** | Sequential Miri | CI from 3–5 min to about 2–2.5 min | S | None. Same tests. Adds a required `miri-32` check to the ruleset |
 | S3 | [#72](https://github.com/michahoiting/rust-forth-vm/issues/72) | **Skip Miri on `.md`-only PRs** through a job-level condition | Doc PRs like #57 and #60 waiting on Miri | Doc PRs finish in under 1 min | S | None today, because no code includes a Markdown file. Revisit with #34, which will test README examples |
 | S4 | [#73](https://github.com/michahoiting/rust-forth-vm/issues/73) | **Cancel superseded PR runs** with `concurrency: cancel-in-progress` | Runs on stale commits (#52 had 5) | Less queueing, small | XS | None. Never apply to `main` pushes |
 | S5 | [#84](https://github.com/michahoiting/rust-forth-vm/issues/84) | **Avoid `CHANGELOG.md` conflicts** with `merge=union` in a new `.gitattributes` | Every PR edits the same `[Unreleased]` lines | Fewer rebases for parallel agents | XS | Low. The order of entries still needs checking |
