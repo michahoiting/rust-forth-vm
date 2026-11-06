@@ -8,6 +8,7 @@
 //! [`ForthError`]s. The stacks and the dictionary hold [`Cell`]s.
 //!
 //! The README has the list of words, how the VM works, and its limitations.
+//! Test only, do not merge: [`this_link_does_not_exist`].
 //!
 //! # Examples
 //!
