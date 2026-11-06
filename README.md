@@ -32,6 +32,12 @@ STATIONARY-SOURCE @ .             \ 1337
 : CONSTANT CREATE , DOES> @ ;
 42 CONSTANT ANSWER
 ANSWER .                          \ 42
+
+VARIABLE COUNTER
+42 COUNTER !
+COUNTER @ .                       \ 42
+COUNTER @ 1 + COUNTER !
+COUNTER @ .                       \ 43
 ```
 
 The `\` comments are for this README only, because the interpreter does not
@@ -47,6 +53,7 @@ support comments yet.
 | `!`      | `( x addr -- )` | Stores a Cell at a dictionary address below `HERE` |
 | `,`      | `( x -- )`   | Stores a Cell at `HERE` and advances it           |
 | `CREATE` | `( -- )`     | Parses a name and creates a word that pushes its data address |
+| `VARIABLE` | `( -- )`   | Parses a name and creates a word holding one Cell, initially 0 |
 | `DOES>`  | `( -- )`     | Inside a definition: gives the newest `CREATE`d word the code that follows |
 | `:`      | `( -- )`     | Parses a name and starts compiling a definition   |
 | `;`      | `( -- )`     | Ends the definition (immediate)                   |

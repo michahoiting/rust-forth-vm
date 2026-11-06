@@ -50,10 +50,25 @@ fn main() {
         evaluate(&mut regs, "ANSWER . LUCKY .");
         println!("-------------------------------------\n");
 
-        // --- TEST RUN 5: Error Handling ---
+        // --- TEST RUN 5: Variables with ! and @ ---
+        evaluate(&mut regs, "VARIABLE COUNTER");
+        evaluate(&mut regs, "COUNTER @ ."); // A new variable starts at zero
+        evaluate(&mut regs, "42 COUNTER !");
+        evaluate(&mut regs, "COUNTER @ .");
+        evaluate(&mut regs, "COUNTER @ 1 + COUNTER !"); // Read, change, and write back
+        evaluate(&mut regs, "COUNTER @ .");
+        evaluate(&mut regs, ": BUMP COUNTER @ 1 + COUNTER ! ;"); // Used from a colon word
+        evaluate(&mut regs, "BUMP BUMP COUNTER @ .");
+        evaluate(&mut regs, "VARIABLE OTHER"); // Each variable has its own Cell
+        evaluate(&mut regs, "7 OTHER !");
+        evaluate(&mut regs, "OTHER @ . COUNTER @ .");
+        println!("-------------------------------------\n");
+
+        // --- TEST RUN 6: Error Handling ---
         evaluate(&mut regs, ": BROKEN 1 NO-SUCH-WORD ;");
         evaluate(&mut regs, "BROKEN");
         evaluate(&mut regs, "+");
+        evaluate(&mut regs, "1 5 !");
         println!("-------------------------------------\n");
     }
 }

@@ -510,3 +510,46 @@ fn boot_rejects_a_dictionary_too_large_to_allocate() {
         ));
     }
 }
+
+#[test]
+fn variable_starts_at_zero() {
+    assert_eq!(output_of(&["VARIABLE X X @ ."]), "0 ");
+}
+
+#[test]
+fn variable_stores_and_fetches() {
+    let lines = ["VARIABLE X", "42 X ! X @ .", "X @ 1 + X !", "X @ ."];
+    assert_eq!(output_of(&lines), "42 43 ");
+}
+
+#[test]
+fn variables_are_independent() {
+    let lines = ["VARIABLE X VARIABLE Y", "1 X ! 2 Y !", "X @ . Y @ ."];
+    assert_eq!(output_of(&lines), "1 2 ");
+}
+
+#[test]
+fn variable_works_in_a_colon_word() {
+    let lines = ["VARIABLE X", ": BUMP X @ 1 + X ! ;", "BUMP BUMP X @ ."];
+    assert_eq!(output_of(&lines), "2 ");
+}
+
+#[test]
+fn variable_needs_a_name() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        assert_error!(&mut regs, "VARIABLE", ForthError::MissingName("VARIABLE"));
+        assert_error!(&mut regs, "CREATE", ForthError::MissingName("CREATE"));
+    }
+}
+
+#[test]
+fn variable_overflows_a_full_dictionary() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = boot(output.clone(), smallest_cells()).unwrap();
+        assert_error!(&mut regs, "VARIABLE X", ForthError::DictionaryOverflow);
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}

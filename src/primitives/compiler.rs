@@ -14,10 +14,10 @@ pub(super) unsafe fn comma(regs: &mut Registers) {
     }
 }
 
-// CREATE: Parses a name and allocates a new word with default DOVAR semantics.
-pub(super) unsafe fn create(regs: &mut Registers) {
+// Parses a name on behalf of `word`, and allocates a new word with default DOVAR semantics.
+unsafe fn create_word(regs: &mut Registers, word: &'static str) {
     let Some(name) = regs.input.parse_name() else {
-        regs.set_error(ForthError::MissingName("CREATE"));
+        regs.set_error(ForthError::MissingName(word));
         return;
     };
     let result = regs
@@ -25,6 +25,20 @@ pub(super) unsafe fn create(regs: &mut Registers) {
         .write_header(&name, code_cell(dovar), F_CREATED);
     if regs.check(result).is_some() {
         let result = regs.dictionary.comma(0); // Reserve the action cell for DOES>
+        regs.check(result);
+    }
+}
+
+// CREATE: Parses a name and allocates a new word with default DOVAR semantics.
+pub(super) unsafe fn create(regs: &mut Registers) {
+    create_word(regs, "CREATE");
+}
+
+// VARIABLE: Parses a name and creates a word that holds one Cell, initially 0.
+pub(super) unsafe fn variable(regs: &mut Registers) {
+    create_word(regs, "VARIABLE");
+    if regs.error.is_none() {
+        let result = regs.dictionary.comma(0);
         regs.check(result);
     }
 }
