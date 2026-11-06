@@ -8,8 +8,8 @@ use std::io;
 
 use crate::cell::Cell;
 
-/// An error that stopped the evaluation of some input. [`ForthError::Quit`] and
-/// [`ForthError::Abort`] also stop it, but aren't failures.
+/// An error that stopped the evaluation of some input. [`ForthError::Quit`],
+/// [`ForthError::Abort`] and [`ForthError::Bye`] also stop it, but aren't failures.
 ///
 /// [`outer_interpreter`](crate::outer_interpreter) returns these, and so does
 /// [`boot`](crate::boot). `Display` gives a message for the user.
@@ -82,6 +82,9 @@ pub enum ForthError {
     /// clear. The standard says that no message is displayed, so a host should show nothing and
     /// read on.
     Abort,
+    /// `BYE` ran, which isn't a failure. The VM stopped evaluating, and the host can use this
+    /// code when it leaves the program.
+    Bye(Cell),
 }
 
 impl fmt::Display for ForthError {
@@ -126,6 +129,7 @@ impl fmt::Display for ForthError {
             ForthError::Output(_) => write!(f, "Output error."),
             ForthError::Quit => write!(f, "QUIT was executed."),
             ForthError::Abort => write!(f, "ABORT was executed."),
+            ForthError::Bye(code) => write!(f, "BYE was executed with exit code {}.", code),
         }
     }
 }

@@ -32,6 +32,7 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
   interpreting. It's reported as `ForthError::Quit`, and keeps the data stack.
 - `ABORT`, which clears the data stack and does the same as `QUIT`. It's reported as
   `ForthError::Abort`.
+- `BYE` and `(BYE)`, which stop evaluation and let the program leave with an exit code.
 - `'` and `[']`, which give the execution token of a named word.
 - `>BODY`, which gives the address of a word's Parameter Field from its execution token.
 - Word names of up to 255 bytes.

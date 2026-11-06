@@ -372,6 +372,38 @@ fn abort_rolls_back_an_open_definition() {
 }
 
 #[test]
+fn bye_stops_interpretation_and_preserves_output() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        let error = outer_interpreter(&mut regs, "40 2 + . BYE 99 .").unwrap_err();
+        assert!(matches!(error, ForthError::Bye(0)));
+        assert_eq!(output.text(), "42 ");
+    }
+}
+
+#[test]
+fn bye_with_code_stops_a_colon_definition() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        outer_interpreter(&mut regs, ": STOP 3 (BYE) 4 ;").unwrap();
+        let error = outer_interpreter(&mut regs, "STOP").unwrap_err();
+        assert!(matches!(error, ForthError::Bye(3)));
+    }
+}
+
+#[test]
+fn bye_with_code_underflow_leaves_the_vm_usable() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        assert_error!(&mut regs, "(BYE)", ForthError::DataStackUnderflow);
+        outer_interpreter(&mut regs, "1 .").unwrap();
+        assert_eq!(output.text(), "1 ");
+    }
+}
+
+#[test]
 fn is_compiling_follows_an_open_definition() {
     unsafe {
         let mut regs = test_vm(io::sink());
@@ -442,6 +474,7 @@ fn errors_have_stable_messages() {
         (ForthError::Output(io::Error::other("x")), "Output error."),
         (ForthError::Quit, "QUIT was executed."),
         (ForthError::Abort, "ABORT was executed."),
+        (ForthError::Bye(3), "BYE was executed with exit code 3."),
     ];
     for (error, message) in cases {
         assert_eq!(error.to_string(), message);

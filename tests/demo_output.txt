@@ -166,6 +166,10 @@ Input:
         DUP  \ keep a copy for later
     ;
     3 PAIR . .                 \ prints 3 3
+
+    \ BYE leaves the program with code 0; uncomment one example to try it.
+    \ BYE
+    \ 3 (BYE)
 Output: 3 4 5 7 3 3 ok
 -------------------------------------
 

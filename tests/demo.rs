@@ -167,6 +167,47 @@ fn abort_does_not_end_the_session() {
 }
 
 #[test]
+fn bye_exits_with_code_zero_and_keeps_prior_output() {
+    let output = run(&[], b"40 2 + . BYE 99 .\n");
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.ends_with("42 "));
+    assert!(!stdout.contains("99"));
+}
+
+#[test]
+fn bye_exits_with_code_zero_from_a_colon_word() {
+    let output = run(&[], b": STOP BYE ; STOP\n");
+    assert_eq!(output.status.code(), Some(0));
+}
+
+#[test]
+fn bye_with_code_exits_from_a_colon_word() {
+    let output = run(&[], b": STOP 3 (BYE) 4 ; STOP\n");
+    assert_eq!(output.status.code(), Some(3));
+}
+
+#[test]
+fn bye_with_code_exits_with_the_given_code() {
+    let output = run(&[], b"3 (BYE)\n");
+    assert_eq!(output.status.code(), Some(3));
+}
+
+#[test]
+fn bye_uses_only_the_low_byte_of_its_code() {
+    let output = run(&[], b"259 (BYE)\n");
+    assert_eq!(output.status.code(), Some(3));
+}
+
+#[test]
+fn bye_with_code_underflow_reports_an_error_and_continues() {
+    assert_eq!(
+        session("(BYE)\n1 .\n"),
+        "Forth Error: Data stack underflow.\n1 ok\n\n"
+    );
+}
+
+#[test]
 fn end_of_input_ends_the_session_with_code_zero() {
     for stdin in ["", "QUIT\n", "ABORT\n", ": OPEN\n"] {
         stdout_of(&[], stdin);

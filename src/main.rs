@@ -173,6 +173,10 @@ ANNOUNCE                      \ prints 99
     DUP  \ keep a copy for later
 ;
 3 PAIR . .                 \ prints 3 3
+
+\ BYE leaves the program with code 0; uncomment one example to try it.
+\ BYE
+\ 3 (BYE)
 ",
     ),
     (
@@ -309,13 +313,15 @@ unsafe fn new_vm() -> Registers {
 /// # Safety
 ///
 /// `regs` must come from [`boot`].
-unsafe fn interpret(regs: &mut Registers, input: &str) {
+unsafe fn interpret(regs: &mut Registers, input: &str) -> Result<(), ExitCode> {
     match outer_interpreter(regs, input) {
         Ok(()) if regs.is_compiling() => {}
         Ok(()) => println!("ok"),
         Err(ForthError::Quit | ForthError::Abort) => println!(),
+        Err(ForthError::Bye(code)) => return Err(ExitCode::from(code as u8)),
         Err(error) => println!("Forth Error: {}", error),
     }
+    Ok(())
 }
 
 /// Echoes a block of Forth source and evaluates it. Output from Forth words follows on one
@@ -324,27 +330,28 @@ unsafe fn interpret(regs: &mut Registers, input: &str) {
 /// # Safety
 ///
 /// `regs` must come from [`boot`].
-unsafe fn evaluate(regs: &mut Registers, input: &str) {
+unsafe fn evaluate(regs: &mut Registers, input: &str) -> Result<(), ExitCode> {
     println!("Input:");
     for line in input.trim().lines() {
         println!("{}", format!("    {}", line).trim_end());
     }
     print!("Output: ");
-    interpret(regs, input);
+    interpret(regs, input)
 }
 
 /// Runs one section in a new VM, given its number counting from 1.
-fn run_section(number: usize) {
+fn run_section(number: usize) -> Result<(), ExitCode> {
     let (title, blocks) = section(number);
     println!("--- TEST RUN {}: {} ---", number, title);
     // SAFETY: `regs` comes from `boot`, through `new_vm`.
     unsafe {
         let mut regs = new_vm();
         for source in blocks {
-            evaluate(&mut regs, source);
+            evaluate(&mut regs, source)?;
         }
     }
     println!("-------------------------------------\n");
+    Ok(())
 }
 
 /// One answer to the demo menu.
@@ -414,8 +421,18 @@ fn demo_menu(mut input: impl BufRead) -> ExitCode {
             Err(code) => return code,
         };
         match parse_choice(&line, SECTION_COUNT) {
-            Some(Choice::All) => (1..=SECTION_COUNT).for_each(run_section),
-            Some(Choice::Section(number)) => run_section(number),
+            Some(Choice::All) => {
+                for number in 1..=SECTION_COUNT {
+                    if let Err(code) = run_section(number) {
+                        return code;
+                    }
+                }
+            }
+            Some(Choice::Section(number)) => {
+                if let Err(code) = run_section(number) {
+                    return code;
+                }
+            }
             Some(Choice::Quit) => return ExitCode::SUCCESS,
             None => println!("Invalid choice: {}\n", line.trim()),
         }
@@ -429,7 +446,11 @@ fn interactive(mut input: impl BufRead) -> ExitCode {
         let mut regs = new_vm();
         loop {
             match read_line(&mut input) {
-                Ok(line) => interpret(&mut regs, &line),
+                Ok(line) => {
+                    if let Err(code) = interpret(&mut regs, &line) {
+                        return code;
+                    }
+                }
                 Err(code) => return code,
             }
         }
