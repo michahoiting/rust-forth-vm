@@ -1,0 +1,2 @@
+# Entries added on two branches both stay, without a conflict.
+CHANGELOG.md merge=union

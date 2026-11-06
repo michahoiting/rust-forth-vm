@@ -27,7 +27,7 @@ make doc-serve # Serves the docs on localhost, including private items. Needs py
 
 `make ci` must pass before a PR. Each step is also its own target, such as `make test`. Add new CI steps to the `Makefile`, not directly to the workflows.
 
-CI uses the latest stable toolchain on purpose, so a new lint can fail it with no code change. Raise `rust-version` when code needs a newer feature, and check it with a PR's CI run. CI runs on PRs and on pushes to `main`, not on other branches.
+CI uses the latest stable toolchain on purpose, so a new lint can fail it with no code change. Raise `rust-version` when code needs a newer feature, and check it with a PR's CI run. CI runs on PRs and on pushes to `main`, not on other branches. PRs that only change Markdown skip Miri.
 
 These three aren't part of CI:
 
@@ -91,11 +91,11 @@ Every new word or feature includes:
 
 1. When planning new work, first check the open issues with `gh issue list --state open`. Show them in a table with columns for the issue number, type, description, and how it relates to the planned work. Say which issues the work solves, depends on, or changes.
 2. Plan first for anything beyond a small fix, and agree on it before writing code.
-3. Create or use a GitHub issue, stating the problem and the acceptance criteria.
+3. Create or use a GitHub issue, stating the problem, the acceptance criteria, and the files it expects to touch. Before picking an issue, check `gh pr list` and the `solo` label. A `solo` issue changes code throughout the project, so start it only with no other PR open, and start nothing else until it merges.
 4. Work on a branch, never directly on `main`.
 5. Update `CHANGELOG.md`, run `make ci`, and compare the `printf '0\nq\n' | make demo` output with `main`. Only the intended changes may appear.
 6. For behaviour changes, temporarily break the code to confirm the tests catch it. `make mutants` skips every `unsafe fn`, which includes all primitives, so it doesn't replace this step. Use `--no-fail-fast` and check the exit code, because a crash in a test binary prints no `FAILED` lines.
-7. Open a PR that closes the issue, then stop. The project owner reviews and merges.
+7. Open a PR that closes the issue. The project owner reviews and merges, so never merge or arm auto-merge. Don't wait for CI: start the next issue in a new worktree. Check back with `gh pr checks <number>` and `gh pr view <number> --comments`, and fix failures or review comments on the same branch.
 8. After the merge, sync `main`, and delete the branch once asked. The PR head can differ from the last local commit, because of review suggestions.
 
 ## Accuracy
