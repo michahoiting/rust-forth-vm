@@ -2,7 +2,7 @@
 
 //! Words that build the dictionary.
 
-use super::runtime::{docol, docon, dodoes, dovar, exit};
+use super::runtime::{docol, docon, dovar, exit};
 use crate::cell::Cell;
 use crate::dictionary::{cfa_of, is_created, F_CREATED, F_HIDDEN};
 use crate::error::ForthError;
@@ -25,10 +25,7 @@ unsafe fn create_word(regs: &mut Registers, word: &'static str) {
     let result = regs
         .dictionary
         .write_header(&name, code_cell(dovar), F_CREATED);
-    if regs.check(result).is_some() {
-        let result = regs.dictionary.comma(0); // Reserve the action cell for DOES>
-        regs.check(result);
-    }
+    regs.check(result);
 }
 
 /// `CREATE ( -- )`: Parses a name and allocates a new word with default DOVAR semantics.
@@ -38,10 +35,13 @@ pub(super) unsafe fn create(regs: &mut Registers) {
 
 /// `VARIABLE ( -- )`: Parses a name and creates a word that holds one Cell, initially 0.
 pub(super) unsafe fn variable(regs: &mut Registers) {
+    let mark = regs.dictionary.mark();
     create_word(regs, "VARIABLE");
     if regs.error.is_none() {
         let result = regs.dictionary.comma(0);
-        regs.check(result);
+        if regs.check(result).is_none() {
+            regs.dictionary.restore(mark); // Don't leave a word without its value
+        }
     }
 }
 
@@ -76,16 +76,17 @@ pub(super) unsafe fn runtime_does(regs: &mut Registers) {
         return;
     }
 
-    // Only words made by CREATE have an action cell. Anything else has live data at W + 1.
+    // Only words made by CREATE may change their action. Changing a colon word would make it
+    // run its body as data.
     let child = regs.dictionary.last_word();
     if !is_created(child) {
         regs.set_error(ForthError::DoesWithoutCreate);
         return;
     }
 
-    let child_cfa = cfa_of(child);
-    *child_cfa = code_cell(dodoes); // Overwrite the child's CFA with DODOES
-    *child_cfa.add(1) = regs.ip as Cell; // Store the pointer to the action code in W+1 of the child
+    // Overwrite the child's CFA with the action code, which enter_word runs through DODOES.
+    // The Return Stack isn't empty, so IP is in a thread in the dictionary.
+    *cfa_of(child) = regs.ip as Cell;
 
     // Unnest from the defining word (EXIT behavior)
     exit(regs);
@@ -130,9 +131,9 @@ mod tests {
     use std::io;
 
     use super::*;
-    use crate::boot;
-    use crate::dictionary::{is_hidden, is_immediate, is_pending};
+    use crate::dictionary::{is_hidden, is_immediate, is_pending, pfa_of};
     use crate::vm::enter_word;
+    use crate::{boot, outer_interpreter};
 
     const TEST_CELLS: usize = 1024;
 
@@ -148,7 +149,7 @@ mod tests {
             assert_eq!(regs.data_stack, [1]);
             let header = regs.dictionary.last_word();
             assert_eq!(regs.dictionary.find_word("X"), Some(header));
-            assert_eq!(*cfa_of(header).add(1), 42);
+            assert_eq!(*pfa_of(cfa_of(header)), 42);
             assert!(!is_created(header));
             assert!(!is_hidden(header));
             assert!(!is_immediate(header));
@@ -260,6 +261,19 @@ mod tests {
             assert!(regs.error.is_none(), "got: {:?}", regs.error);
             assert_eq!(regs.data_stack, [7]);
             assert!(is_immediate(regs.dictionary.last_word()));
+        }
+    }
+
+    #[test]
+    fn does_stores_the_action_thread_in_the_code_field() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            outer_interpreter(&mut regs, ": D CREATE DOES> ; D X").unwrap();
+
+            // The thread of D is CREATE, DOES>, EXIT, and the action is everything after DOES>.
+            let defining_word = cfa_of(regs.dictionary.find_word("D").unwrap());
+            let child = cfa_of(regs.dictionary.find_word("X").unwrap());
+            assert_eq!(*child, pfa_of(defining_word).add(2) as Cell);
         }
     }
 }

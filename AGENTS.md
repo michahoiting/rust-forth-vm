@@ -10,7 +10,7 @@ The FORTH-83 standard is the reference for how words behave. Later ANS Forth wor
 
 See `README.md` for the word list and internals, and the GitHub issues for known problems. Don't copy either into this file, because they change.
 
-See `CONTRIBUTING.md` for setup, the release steps, and the versioning policy. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+See `CONTRIBUTING.md` for setup, the release steps, and the versioning policy. After the first release, versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Commands
 
@@ -70,9 +70,10 @@ main → lib → interpreter, primitives → vm → compiler → dictionary → 
 - Doc comments on primitives start with the word and its stack effect in one code span, such as `` `@ ( addr -- x )`: ``. Outside a code span, rustdoc would change `--` and `*`.
 - Public API changes update the doc examples, which run as doctests.
 - Docs describe behaviour, and link to the README for the word list and limitations instead of copying them.
-- Breaking changes are fine until the project owner says otherwise. Mark them with `**Breaking:**` in the changelog.
+- Breaking changes are fine until the project owner says otherwise.
+- Everything is part of the unreleased `0.1.0` until the project owner releases it. Until then, all changelog entries go under `### Added`, including fixes and changes, and nothing is marked as breaking. After the first release, this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), and breaking changes start with `**Breaking:**`.
 - Every user-visible change adds an entry under `[Unreleased]` in `CHANGELOG.md`.
-- Don't bump the version or create tags unless asked. Releases are the project owner's.
+- Don't bump the version or create tags unless asked. Only the project owner decides when to release.
 - Stay within the requested scope. Report anything else you find instead of fixing it in passing.
 
 ## New Forth words

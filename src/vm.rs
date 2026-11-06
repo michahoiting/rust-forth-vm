@@ -8,7 +8,7 @@ use std::ptr;
 
 use crate::cell::Cell;
 use crate::compiler::Compiler;
-use crate::dictionary::Dictionary;
+use crate::dictionary::{pfa_of, Dictionary};
 use crate::error::ForthError;
 use crate::input::InputSource;
 
@@ -158,18 +158,46 @@ unsafe fn next(regs: &mut Registers) {
     enter_word(regs);
 }
 
+/// `DODOES`: Runs a word changed by DOES>. Its Code Field holds the address of its action
+/// thread, so unlike the other primitives that drive threaded code, this one is called
+/// directly by [`enter_word`].
+unsafe fn dodoes(regs: &mut Registers) {
+    // 1. Push the address of the word's data onto the stack
+    regs.data_stack.push(pfa_of(regs.w) as Cell);
+
+    // 2. Save the current IP onto the Return Stack
+    regs.return_stack.push(regs.ip);
+
+    // 3. Jump with the IP to the Forth action code stored behind DOES>
+    regs.ip = *regs.w as *const Cell;
+}
+
 /// Runs the word that W points to.
 ///
 /// # Safety
 ///
-/// W must point to a Code Field, which must hold the Cell of a primitive.
+/// W must point to a Code Field, which must hold the Cell of a primitive, or the address of
+/// an action thread that DOES> stored there. Zero gives [`ForthError::NullPointerCheck`].
 #[inline(always)]
 pub(crate) unsafe fn enter_word(regs: &mut Registers) {
     // Fetch the contents of the CFA Cell (the raw bits of the machine-code pointer)
-    let code_bits = *regs.w as *const ();
+    let code_bits = *regs.w;
+
+    // A null pointer is undefined behaviour, and `!` can write zero here.
+    if code_bits == 0 {
+        regs.set_error(ForthError::NullPointerCheck(regs.w as Cell));
+        return;
+    }
+
+    // Primitives are compiled into the binary, so their address is never in the dictionary,
+    // and DOES> only stores addresses of threads, which always are.
+    if regs.dictionary.is_in_arena(code_bits) {
+        dodoes(regs);
+        return;
+    }
 
     // Blindly transmute the raw bits into an executable Rust function (like a hardware jump)
-    let code = mem::transmute::<*const (), PrimitiveFn>(code_bits);
+    let code = mem::transmute::<*const (), PrimitiveFn>(code_bits as *const ());
     code(regs);
 }
 
@@ -202,4 +230,55 @@ pub(crate) unsafe fn execute(regs: &mut Registers, cfa: *mut Cell) {
     run(regs);
 
     regs.ip = ptr::null(); // The trampoline is about to go out of scope
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+
+    use super::*;
+    use crate::dictionary::cfa_of;
+    use crate::{boot, outer_interpreter};
+
+    const TEST_CELLS: usize = 1024;
+
+    #[test]
+    fn a_word_changed_by_does_pushes_its_pfa_and_jumps_to_its_action() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            outer_interpreter(&mut regs, ": D CREATE DOES> ; D X").unwrap();
+            let cfa = cfa_of(regs.dictionary.find_word("X").unwrap());
+            let thread: [Cell; 1] = [0];
+
+            regs.w = cfa;
+            regs.ip = thread.as_ptr();
+            enter_word(&mut regs);
+
+            assert!(regs.error.is_none(), "got: {:?}", regs.error);
+            assert_eq!(regs.data_stack, [pfa_of(cfa) as Cell]);
+            assert_eq!(regs.return_stack, [thread.as_ptr()]);
+            assert_eq!(regs.ip, *cfa as *const Cell);
+        }
+    }
+
+    #[test]
+    fn a_zero_code_field_is_an_error() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            outer_interpreter(&mut regs, "CREATE X").unwrap();
+            let cfa = cfa_of(regs.dictionary.find_word("X").unwrap());
+            *cfa = 0;
+            regs.data_stack.push(7);
+
+            regs.w = cfa;
+            enter_word(&mut regs);
+
+            assert!(matches!(
+                regs.error,
+                Some(ForthError::NullPointerCheck(xt)) if xt == cfa as Cell
+            ));
+            assert_eq!(regs.data_stack, [7]);
+            assert!(regs.return_stack.is_empty());
+        }
+    }
 }

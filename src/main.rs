@@ -12,7 +12,7 @@ const DICTIONARY_CELLS: usize = 1024;
 
 /// The demo sections, each with its title and one block of Forth source. All of them run in
 /// the same VM, so later sections can use words from earlier ones.
-const SECTIONS: [(&str, &str); 10] = [
+const SECTIONS: [(&str, &str); 11] = [
     (
         "Evaluating Text Operations",
         r"
@@ -161,6 +161,29 @@ ANNOUNCE                      \ prints 99
     DUP  \ keep a copy for later
 ;
 3 PAIR . .                 \ prints 3 3
+",
+    ),
+    (
+        "Reaching a Word's Parameter Field",
+        r"
+\ ' gives the execution token of a word, which :NONAME gives for an unnamed one
+3 ' ADD3 EXECUTE .            \ prints 6
+
+\ >BODY turns an execution token into the address of the word's Parameter Field
+' COUNTER >BODY @ .           \ prints 50
+
+\ A word made with DOES> doesn't push that address, so this is the way to its data
+1 PLUS3 .                     \ prints 4
+' PLUS3 >BODY @ .             \ prints 3
+5 ' PLUS3 >BODY !
+1 PLUS3 .                     \ prints 6
+
+\ ['] does the same as ' inside a definition, using a name from the source
+: SET-PLUS3 ['] PLUS3 >BODY ! ;
+9 SET-PLUS3
+1 PLUS3 .                     \ prints 10
+: RUN-ADD3 ['] ADD3 EXECUTE ;
+1 RUN-ADD3 .                  \ prints 4
 ",
     ),
 ];

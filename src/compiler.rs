@@ -38,7 +38,7 @@ impl Compiler {
     ///
     /// # Errors
     ///
-    /// Returns [`ForthError::DictionaryOverflow`] if the word doesn't fit in the dictionary.
+    /// See [`Dictionary::write_header`].
     ///
     /// # Safety
     ///
@@ -72,7 +72,7 @@ impl Compiler {
         dictionary: &mut Dictionary,
     ) -> Result<(), ForthError> {
         if !self.compiling {
-            return Err(ForthError::NotCompiling);
+            return Err(ForthError::NotCompiling(";"));
         }
         dictionary.comma(self.exit_cfa)?;
         dictionary.finish_last();

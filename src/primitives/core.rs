@@ -5,6 +5,7 @@
 use std::io::Write;
 
 use crate::cell::Cell;
+use crate::dictionary::pfa_of;
 use crate::error::ForthError;
 use crate::vm::Registers;
 
@@ -28,6 +29,18 @@ pub(super) unsafe fn store(regs: &mut Registers) {
     if let (Some(addr), Some(value)) = (regs.data_stack.pop(), regs.data_stack.pop()) {
         let result = regs.dictionary.store(addr, value);
         regs.check(result);
+    }
+}
+
+/// `>BODY ( xt -- pfa )`: Replaces an execution token with the address of that word's Parameter
+/// Field.
+pub(super) unsafe fn to_body(regs: &mut Registers) {
+    if let Some(xt) = regs.pop() {
+        if !regs.dictionary.is_execution_token(xt) {
+            regs.set_error(ForthError::InvalidExecutionToken(xt));
+            return;
+        }
+        regs.data_stack.push(pfa_of(xt as *const Cell) as Cell);
     }
 }
 
@@ -123,9 +136,11 @@ pub(super) unsafe fn depth(regs: &mut Registers) {
 #[cfg(test)]
 mod tests {
     use std::io;
+    use std::mem;
 
     use super::*;
     use crate::boot;
+    use crate::dictionary::cfa_of;
     use crate::vm::PrimitiveFn;
 
     const TEST_CELLS: usize = 1024;
@@ -272,6 +287,39 @@ mod tests {
                 assert_underflow(word, &[1, 2, 2]);
                 assert_underflow(word, &[1, 2, Cell::MAX]);
             }
+        }
+    }
+
+    #[test]
+    fn to_body_replaces_an_xt_with_its_pfa() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let xt = cfa_of(regs.dictionary.find_word("DUP").unwrap()) as Cell;
+            regs.data_stack.extend_from_slice(&[7, xt]);
+
+            to_body(&mut regs);
+            assert!(regs.error.is_none(), "got: {:?}", regs.error);
+            assert_eq!(regs.data_stack, [7, xt + mem::size_of::<Cell>()]);
+        }
+    }
+
+    #[test]
+    fn to_body_rejects_anything_else() {
+        unsafe {
+            let regs = run_on(to_body, &[1, 5]);
+            assert!(matches!(
+                regs.error,
+                Some(ForthError::InvalidExecutionToken(5))
+            ));
+            assert_eq!(regs.data_stack, [1]);
+        }
+    }
+
+    #[test]
+    fn to_body_needs_a_cell() {
+        unsafe {
+            let regs = run_on(to_body, &[]);
+            assert!(matches!(regs.error, Some(ForthError::DataStackUnderflow)));
         }
     }
 }

@@ -3,11 +3,11 @@
 //! Words that drive threaded code. Their addresses are stored in Code Fields
 //! or compiled into threads.
 //!
-//! A word made by CREATE has two Cells behind its CFA: W + 1 is the action cell
-//! reserved for DOES>, and its data field starts at W + 2. A word made by CONSTANT
-//! has one Cell behind its CFA: W + 1 holds its value.
+//! Every word's Parameter Field directly follows its Code Field, so these words use
+//! [`pfa_of`] on W. `DODOES` is in [`vm`](crate::vm), because the inner interpreter calls it.
 
 use crate::cell::Cell;
+use crate::dictionary::pfa_of;
 use crate::error::ForthError;
 use crate::vm::{enter_word, Registers};
 
@@ -15,34 +15,20 @@ use crate::vm::{enter_word, Registers};
 pub(super) unsafe fn docol(regs: &mut Registers) {
     // Push the current IP to the Return Stack (return address)
     regs.return_stack.push(regs.ip);
-    // Move IP to the inside of the definition (physically 1 Cell after the CFA, so W + 1)
-    regs.ip = regs.w.add(1);
+    // Move IP to the inside of the definition, which is the Parameter Field
+    regs.ip = pfa_of(regs.w);
 }
 
 /// `DOVAR`: Default execution semantics for a word created via CREATE (or VARIABLE).
-/// It simply pushes the memory address of its own Data Field (W + 2) onto the stack.
+/// It simply pushes the memory address of its own Parameter Field onto the stack.
 pub(super) unsafe fn dovar(regs: &mut Registers) {
-    let data_address = regs.w.add(2) as Cell;
-    regs.data_stack.push(data_address);
+    regs.data_stack.push(pfa_of(regs.w) as Cell);
 }
 
 /// `DOCON`: Execution semantics of a word made by CONSTANT.
-/// It pushes the value held in the word's body (W + 1).
+/// It pushes the value held in the word's Parameter Field.
 pub(super) unsafe fn docon(regs: &mut Registers) {
-    regs.data_stack.push(*regs.w.add(1));
-}
-
-/// `DODOES`: Runtime execution semantics for a child word modified via DOES>.
-pub(super) unsafe fn dodoes(regs: &mut Registers) {
-    // 1. Push the address of the actual data onto the stack (W + 2, because W + 1 holds the action-pointer)
-    let data_address = regs.w.add(2) as Cell;
-    regs.data_stack.push(data_address);
-
-    // 2. Save the current IP onto the Return Stack
-    regs.return_stack.push(regs.ip);
-
-    // 3. Jump with the IP to the Forth action code stored behind DOES> (saved in W + 1)
-    regs.ip = *regs.w.add(1) as *const Cell;
+    regs.data_stack.push(*pfa_of(regs.w));
 }
 
 /// `EXIT ( -- )`: Cleans up and exits a nested `:` word (compiled by `;`).
@@ -119,7 +105,7 @@ mod tests {
     fn execute_rejects_a_pending_word() {
         unsafe {
             let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
-            // Code 0 would crash if it ran, so this also shows that nothing ran.
+            // Code 0 would give another error if it ran, so this also shows that nothing ran.
             let xt = regs
                 .compiler
                 .begin_definition(&mut regs.dictionary, "X", 0, 0)

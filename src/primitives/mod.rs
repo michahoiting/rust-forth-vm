@@ -24,6 +24,8 @@ pub(crate) unsafe fn install(regs: &mut Registers) -> Result<(), ForthError> {
     regs.dictionary
         .add_primitive_word("@", code_cell(core::fetch), 0)?;
     regs.dictionary
+        .add_primitive_word(">BODY", code_cell(core::to_body), 0)?;
+    regs.dictionary
         .add_primitive_word("!", code_cell(core::store), 0)?;
     regs.dictionary
         .add_primitive_word("DUP", code_cell(core::dup), 0)?;
@@ -65,6 +67,10 @@ pub(crate) unsafe fn install(regs: &mut Registers) -> Result<(), ForthError> {
         .add_primitive_word("(", code_cell(parsing::paren_comment), F_IMMEDIATE)?;
     regs.dictionary
         .add_primitive_word("\\", code_cell(parsing::line_comment), F_IMMEDIATE)?;
+    regs.dictionary
+        .add_primitive_word("'", code_cell(parsing::tick), 0)?;
+    regs.dictionary
+        .add_primitive_word("[']", code_cell(parsing::bracket_tick), F_IMMEDIATE)?;
     regs.dictionary
         .add_primitive_word("EXECUTE", code_cell(runtime::execute), 0)?;
     let exit_cfa = regs

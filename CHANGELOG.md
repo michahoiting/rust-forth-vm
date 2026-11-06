@@ -3,7 +3,8 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and after the first release, this project adheres to
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
@@ -21,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Defining words: `:`, `;`, `:NONAME`, `CREATE`, `CONSTANT`, `DOES>`, `IMMEDIATE` and
   `EXIT`.
 - `EXECUTE`, which runs a word from its execution token.
+- `'` and `[']`, which give the execution token of a named word.
+- `>BODY`, which gives the address of a word's Parameter Field from its execution token.
+- Word names of up to 255 bytes.
 - Comments with `(` and `\`.
 - A `forth-vm` binary that runs a scripted demo.
 - The MIT licence, and a minimum supported Rust version.
