@@ -45,5 +45,7 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
   Miri, and new pushes to a PR cancel its older runs.
 - `make metrics`, which reports PR lead time, time to first review, CI reruns, and issues
   completed per week.
+- A guide in the README to working on this project with the Claude CLI, and `.gitignore`
+  rules for Claude's worktrees and local settings.
 
 [Unreleased]: https://github.com/michahoiting/rust-forth-vm/commits/main

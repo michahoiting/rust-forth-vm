@@ -213,6 +213,94 @@ stacks, and rolls back any unfinished colon definition.
   the line where it starts.
 - `!` can overwrite word headers and compiled code, which can crash the process.
 
+## Working with Claude Code
+
+We use the [Claude Code](https://code.claude.com/docs/en/overview) CLI to work on this
+project. It reads the project's rules from [AGENTS.md](AGENTS.md), and
+[CONTRIBUTING.md](CONTRIBUTING.md#making-a-change) describes the process it follows.
+
+Give each piece of work its own session and its own worktree, so parallel sessions can't
+change each other's files. Keep your main checkout on a clean `main`, and start every
+session from there:
+
+```sh
+claude -w add-nip
+```
+
+This creates `.claude/worktrees/add-nip/` on a new `worktree-add-nip` branch, based on the
+latest `main` on GitHub, and starts the session inside it.
+
+### From an idea to the merge
+
+As an example, say you want to add the word `NIP`.
+
+1. **Start a session.** In a terminal, in your main checkout, run `claude -w add-nip`.
+2. **Plan.** Describe the idea: "I'd like to add NIP. Check the open issues and make a
+   plan." Claude shows how the issues relate to the work and proposes a plan. Change it
+   until you agree with it.
+3. **Create the issue.** Ask Claude to create the issue, unless one already exists.
+4. **Build it.** Claude writes the code, tests, demo, README and `CHANGELOG.md` changes,
+   and runs `make ci`. Review the changes as they're made.
+5. **Open the PR.** Ask Claude to commit, push, and open a PR that closes the issue.
+6. **Pause the session.** You don't need to wait for CI. Run `/exit`, choose to keep the
+   worktree, and start the next idea in a new session. Claude prints the command that
+   resumes this one.
+7. **Handle feedback.** To check the PR, run `gh pr checks <number>`. If a check fails or a
+   review asks for changes, resume the session with the printed command, or with
+   `claude -r` from your main checkout. Fix it on the same branch.
+8. **Merge.** The project owner reviews the PR and merges it. Claude never merges.
+9. **Clean up.** Once the PR is merged, and with its session closed, run this in your main
+   checkout:
+
+   ```sh
+   git pull --ff-only
+   git worktree remove .claude/worktrees/add-nip
+   git branch -D worktree-add-nip
+   ```
+
+### Starting and stopping sessions
+
+Inside a session:
+
+| Command                | What it does                                                    |
+|------------------------|-----------------------------------------------------------------|
+| `/rename <name>`       | Names this session, so it's easy to find again                  |
+| `/clear`               | Starts a new, empty conversation                                |
+| `/resume [session]`    | Switches to another session, or opens a list of them            |
+| `/branch [name]`       | Copies this conversation and switches to the copy               |
+| `/fork [prompt]`       | Copies this conversation to a new background session           |
+| `/background [prompt]` | Moves this session to the background                            |
+| `/tasks`               | Lists the background work in this session                       |
+| `/stop`                | Stops the background session you're attached to                 |
+| `/exit`                | Closes this session, or detaches from a background session      |
+| `Esc`                  | Interrupts Claude without ending the session                    |
+| `Ctrl+C` twice         | Exits, when nothing is running                                  |
+
+There's no command to open a second interactive session or a new worktree from inside a
+session. Open another terminal and run `claude -w <name>`, or ask Claude to "work in a
+worktree" if the current session should move to one. `/fork` and `/background` keep work
+going without another terminal.
+
+Exiting a session with changes or commits asks whether to keep or remove its worktree.
+Removing it discards those changes, so keep it until the work is pushed.
+
+From the shell:
+
+| Command                    | What it does                                            |
+|----------------------------|---------------------------------------------------------|
+| `claude -w <name>`         | Starts a session in a new worktree                      |
+| `claude -c`                | Continues the latest session in this folder             |
+| `claude -r [name]`         | Resumes a session by name, or opens a list of them      |
+| `claude --bg "<prompt>"`   | Starts a session in the background                      |
+| `claude agents`            | Lists background sessions, and manages them             |
+| `claude attach <id\|name>` | Opens a background session in this terminal             |
+| `claude logs <id\|name>`   | Prints a background session's recent output             |
+| `claude stop <id>`         | Stops a background session, and keeps its conversation  |
+
+Background sessions are a research preview, so these commands may change. See the
+[worktrees](https://code.claude.com/docs/en/worktrees) and
+[commands](https://code.claude.com/docs/en/commands) documentation for details.
+
 ## Versioning
 
 The current version is `0.1.0`, which hasn't been released yet.
