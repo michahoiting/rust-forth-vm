@@ -48,14 +48,17 @@ pub enum ForthError {
     DoesOutsideDefinition,
     /// `DOES>` ran when the newest word was not made by `CREATE`.
     DoesWithoutCreate,
-    /// `;` ran without a definition in progress.
-    NotCompiling,
+    /// A word that needs a definition in progress, named here, ran without one.
+    NotCompiling(&'static str),
+    /// A word name of this many bytes is too long for a header.
+    NameTooLong(usize),
     /// A token, held here, is neither a known word nor a number.
     UnknownWord(String),
     /// `@` or `!` was given an address, held here, that it may not access: one outside
     /// the written part of the dictionary, or one that is not cell-aligned.
     InvalidAddress(Cell),
-    /// `EXECUTE` was given a Cell, held here, that isn't the code field of a finished word.
+    /// `EXECUTE` or `>BODY` was given a Cell, held here, that isn't the code field of a
+    /// finished word.
     InvalidExecutionToken(Cell),
     /// `(` found no closing `)` in the input.
     UnterminatedComment,
@@ -77,7 +80,10 @@ impl fmt::Display for ForthError {
                 write!(f, "DOES> can only be used inside a definition.")
             }
             ForthError::DoesWithoutCreate => write!(f, "DOES> needs a word made by CREATE."),
-            ForthError::NotCompiling => write!(f, "; can only be used while compiling."),
+            ForthError::NotCompiling(word) => {
+                write!(f, "{} can only be used while compiling.", word)
+            }
+            ForthError::NameTooLong(len) => write!(f, "Word name of {} bytes is too long.", len),
             ForthError::UnknownWord(token) => {
                 write!(f, "Word or numeric literal '{}' not recognized.", token)
             }

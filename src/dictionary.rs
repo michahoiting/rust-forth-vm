@@ -2,7 +2,7 @@
 
 //! The dictionary: its storage, the word header layout, and the functions that
 //! write to and search the linked list of words. Nothing outside this module
-//! knows how a header is laid out, except that a word's body follows its CFA.
+//! knows how a header is laid out: other modules use its accessors, such as [`pfa_of`].
 //!
 //! Every word uses the same header layout, whether it is a primitive or was created at
 //! runtime. The name bytes are stored in the dictionary directly in front of the header. A
@@ -19,25 +19,28 @@ use crate::error::ForthError;
 const LFA: usize = 0;
 /// Name Field: points to the name bytes.
 const NFA: usize = 1;
-/// Length of the name in bytes.
-const LEN: usize = 2;
-/// Combination of the `F_*` flags below.
-const FLAGS: usize = 3;
-/// Code Field: the machine-code pointer.
-const CFA: usize = 4;
+/// The length of the name in bytes, in the bits of [`LEN_MASK`], combined with the `F_*` flags
+/// below.
+const LEN_FLAGS: usize = 2;
+/// Code Field: the machine-code pointer. For a word changed by DOES>, this is the address of
+/// its action thread instead, which [`enter_word`](crate::vm::enter_word) tells apart.
+const CFA: usize = 3;
 /// The size of a header in Cells.
-const HEADER_CELLS: usize = 5;
+const HEADER_CELLS: usize = 4;
+
+/// The bits of [`LEN_FLAGS`] that hold the name length, which is also the longest name.
+const LEN_MASK: Cell = 0xFF;
 
 /// Executes even while compiling.
-pub(crate) const F_IMMEDIATE: Cell = 1;
+pub(crate) const F_IMMEDIATE: Cell = 1 << 8;
 /// Can never be found by name. Unlike [`F_PENDING`], this stays set, and the word can still
 /// be run through its execution token.
-pub(crate) const F_HIDDEN: Cell = 2;
-/// Made by CREATE, so it owns an action cell for DOES>.
-pub(crate) const F_CREATED: Cell = 4;
+pub(crate) const F_HIDDEN: Cell = 1 << 9;
+/// Made by CREATE, so DOES> may change its action.
+pub(crate) const F_CREATED: Cell = 1 << 10;
 /// Still being defined, so it can't be found or executed. Unlike [`F_HIDDEN`], this is
 /// cleared when the definition ends.
-pub(crate) const F_PENDING: Cell = 8;
+pub(crate) const F_PENDING: Cell = 1 << 11;
 
 /// Returns the CFA of the word with this header.
 ///
@@ -48,13 +51,23 @@ pub(crate) unsafe fn cfa_of(header: *mut Cell) -> *mut Cell {
     header.add(CFA)
 }
 
+/// Returns the PFA of the word with this CFA. Every word's Parameter Field follows its Code
+/// Field, but a primitive has nothing there.
+///
+/// # Safety
+///
+/// `cfa` must point to the Code Field of a word in the dictionary.
+pub(crate) unsafe fn pfa_of(cfa: *const Cell) -> *const Cell {
+    cfa.add(1)
+}
+
 /// Returns whether the word has [`F_IMMEDIATE`] set.
 ///
 /// # Safety
 ///
 /// See [`cfa_of`].
 pub(crate) unsafe fn is_immediate(header: *mut Cell) -> bool {
-    *header.add(FLAGS) & F_IMMEDIATE != 0
+    *header.add(LEN_FLAGS) & F_IMMEDIATE != 0
 }
 
 /// Returns whether the word has [`F_CREATED`] set.
@@ -63,7 +76,7 @@ pub(crate) unsafe fn is_immediate(header: *mut Cell) -> bool {
 ///
 /// See [`cfa_of`].
 pub(crate) unsafe fn is_created(header: *mut Cell) -> bool {
-    *header.add(FLAGS) & F_CREATED != 0
+    *header.add(LEN_FLAGS) & F_CREATED != 0
 }
 
 /// Returns whether the word has [`F_HIDDEN`] set.
@@ -72,7 +85,7 @@ pub(crate) unsafe fn is_created(header: *mut Cell) -> bool {
 ///
 /// See [`cfa_of`].
 pub(crate) unsafe fn is_hidden(header: *mut Cell) -> bool {
-    *header.add(FLAGS) & F_HIDDEN != 0
+    *header.add(LEN_FLAGS) & F_HIDDEN != 0
 }
 
 /// Returns whether the word has [`F_PENDING`] set.
@@ -81,7 +94,7 @@ pub(crate) unsafe fn is_hidden(header: *mut Cell) -> bool {
 ///
 /// See [`cfa_of`].
 pub(crate) unsafe fn is_pending(header: *mut Cell) -> bool {
-    *header.add(FLAGS) & F_PENDING != 0
+    *header.add(LEN_FLAGS) & F_PENDING != 0
 }
 
 /// A saved dictionary state, used to discard everything written after it.
@@ -109,7 +122,7 @@ pub(crate) struct Dictionary {
 
 impl Dictionary {
     /// Allocates an untyped arena of `cells` Cells for our Forth dictionary space. The arena
-    /// can't grow later, because threads, links and action cells hold raw addresses into it.
+    /// can't grow later, because threads, links and Code Fields hold raw addresses into it.
     ///
     /// # Errors
     ///
@@ -143,6 +156,12 @@ impl Dictionary {
         *self.here = value;
         self.here = self.here.add(1);
         Ok(())
+    }
+
+    /// Returns whether `addr` is inside the arena, written or not.
+    #[inline(always)]
+    pub(crate) fn contains(&self, addr: Cell) -> bool {
+        addr >= self.start as Cell && addr < self.end as Cell
     }
 
     /// Returns the index of the Cell at `addr`, which must be a cell-aligned address below
@@ -193,7 +212,8 @@ impl Dictionary {
     ///
     /// # Errors
     ///
-    /// Returns [`ForthError::DictionaryOverflow`] if the word doesn't fit. Nothing is written.
+    /// Returns [`ForthError::NameTooLong`] if the length doesn't fit in [`LEN_MASK`], and
+    /// [`ForthError::DictionaryOverflow`] if the word doesn't fit. Nothing is written.
     ///
     /// # Safety
     ///
@@ -204,6 +224,10 @@ impl Dictionary {
         code: Cell,
         flags: Cell,
     ) -> Result<*mut Cell, ForthError> {
+        if name.len() > LEN_MASK {
+            return Err(ForthError::NameTooLong(name.len()));
+        }
+
         let name_cells = name.len().div_ceil(mem::size_of::<Cell>());
         let free_cells = self.end.offset_from(self.here) as usize;
         if name_cells + HEADER_CELLS > free_cells {
@@ -217,8 +241,7 @@ impl Dictionary {
         let header = self.here.add(name_cells);
         *header.add(LFA) = self.last_word as Cell;
         *header.add(NFA) = name_ptr as Cell;
-        *header.add(LEN) = name.len();
-        *header.add(FLAGS) = flags;
+        *header.add(LEN_FLAGS) = name.len() | flags;
         *header.add(CFA) = code;
 
         self.here = header.add(HEADER_CELLS);
@@ -231,7 +254,7 @@ impl Dictionary {
     ///
     /// # Errors
     ///
-    /// Returns [`ForthError::DictionaryOverflow`] if the word doesn't fit.
+    /// See [`write_header`](Self::write_header).
     ///
     /// # Safety
     ///
@@ -258,7 +281,7 @@ impl Dictionary {
 
         while !current_lfa.is_null() {
             let nfa_ptr = *current_lfa.add(NFA) as *const u8;
-            let len = *current_lfa.add(LEN);
+            let len = *current_lfa.add(LEN_FLAGS) & LEN_MASK;
 
             // Reconstruct the name from raw dictionary data pointers
             if !is_hidden(current_lfa)
@@ -284,7 +307,7 @@ impl Dictionary {
     ///
     /// The dictionary must hold at least one word.
     pub(crate) unsafe fn finish_last(&mut self) {
-        *self.last_word.add(FLAGS) &= !F_PENDING;
+        *self.last_word.add(LEN_FLAGS) &= !F_PENDING;
     }
 
     /// Marks the most recently created word as immediate. Its other flags stay as they are.
@@ -293,7 +316,7 @@ impl Dictionary {
     ///
     /// The dictionary must hold at least one word.
     pub(crate) unsafe fn mark_last_immediate(&mut self) {
-        *self.last_word.add(FLAGS) |= F_IMMEDIATE;
+        *self.last_word.add(LEN_FLAGS) |= F_IMMEDIATE;
     }
 
     /// Returns whether `xt` is the code field of a finished word, hidden or not.
@@ -490,7 +513,7 @@ mod tests {
         }
     }
 
-    // `!` is deliberately not limited to data fields for now. This pins that down, using
+    // `!` is deliberately not limited to Parameter Fields for now. This pins that down, using
     // the hidden flag because it has a visible effect without corrupting the VM. If `!`
     // gets restricted later, this test should change with it.
     #[test]
@@ -500,8 +523,8 @@ mod tests {
             outer_interpreter(&mut regs, "CREATE X 7 ,").unwrap();
             let header = regs.dictionary.find_word("X").unwrap();
 
-            let addr = header.add(FLAGS) as Cell;
-            let flags = F_CREATED | F_HIDDEN;
+            let addr = header.add(LEN_FLAGS) as Cell;
+            let flags = 1 | F_CREATED | F_HIDDEN; // The length of the name stays the same
             outer_interpreter(&mut regs, &format!("{} {} !", flags, addr)).unwrap();
 
             outer_interpreter(&mut regs, &format!("{} @", addr)).unwrap();
@@ -671,7 +694,101 @@ mod tests {
 
             dictionary.mark_last_immediate();
             dictionary.mark_last_immediate();
-            assert_eq!(*header.add(FLAGS), F_IMMEDIATE);
+            assert_eq!(*header.add(LEN_FLAGS), 1 | F_IMMEDIATE);
+        }
+    }
+
+    #[test]
+    fn pfa_is_the_cell_after_the_code_field() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let header = dictionary.write_header("X", 0, 0).unwrap();
+            assert_eq!(pfa_of(cfa_of(header)), header.add(CFA + 1) as *const Cell);
+            assert_eq!(pfa_of(cfa_of(header)), dictionary.here as *const Cell);
+        }
+    }
+
+    #[test]
+    fn contains_covers_exactly_the_arena() {
+        unsafe {
+            let dictionary = Dictionary::new(2).unwrap();
+            let start = dictionary.start as Cell;
+            assert!(dictionary.contains(start));
+            assert!(dictionary.contains(start + CELL_SIZE));
+            assert!(dictionary.contains(start + 2 * CELL_SIZE - 1));
+            assert!(!dictionary.contains(start - 1));
+            assert!(!dictionary.contains(start + 2 * CELL_SIZE));
+        }
+    }
+
+    #[test]
+    fn contains_excludes_primitives_and_an_empty_arena() {
+        unsafe {
+            let dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            assert!(!dictionary.contains(io::sink as fn() -> io::Sink as usize));
+
+            let empty = Dictionary::new(0).unwrap();
+            assert!(!empty.contains(empty.start as Cell));
+        }
+    }
+
+    #[test]
+    fn flags_use_their_specified_bits() {
+        assert_eq!(F_IMMEDIATE, 1 << 8);
+        assert_eq!(F_HIDDEN, 1 << 9);
+        assert_eq!(F_CREATED, 1 << 10);
+        assert_eq!(F_PENDING, 1 << 11);
+    }
+
+    #[test]
+    fn write_header_combines_the_length_and_the_flags() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let flags = F_HIDDEN | F_CREATED;
+            let header = dictionary.write_header("ABC", 0, flags).unwrap();
+            assert_eq!(*header.add(LEN_FLAGS), 3 | flags);
+        }
+    }
+
+    #[test]
+    fn changing_flags_keeps_the_length() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let header = dictionary.write_header("ABC", 0, F_PENDING).unwrap();
+
+            dictionary.finish_last();
+            assert_eq!(*header.add(LEN_FLAGS), 3);
+
+            dictionary.mark_last_immediate();
+            assert_eq!(*header.add(LEN_FLAGS), 3 | F_IMMEDIATE);
+        }
+    }
+
+    #[test]
+    fn find_word_compares_the_length_without_the_flags() {
+        unsafe {
+            let longest = "X".repeat(LEN_MASK);
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let flags = F_IMMEDIATE | F_CREATED;
+            let short = dictionary.write_header("A", 0, flags).unwrap();
+            let long = dictionary.write_header(&longest, 0, flags).unwrap();
+
+            assert_eq!(dictionary.find_word("A"), Some(short));
+            assert_eq!(dictionary.find_word(&longest), Some(long));
+            assert_eq!(dictionary.find_word(&longest[1..]), None);
+        }
+    }
+
+    #[test]
+    fn write_header_rejects_a_name_that_does_not_fit_the_length_bits() {
+        unsafe {
+            let name = "X".repeat(LEN_MASK + 1);
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let mark = dictionary.mark();
+
+            let result = dictionary.write_header(&name, 0, 0);
+            assert!(matches!(result, Err(ForthError::NameTooLong(256))));
+            assert_eq!(dictionary.mark(), mark);
         }
     }
 }

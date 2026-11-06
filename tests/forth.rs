@@ -71,6 +71,14 @@ fn output_of(lines: &[&str]) -> String {
     }
 }
 
+// Asserts that the lines print exactly two Cells, and that those are equal.
+fn assert_same_cells(lines: &[&str]) {
+    let output = output_of(lines);
+    let cells: Vec<&str> = output.split_whitespace().collect();
+    assert_eq!(cells.len(), 2, "got: {}", output);
+    assert_eq!(cells[0], cells[1]);
+}
+
 // Asserts that evaluating `input` fails with an error matching the pattern.
 macro_rules! assert_error {
     ($regs:expr, $input:expr, $($pattern:tt)+) => {
@@ -194,7 +202,7 @@ fn stack_underflow_is_reported() {
 fn misused_words_are_rejected() {
     unsafe {
         let mut regs = test_vm(io::sink());
-        assert_error!(&mut regs, ";", ForthError::NotCompiling);
+        assert_error!(&mut regs, ";", ForthError::NotCompiling(";"));
         assert_error!(&mut regs, ":", ForthError::MissingName(":"));
         assert_error!(&mut regs, "CREATE", ForthError::MissingName("CREATE"));
         assert_error!(&mut regs, "LIT", ForthError::UnknownWord(name) if name == "LIT");
@@ -283,8 +291,16 @@ fn errors_have_stable_messages() {
             "DOES> needs a word made by CREATE.",
         ),
         (
-            ForthError::NotCompiling,
+            ForthError::NotCompiling(";"),
             "; can only be used while compiling.",
+        ),
+        (
+            ForthError::NotCompiling("[']"),
+            "['] can only be used while compiling.",
+        ),
+        (
+            ForthError::NameTooLong(300),
+            "Word name of 300 bytes is too long.",
         ),
         (
             ForthError::UnknownWord("NOPE".to_string()),
@@ -365,9 +381,9 @@ fn fetch_reads_the_last_written_cell() {
 
 #[test]
 fn fetch_reads_headers() {
-    // The Cell in front of the data field is the action cell, which starts at zero.
-    let line = format!("CREATE X 7 , X -{} + @ .", mem::size_of::<Cell>());
-    assert_eq!(output_of(&[&line]), "0 ");
+    // The Cell in front of the Parameter Field is the Code Field.
+    let line = format!("CREATE X 7 , X -{} + @ . ' X @ .", mem::size_of::<Cell>());
+    assert_same_cells(&[&line]);
 }
 
 #[test]
@@ -1052,5 +1068,231 @@ fn unterminated_comment_rolls_back_an_open_definition() {
             ForthError::UnterminatedComment
         );
         assert_error!(&mut regs, "A", ForthError::UnknownWord(name) if name == "A");
+    }
+}
+
+#[test]
+fn to_body_gives_the_address_that_a_created_word_pushes() {
+    assert_same_cells(&["CREATE X 7 , ' X >BODY . X ."]);
+    assert_same_cells(&["VARIABLE X ' X >BODY . X ."]);
+}
+
+#[test]
+fn to_body_reaches_the_data_of_a_does_child() {
+    let lines = [
+        ": CONSTANT CREATE , DOES> @ ;",
+        "42 CONSTANT A",
+        "' A >BODY @ .",
+        "7 ' A >BODY !",
+        "A .",
+    ];
+    assert_eq!(output_of(&lines), "42 7 ");
+}
+
+#[test]
+fn to_body_of_a_colon_word_is_the_first_cell_of_its_thread() {
+    assert_same_cells(&[": X DUP ;", "' X >BODY @ . ' DUP ."]);
+}
+
+#[test]
+fn to_body_of_a_primitive_is_the_cell_after_its_code_field() {
+    let line = format!("' DUP >BODY . ' DUP {} + .", mem::size_of::<Cell>());
+    assert_same_cells(&[&line]);
+}
+
+#[test]
+fn to_body_rejects_what_is_not_an_execution_token() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        assert_error!(&mut regs, "5 >BODY", ForthError::InvalidExecutionToken(5));
+        assert_error!(&mut regs, ">BODY", ForthError::DataStackUnderflow);
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn tick_gives_an_execution_token() {
+    assert_eq!(output_of(&["5 ' DUP EXECUTE . ."]), "5 5 ");
+    assert_eq!(output_of(&[": ADD3 3 + ;", "4 ' ADD3 EXECUTE ."]), "7 ");
+}
+
+#[test]
+fn tick_rejects_bad_names() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        assert_error!(&mut regs, "'", ForthError::MissingName("'"));
+        assert_error!(&mut regs, "' NOPE", ForthError::UnknownWord(name) if name == "NOPE");
+        assert_error!(&mut regs, "' LIT", ForthError::UnknownWord(name) if name == "LIT");
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn bracket_tick_compiles_an_execution_token() {
+    assert_eq!(output_of(&[": X ['] DUP EXECUTE ;", "3 X . ."]), "3 3 ");
+    assert_same_cells(&["CREATE Y", ": X ['] Y >BODY ;", "X . Y ."]);
+}
+
+#[test]
+fn bracket_tick_does_not_run_an_immediate_word() {
+    let lines = [": LOUD 99 . ; IMMEDIATE", ": X ['] LOUD ;"];
+    assert_eq!(output_of(&lines), "");
+
+    let lines = [": LOUD 99 . ; IMMEDIATE", ": X ['] LOUD ;", "X EXECUTE"];
+    assert_eq!(output_of(&lines), "99 ");
+}
+
+#[test]
+fn bracket_tick_only_works_in_a_definition() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        assert_error!(&mut regs, "['] DUP", ForthError::NotCompiling("[']"));
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn bracket_tick_rejects_bad_names_and_rolls_back_the_definition() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        assert_error!(&mut regs, ": X [']", ForthError::MissingName("[']"));
+        assert_error!(&mut regs, ": X ['] NOPE ;", ForthError::UnknownWord(name) if name == "NOPE");
+        assert_error!(&mut regs, ": X ['] LIT ;", ForthError::UnknownWord(name) if name == "LIT");
+        assert_error!(&mut regs, ": X ['] X ;", ForthError::UnknownWord(name) if name == "X");
+        assert_error!(&mut regs, "X", ForthError::UnknownWord(name) if name == "X");
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn names_can_be_255_bytes_long() {
+    let name = "X".repeat(255);
+    let definition = format!(": {} 5 ;", name);
+    let call = format!("{} .", name);
+    assert_eq!(output_of(&[&definition, &call]), "5 ");
+
+    let create = format!("CREATE {} 7 ,", name);
+    let fetch = format!("{} @ .", name);
+    assert_eq!(output_of(&[&create, &fetch]), "7 ");
+}
+
+#[test]
+fn longer_names_are_rejected() {
+    unsafe {
+        let name = "X".repeat(256);
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        for word in [":", "CREATE", "VARIABLE"] {
+            let line = format!("{} {}", word, name);
+            assert_error!(&mut regs, &line, ForthError::NameTooLong(256));
+            assert_error!(&mut regs, &name, ForthError::UnknownWord(_));
+        }
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn does_through_execute_from_the_text_interpreter_is_rejected() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        outer_interpreter(&mut regs, "CREATE X").unwrap();
+        assert_error!(
+            &mut regs,
+            "' DOES> EXECUTE",
+            ForthError::DoesOutsideDefinition
+        );
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn does_child_runs_through_execute() {
+    let lines = [
+        ": CONSTANT CREATE , DOES> @ ;",
+        "5 CONSTANT A",
+        "' A EXECUTE .",
+    ];
+    assert_eq!(output_of(&lines), "5 ");
+}
+
+#[test]
+fn does_can_change_the_action_again_from_the_action() {
+    let lines = [
+        ": D CREATE DOES> 1 . DOES> 2 . ;",
+        "D X",
+        "X DROP",
+        "X DROP",
+    ];
+    assert_eq!(output_of(&lines), "1 2 ");
+}
+
+#[test]
+fn failed_create_leaves_no_word() {
+    unsafe {
+        let smallest = smallest_cells();
+        let mut failures = 0;
+        for extra in 0..TEST_CELLS {
+            let mut regs = boot(io::sink(), smallest + extra).unwrap();
+            if outer_interpreter(&mut regs, "CREATE X").is_ok() {
+                outer_interpreter(&mut regs, "X").unwrap();
+                break;
+            }
+            failures += 1;
+            assert_error!(&mut regs, "X", ForthError::UnknownWord(_));
+        }
+        assert!(failures > 0);
+    }
+}
+
+#[test]
+fn failed_variable_leaves_no_word_and_gives_its_space_back() {
+    unsafe {
+        let smallest = smallest_cells();
+        let fits = (0..TEST_CELLS)
+            .find(|extra| {
+                let mut regs = boot(io::sink(), smallest + *extra).unwrap();
+                outer_interpreter(&mut regs, "VARIABLE X").is_ok()
+            })
+            .unwrap();
+
+        // One Cell less fits the header but not the value.
+        let mut regs = boot(io::sink(), smallest + fits - 1).unwrap();
+        assert_error!(&mut regs, "VARIABLE X", ForthError::DictionaryOverflow);
+        assert_error!(&mut regs, "X", ForthError::UnknownWord(_));
+        outer_interpreter(&mut regs, "CREATE X").unwrap();
+    }
+}
+
+#[test]
+fn does_works_on_a_word_in_the_last_cells_of_the_dictionary() {
+    unsafe {
+        let smallest = smallest_cells();
+        let source = ": Z DOES> ; CREATE X";
+        let fits = (0..TEST_CELLS)
+            .find(|extra| {
+                let mut regs = boot(io::sink(), smallest + *extra).unwrap();
+                outer_interpreter(&mut regs, source).is_ok()
+            })
+            .unwrap();
+
+        let output = Capture::default();
+        let mut regs = boot(output.clone(), smallest + fits).unwrap();
+        outer_interpreter(&mut regs, source).unwrap();
+        outer_interpreter(&mut regs, "Z X DEPTH .").unwrap();
+        assert_eq!(output.text(), "1 ");
+
+        // The data of X would start at HERE, which is past the end of the dictionary.
+        assert_error!(&mut regs, "X @", ForthError::InvalidAddress(_));
     }
 }

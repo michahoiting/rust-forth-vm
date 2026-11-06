@@ -55,6 +55,7 @@ The demo evaluates lines of Forth like these:
 
 CREATE STATIONARY-SOURCE 1337 ,
 STATIONARY-SOURCE @ .             \ 1337
+' STATIONARY-SOURCE >BODY @ .     \ 1337
 
 : ADD3 3 + ;
 : ADD6 ADD3 ADD3 ;
@@ -109,6 +110,9 @@ it.
 | `IMMEDIATE` | `( -- )`  | Marks the newest word, so that it runs during compilation |
 | `:NONAME` | `( -- xt )` | Starts a definition without a name, and pushes its execution token |
 | `EXECUTE` | `( i*x xt -- j*x )` | Runs the word that an execution token refers to |
+| `'`      | `( -- xt )`  | Parses a name and pushes the execution token of that word |
+| `[']`    | `( -- )`     | Inside a definition: parses a name, and compiles its execution token as a literal (immediate) |
+| `>BODY`  | `( xt -- addr )` | Replaces an execution token with the address of that word's Parameter Field |
 | `EXIT`   | `( -- )`     | Returns from the current definition               |
 | `(`      | `( -- )`     | Skips the input up to and including the next `)` (immediate) |
 | `\`      | `( -- )`     | Skips the rest of the line (immediate)            |
@@ -122,7 +126,8 @@ it.
 | `ROLL`   | `( ... n -- ... x )` | Moves the `n`th Cell below `n` to the top, counting from 0 |
 | `DEPTH`  | `( -- n )`   | Pushes the number of Cells on the stack           |
 
-Word names are case-sensitive. Numbers are decimal, and may be negative.
+Word names are case-sensitive, and can be up to 255 bytes long. Numbers are decimal,
+and may be negative.
 
 ## How it works
 
@@ -130,21 +135,28 @@ Every dictionary entry has the same header. The name bytes are stored in the
 dictionary directly in front of it.
 
 ```
-LFA     Link to the previous word
-NFA     Pointer to the name bytes
-LEN     Length of the name in bytes
-FLAGS   F_IMMEDIATE, F_HIDDEN, F_CREATED, F_PENDING
-CFA     Pointer to the machine code
-...     Body
+LFA        Link to the previous word
+NFA        Pointer to the name bytes
+LEN_FLAGS  Length of the name in bits 0-7, and the flags from bit 8 upwards
+CFA        Pointer to the machine code
+...        Parameter Field
 ```
 
-The body depends on how the word was defined:
+The flags are `F_IMMEDIATE` (bit 8), `F_HIDDEN` (bit 9), `F_CREATED` (bit 10) and
+`F_PENDING` (bit 11).
 
-- **Primitives** have no body.
+The Parameter Field always starts at `CFA + 1`, which `>BODY` gives from an execution
+token. What it holds depends on how the word was defined:
+
+- **Primitives** have no Parameter Field, so `>BODY` gives whatever comes next in the
+  dictionary.
 - **Colon words** hold a thread of CFAs, ending in `EXIT`. Literals are compiled
   as `LIT` followed by the value.
-- **`CREATE`d words** hold an action cell for `DOES>` at `CFA + 1`, and their
-  data starts at `CFA + 2`.
+- **`CREATE`d words** hold their data.
+
+`DOES>` changes the CFA of a `CREATE`d word to the address of the thread behind
+`DOES>`. That address is in the dictionary and machine code never is, so `enter_word`
+can tell them apart with a range check, and run the thread through `DODOES`.
 
 Primitives return to the `run` loop instead of calling `next` themselves, so
 threaded code does not grow the Rust call stack. A zero Cell ends a thread.
