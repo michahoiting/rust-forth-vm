@@ -88,7 +88,9 @@ The project owner makes releases:
 2. Update the links at the bottom of `CHANGELOG.md`: `[Unreleased]` compares the new tag
    with `HEAD`, and the new version compares the previous tag with the new one. The first
    release links to its tag instead.
-3. Set `version` in `Cargo.toml`, and run `cargo build` to update `Cargo.lock`.
+3. Set `version` in `Cargo.toml`, and run `cargo build` to update `Cargo.lock`. Also update
+   the current version in the [Versioning](README.md#versioning) section of the README,
+   and the sentence about the unreleased version in the `CHANGELOG.md` intro.
 4. After merging, tag the merge commit and push the tag:
 
    ```sh

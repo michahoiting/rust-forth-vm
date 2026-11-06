@@ -193,6 +193,8 @@ stacks, and rolls back any unfinished colon definition.
 
 ## Versioning
 
+The current version is `0.1.0`, which hasn't been released yet.
+
 After the first release, this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). It is
 in initial development, so the API can still change. See
