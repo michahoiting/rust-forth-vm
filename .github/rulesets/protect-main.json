@@ -30,7 +30,8 @@
           { "context": "lint" },
           { "context": "build-and-test" },
           { "context": "msrv" },
-          { "context": "miri" }
+          { "context": "miri" },
+          { "context": "miri-32" }
         ]
       }
     }

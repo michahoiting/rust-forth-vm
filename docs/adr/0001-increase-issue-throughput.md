@@ -41,7 +41,7 @@ Gain is an estimate unless it cites a measurement. Quality impact is the effect 
 | S2 | Not created | **Run the two Miri targets as parallel jobs** | Sequential Miri | CI from 3–5 min to about 2–2.5 min | S | None. Same tests. Adds a required `miri-32` check to the ruleset |
 | S3 | [#72](https://github.com/michahoiting/rust-forth-vm/issues/72) | **Skip Miri on `.md`-only PRs** through a job-level condition | Doc PRs like #57 and #60 waiting on Miri | Doc PRs finish in under 1 min | S | None today, because no code includes a Markdown file. Revisit with #34, which will test README examples |
 | S4 | [#73](https://github.com/michahoiting/rust-forth-vm/issues/73) | **Cancel superseded PR runs** with `concurrency: cancel-in-progress` | Runs on stale commits (#52 had 5) | Less queueing, small | XS | None. Never apply to `main` pushes |
-| S5 | Not created | **Avoid `CHANGELOG.md` conflicts** with `merge=union` in a new `.gitattributes` | Every PR edits the same `[Unreleased]` lines | Fewer rebases for parallel agents | XS | Low. The order of entries still needs checking |
+| S5 | [#84](https://github.com/michahoiting/rust-forth-vm/issues/84) | **Avoid `CHANGELOG.md` conflicts** with `merge=union` in a new `.gitattributes` | Every PR edits the same `[Unreleased]` lines | Fewer rebases for parallel agents | XS | Low. The order of entries still needs checking |
 | S6 | [#74](https://github.com/michahoiting/rust-forth-vm/issues/74) | **Agents don't wait on CI**: open the PR, then start the next issue in a new worktree | Agents idle during CI | Directly raises parallelism | XS, `AGENTS.md` | None |
 | S7 | [#75](https://github.com/michahoiting/rust-forth-vm/issues/75) | **Mark issues as parallel-safe** before assigning them, by the files they touch | Agents colliding in hotspots: `README.md`, `src/main.rs`, `src/interpreter.rs`, `src/vm.rs` | Fewer rebases and reruns | S, process | None |
 
@@ -50,18 +50,18 @@ Gain is an estimate unless it cites a measurement. Quality impact is the effect 
 | ID | Issue | Idea | Solves | Expected gain | Effort | Quality impact |
 |---|---|---|---|---|---|---|
 | M1 | [#76](https://github.com/michahoiting/rust-forth-vm/issues/76) | **Decide how to handle `strict`** | Rerun after every merge | Largest CI saving once PRs run in parallel | S–M | Depends on the option |
-| M2 | Not created | **Run Miri under cargo-nextest** | Miri runs tests one at a time | nextest reports up to 3–4x. Expect less on small runners, so measure it | M | Low. Loses race detection between tests, but the code has no threads. Adds a CI-only tool, not a crate dependency |
+| M2 | [#85](https://github.com/michahoiting/rust-forth-vm/issues/85) | **Run Miri under cargo-nextest** | Miri runs tests one at a time | nextest reports up to 3–4x. Expect less on small runners, so measure it | M | Low. Loses race detection between tests, but the code has no threads. Adds a CI-only tool, not a crate dependency |
 | M3 | [#34](https://github.com/michahoiting/rust-forth-vm/issues/34) | **Automate the demo comparison** | Manual demo diff against `main` on every change | Removes a manual step per PR | M | Positive |
 | M4 | [#77](https://github.com/michahoiting/rust-forth-vm/issues/77) | **Risk-based review**: low-risk PRs merge on Claude review plus green CI, the owner reviews the rest | Review is likely the largest wait | Potentially the largest gain overall | S to set up | Medium. An owner policy change, so limit it to low-risk paths |
 | M5 | [#78](https://github.com/michahoiting/rust-forth-vm/issues/78) | **Better first-pass agent PRs**: run `/code-review` locally before opening the PR, and write sharper acceptance criteria | Review rounds (#52 had 22 reviews) | Fewer CI reruns and review cycles | S | Positive |
-| M6 | Not created | **Track metrics**: PR lead time, time to first review, CI reruns per PR | Decisions based on guesses | Shows whether the rest worked | S | None |
+| M6 | [#86](https://github.com/michahoiting/rust-forth-vm/issues/86) | **Track metrics**: PR lead time, time to first review, CI reruns per PR | Decisions based on guesses | Shows whether the rest worked | S | None |
 
 ### Long term (months, or when volume requires it)
 
 | ID | Issue | Idea | Solves | Expected gain | Effort | Quality impact |
 |---|---|---|---|---|---|---|
 | L1 | [#79](https://github.com/michahoiting/rust-forth-vm/issues/79) | **Move to a GitHub organization and use a merge queue** | `strict` reruns, with the same guarantee | Keeps "tested against latest `main`" with no manual rebasing | M. Needs `merge_group` in CI and a ruleset change | Positive or neutral. GitHub's docs list only organization-owned repositories, and this one is personal |
-| L2 | Not created | **Reduce conflict hotspots**: split demo `SECTIONS` out of `src/main.rs`, use changelog fragments, generate the README word table | Parallel work touching the same lines | Lets parallel agents scale | M–L | None |
+| L2 | [#87](https://github.com/michahoiting/rust-forth-vm/issues/87) | **Reduce conflict hotspots**: split demo `SECTIONS` out of `src/main.rs`, use changelog fragments, generate the README word table | Parallel work touching the same lines | Lets parallel agents scale | M–L | None |
 | L3 | [#80](https://github.com/michahoiting/rust-forth-vm/issues/80) | **Two-tier Miri**: 64-bit on PRs, 32-bit plus many seeds on `main` and nightly | Miri cost as tests grow | Only worthwhile if Miri exceeds about 10 min | M | **Negative**. 32-bit bugs could reach `main`, against the stated goal. Held in reserve |
 | L4 | [#81](https://github.com/michahoiting/rust-forth-vm/issues/81) | **Issue-triggered agents** through the installed `claude.yml`, which was skipped in every recent run sampled | Manual agent start | More issues in progress at once | M | None, if PRs still pass the same gates |
 | L5 | [#82](https://github.com/michahoiting/rust-forth-vm/issues/82) | **Incremental mutation testing** with `--in-diff` on PRs, non-blocking | Weekly feedback | Faster signal, but `make mutants` skips all `unsafe fn` primitives | M | Positive, limited |

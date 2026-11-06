@@ -21,7 +21,7 @@ MSRV := $(shell sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
 
 .DEFAULT_GOAL := ci
 
-.PHONY: ci ci-all fmt clippy build test test-release doc doc-serve miri miri-32 check-miri msrv msrv-version mutants demo setup-dev hooks protect
+.PHONY: ci ci-all fmt clippy build test test-release doc doc-serve miri miri-32 check-miri msrv msrv-version code-changed mutants demo setup-dev hooks protect
 
 ci: fmt clippy build test test-release doc
 
@@ -75,6 +75,12 @@ msrv:
 
 msrv-version:
 	@echo $(MSRV)
+
+# Prints false only if BASE..HEAD changes nothing but Markdown. Renames count as code, so a
+# file renamed to Markdown isn't missed.
+code-changed:
+	@files=$$(git diff --no-renames --name-only $(BASE) HEAD) && \
+	if [ -z "$$files" ] || printf '%s\n' "$$files" | grep -qv '\.md$$'; then echo true; else echo false; fi
 
 mutants:
 	@cargo mutants --version >/dev/null 2>&1 || { \

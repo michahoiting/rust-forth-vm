@@ -31,8 +31,9 @@ it. CI still runs the same checks.
 ## Making a change
 
 1. Find or open a [GitHub issue](https://github.com/michahoiting/rust-forth-vm/issues)
-   that states the problem and the acceptance criteria. For anything beyond a small fix,
-   agree on the approach there first.
+   that states the problem, the acceptance criteria, and the files it expects to touch. For
+   anything beyond a small fix, agree on the approach there first. The `solo` label marks
+   changes throughout the project, which run with no other PR open.
 2. Work on a branch. If you don't have write access, work on a branch in your fork.
 3. Follow the conventions in [AGENTS.md](AGENTS.md). New Forth words have their own
    checklist there.
@@ -44,11 +45,19 @@ it. CI still runs the same checks.
 5. Run `make ci`.
 6. Open a PR that closes the issue. The project owner reviews and merges.
 
+If `main` moves on, use **Update branch** on the PR to bring it up to date. After reviewing,
+the project owner can arm auto-merge, which merges once the checks pass. Only the owner arms
+it, because the ruleset requires no approvals, so nothing else stops an unreviewed merge.
+
+`CHANGELOG.md` uses git's `union` merge driver, so entries added on two branches don't
+conflict in a local merge or rebase. Check the order of the entries afterwards.
+
 ## Why `main` refuses pushes
 
 A GitHub ruleset protects `main`, for everyone including the project owner. Changes land
-through a PR once the `lint`, `build-and-test`, `msrv` and `miri` checks pass and the branch
-is up to date with `main`. Force-pushing to `main` and deleting it are blocked.
+through a PR once the `lint`, `build-and-test`, `msrv`, `miri` and `miri-32` checks pass and
+the branch is up to date with `main`. PRs that only change Markdown skip the two Miri jobs,
+which then count as passed. Force-pushing to `main` and deleting it are blocked.
 
 The ruleset is kept in [`.github/rulesets/protect-main.json`](.github/rulesets/protect-main.json).
 After changing it, a repository admin applies it with `make protect`, which needs the `gh`
