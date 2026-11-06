@@ -2,6 +2,7 @@
 
 mod compiler;
 mod core;
+mod parsing;
 mod runtime;
 
 use crate::dictionary::{F_HIDDEN, F_IMMEDIATE};
@@ -52,6 +53,10 @@ pub(crate) unsafe fn install(regs: &mut Registers) -> Result<(), ForthError> {
         .add_primitive_word(";", code_cell(compiler::semicolon), F_IMMEDIATE)?;
     regs.dictionary
         .add_primitive_word("IMMEDIATE", code_cell(compiler::immediate), 0)?;
+    regs.dictionary
+        .add_primitive_word("(", code_cell(parsing::paren_comment), F_IMMEDIATE)?;
+    regs.dictionary
+        .add_primitive_word("\\", code_cell(parsing::line_comment), F_IMMEDIATE)?;
     regs.dictionary
         .add_primitive_word("EXECUTE", code_cell(runtime::execute), 0)?;
     let exit_cfa = regs
