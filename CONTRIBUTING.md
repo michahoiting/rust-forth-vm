@@ -45,6 +45,9 @@ it. CI still runs the same checks.
 5. Run `make ci`.
 6. Open a PR that closes the issue. The project owner reviews and merges.
 
+If you use the Claude CLI, see [Working with Claude Code](README.md#working-with-claude-code)
+for how these steps look in practice.
+
 If `main` moves on, use **Update branch** on the PR to bring it up to date. After reviewing,
 the project owner can arm auto-merge, which merges once the checks pass. Only the owner arms
 it, because the ruleset requires no approvals, so nothing else stops an unreviewed merge.
