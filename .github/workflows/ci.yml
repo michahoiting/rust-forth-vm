@@ -20,14 +20,8 @@ jobs:
 
       - name: Install Rust
         run: |
-          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup toolchain install stable --profile minimal
           rustup default stable
-
-      - name: Check formatting
-        run: make fmt
-
-      - name: Lint
-        run: make clippy
 
       - name: Build
         run: make build

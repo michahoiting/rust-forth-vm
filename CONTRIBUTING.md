@@ -47,8 +47,8 @@ it. CI still runs the same checks.
 ## Why `main` refuses pushes
 
 A GitHub ruleset protects `main`, for everyone including the project owner. Changes land
-through a PR once the `build-and-test`, `msrv` and `miri` checks pass and the branch is up
-to date with `main`. Force-pushing to `main` and deleting it are blocked.
+through a PR once the `lint`, `build-and-test`, `msrv` and `miri` checks pass and the branch
+is up to date with `main`. Force-pushing to `main` and deleting it are blocked.
 
 The ruleset is kept in [`.github/rulesets/protect-main.json`](.github/rulesets/protect-main.json).
 After changing it, a repository admin applies it with `make protect`, which needs the `gh`
