@@ -29,13 +29,14 @@ make doc-serve # Serves the docs on localhost, including private items. Needs py
 
 CI uses the latest stable toolchain on purpose, so a new lint can fail it with no code change. Raise `rust-version` when code needs a newer feature, and check it with a PR's CI run. CI runs on PRs and on pushes to `main`, not on other branches. PRs that only change Markdown skip Miri.
 
-These four aren't part of CI:
+These five aren't part of CI:
 
 ```sh
 make setup-dev # Installs the developer tools and the git hooks. Run it once after cloning
 make hooks     # Installs only the git hooks from `.githooks/`
 make protect   # Applies the ruleset for `main`. Needs gh and admin access
 make metrics   # Reports PR lead time, reviews, CI reruns and closed issues. Needs gh and python3
+make demo-expected # Updates `tests/demo_output.txt`, the expected demo output
 ```
 
 `main` is protected by the ruleset in `.github/rulesets/protect-main.json`. Renaming a CI job means updating its required check there too. Never bypass the hooks with `--no-verify` unless asked, and don't run `make protect` unless asked.
@@ -84,7 +85,7 @@ Every new word or feature includes:
 - A doc comment on each primitive.
 - Unit tests next to the code, comparing exact state.
 - API tests in `tests/forth.rs`, using only the public API.
-- Normal use cases in the demo, as a commented block in `SECTIONS` in `src/main.rs`.
+- Normal use cases in the demo, as a commented block in `SECTIONS` in `src/main.rs`, and the updated `tests/demo_output.txt`.
 - README updates: the word table, and the limitations if they change.
 - A `CHANGELOG.md` entry.
 
@@ -94,7 +95,7 @@ Every new word or feature includes:
 2. Plan first for anything beyond a small fix, and agree on it before writing code.
 3. Create or use a GitHub issue, stating the problem, the acceptance criteria, and the files it expects to touch. Before picking an issue, check `gh pr list` and the `solo` label. A `solo` issue changes code throughout the project, so start it only with no other PR open, and start nothing else until it merges.
 4. Work on a branch, never directly on `main`.
-5. Update `CHANGELOG.md`, run `make ci`, and compare the `printf '0\nq\n' | make demo` output with `main`. Only the intended changes may appear.
+5. Update `CHANGELOG.md`, and run `make ci`. A test compares the demo with `tests/demo_output.txt`. If a demo change is intended, run `make demo-expected`, and check that the diff of that file shows only the intended changes. After a merge conflict in that file, run it again.
 6. For behaviour changes, temporarily break the code to confirm the tests catch it. `make mutants` skips every `unsafe fn`, which includes all primitives, so it doesn't replace this step. Use `--no-fail-fast` and check the exit code, because a crash in a test binary prints no `FAILED` lines.
 7. Open a PR that closes the issue. The project owner reviews and merges, so never merge or arm auto-merge. Don't wait for CI: start the next issue in a new worktree. Check back with `gh pr checks <number>` and `gh pr view <number> --comments`, and fix failures or review comments on the same branch.
 8. After the merge, sync `main`, and delete the branch once asked. The PR head can differ from the last local commit, because of review suggestions.

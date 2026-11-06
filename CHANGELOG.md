@@ -49,6 +49,8 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
   Miri, and new pushes to a PR cancel its older runs.
 - `make metrics`, which reports PR lead time, time to first review, CI reruns, and issues
   completed per week.
+- Tests of the demo's full output and the README's Forth example, and `make demo-expected`,
+  which updates the expected output.
 - A guide in the README to working on this project with the Claude CLI, and `.gitignore`
   rules for Claude's worktrees and local settings.
 

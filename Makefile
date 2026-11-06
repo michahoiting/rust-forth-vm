@@ -11,6 +11,7 @@
 # make hooks      Installs only the git hooks in this clone.
 # make protect    Applies the GitHub ruleset for main, which needs gh and admin access.
 # make metrics    Reports PR lead time and issue throughput, which needs gh and python3.
+# make demo-expected  Updates the expected demo output that the tests compare with.
 
 # Stops rustup from installing a missing toolchain when a target asks for it.
 export RUSTUP_AUTO_INSTALL := 0
@@ -22,7 +23,7 @@ MSRV := $(shell sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
 
 .DEFAULT_GOAL := ci
 
-.PHONY: ci ci-all fmt clippy build test test-release doc doc-serve miri miri-32 check-miri msrv msrv-version code-changed mutants demo setup-dev hooks protect metrics
+.PHONY: ci ci-all fmt clippy build test test-release doc doc-serve miri miri-32 check-miri msrv msrv-version code-changed mutants demo demo-expected setup-dev hooks protect metrics
 
 ci: fmt clippy build test test-release doc
 
@@ -100,6 +101,10 @@ mutants:
 
 demo:
 	cargo run --locked -- --demo
+
+# Answers the menu with 0 for all sections, then Q to quit.
+demo-expected:
+	printf '0\nq\n' | cargo run --quiet --locked -- --demo > tests/demo_output.txt
 
 # Everything the other targets need, except what depends on the OS. Those tools are only
 # checked for: git and rustup are required, while python3 and gh are for a few targets.

@@ -64,7 +64,7 @@ Gain is an estimate unless it cites a measurement. Quality impact is the effect 
 |---|---|---|---|---|---|---|
 | S1 | [#71](https://github.com/michahoiting/rust-forth-vm/issues/71) | **Enable auto-merge and the update-branch button** | Coming back to merge by hand | Removes idle time after approval, no extra CI | XS | None. All checks stay required |
 | S2 | [#95](https://github.com/michahoiting/rust-forth-vm/issues/95) | **Run the two Miri targets as parallel jobs** | Sequential Miri | CI from 3–5 min to about 2–2.5 min | S | None. Same tests. Adds a required `miri-32` check to the ruleset |
-| S3 | [#72](https://github.com/michahoiting/rust-forth-vm/issues/72) | **Skip Miri on `.md`-only PRs** through a job-level condition | Doc PRs like #57 and #60 waiting on Miri | Doc PRs finish in under 1 min | S | None today, because no code includes a Markdown file. Revisit with #34, which will test README examples |
+| S3 | [#72](https://github.com/michahoiting/rust-forth-vm/issues/72) | **Skip Miri on `.md`-only PRs** through a job-level condition | Doc PRs like #57 and #60 waiting on Miri | Doc PRs finish in under 1 min | S | None. The README test from #34 runs in `tests/demo.rs`, which Miri doesn't run, and `build-and-test` always runs, so Markdown-only PRs still run it |
 | S4 | [#73](https://github.com/michahoiting/rust-forth-vm/issues/73) | **Cancel superseded PR runs** with `concurrency: cancel-in-progress` | Runs on stale commits (#52 had 5) | Less queueing, small | XS | None. Never apply to `main` pushes |
 | S5 | [#84](https://github.com/michahoiting/rust-forth-vm/issues/84) | **Avoid `CHANGELOG.md` conflicts** with `merge=union` in a new `.gitattributes` | Every PR edits the same `[Unreleased]` lines | Fewer rebases for parallel agents | XS | Low. The order of entries still needs checking |
 | S6 | [#74](https://github.com/michahoiting/rust-forth-vm/issues/74) | **Agents don't wait on CI**: open the PR, then start the next issue in a new worktree | Agents idle during CI | Directly raises parallelism | XS, `AGENTS.md` | None |
@@ -129,7 +129,7 @@ C stays a separate decision in [#79](https://github.com/michahoiting/rust-forth-
 
 | Issue | Type | Description | Relation |
 |---|---|---|---|
-| #34 | enhancement | Test the demo output and the README examples | This is M3. It also changes S3, since README examples then affect tests |
+| #34 | enhancement | Test the demo output and the README examples | This is M3. S3 stays valid, because Miri doesn't run the README test |
 | #35 | enhancement | Add common missing words | Benefits. Touches every hotspot, so split it up for S7 |
 | #37 | documentation | Bring the README up to date | Benefits from S3 |
 | #36 | documentation | Update text that still says line where it means a whole string | Benefits from S3 if docs-only. Rustdoc edits still run Miri |
@@ -160,7 +160,7 @@ Each item's issue has its own acceptance criteria. For the roadmap as a whole:
 ## Consequences
 
 - `main` keeps the same checks. The only item that would weaken them, L3, is held in reserve.
-- Doc PRs no longer run Miri, so that rule must change when Markdown starts affecting tests.
+- Doc PRs no longer run Miri, so that rule must change if a test that Miri runs starts reading Markdown.
 - Agents work on more issues at once, so review load on the owner goes up until M4 or M5 reduce it.
 - The recommendation rests on one day of data, so M6 could change the priorities.
 
