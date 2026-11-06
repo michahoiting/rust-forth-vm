@@ -122,7 +122,17 @@ it.
 | `.`      | `( n -- )`   | Prints a Cell as a signed number                  |
 | `@`      | `( addr -- x )` | Fetches the Cell at a dictionary address below `HERE` |
 | `!`      | `( x addr -- )` | Stores a Cell at a dictionary address below `HERE` |
-| `,`      | `( x -- )`   | Stores a Cell at `HERE` and advances it           |
+| `,`      | `( x -- )`   | Aligns `HERE`, stores a Cell there and advances it |
+| `C@`     | `( c-addr -- char )` | Fetches the byte at a dictionary address below `HERE` |
+| `C!`     | `( char c-addr -- )` | Stores the low byte of a Cell at a dictionary address below `HERE` |
+| `C,`     | `( char -- )` | Stores the low byte of a Cell at `HERE` and advances it, which can leave `HERE` unaligned |
+| `HERE`   | `( -- addr )` | Pushes the address of the next free byte in the dictionary |
+| `ALLOT`  | `( n -- )`   | Reserves and clears `n` bytes at `HERE`. A negative `n` gives back data of the newest word, if `CREATE` made it |
+| `ALIGN`  | `( -- )`     | Moves `HERE` to the next cell-aligned address     |
+| `ALIGNED` | `( addr -- a-addr )` | Rounds an address up to a cell-aligned address |
+| `CHAR+`  | `( c-addr1 -- c-addr2 )` | Adds the size of a character to an address |
+| `CHARS`  | `( n1 -- n2 )` | Gives the size of `n1` characters in bytes. A character is one byte |
+| `CELLS`  | `( n1 -- n2 )` | Gives the size of `n1` Cells in bytes             |
 | `CREATE` | `( -- )`     | Parses a name and creates a word that pushes its data address |
 | `VARIABLE` | `( -- )`   | Parses a name and creates a word holding one Cell, initially 0 |
 | `CONSTANT` | `( x -- )` | Parses a name and creates a word that pushes `x`  |
@@ -207,11 +217,13 @@ stacks, and rolls back any unfinished colon definition.
 - Immediate words must not use `,` while a definition is being compiled, because it
   writes into the thread and can crash the process (see issue #15). Using `CREATE`,
   `VARIABLE`, `CONSTANT`, `:` or `:NONAME` there leaves the open definition unfinished,
-  so it can't be found or executed.
+  so it can't be found or executed. `C,` and `ALLOT` give an error there instead.
 - The dictionary size is chosen when the VM boots, and can't grow afterwards.
 - The interactive prompt evaluates each line by itself, so a `(` comment must end on
   the line where it starts.
-- `!` can overwrite word headers and compiled code, which can crash the process.
+- `!` and `C!` can overwrite word headers and compiled code, which can crash the process.
+- A negative `ALLOT` can only give back data of the newest word, and only if `CREATE` made
+  it.
 
 ## Working with Claude Code
 

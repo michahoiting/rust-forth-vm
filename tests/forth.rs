@@ -407,6 +407,14 @@ fn errors_have_stable_messages() {
             "['] can only be used while compiling.",
         ),
         (
+            ForthError::DefinitionOpen("C,"),
+            "C, can't be used while a definition is open.",
+        ),
+        (
+            ForthError::AllotBelowData(-3),
+            "ALLOT of -3 goes below the data of the newest word.",
+        ),
+        (
             ForthError::NameTooLong(300),
             "Word name of 300 bytes is too long.",
         ),
@@ -1316,6 +1324,252 @@ fn to_body_rejects_what_is_not_an_execution_token() {
         outer_interpreter(&mut regs, "1 2 + .").unwrap();
         assert_eq!(output.text(), "3 ");
     }
+}
+
+#[test]
+fn c_store_and_c_fetch_round_trip_one_byte() {
+    assert_eq!(
+        output_of(&[
+            "CREATE B 0 , 0 ,",
+            "171 B CHAR+ C!",
+            "B C@ . B CHAR+ C@ . B CHAR+ CHAR+ C@ .",
+        ]),
+        "0 171 0 "
+    );
+}
+
+#[test]
+fn c_store_keeps_the_low_byte() {
+    assert_eq!(output_of(&["CREATE B 0 ,", "511 B C! B C@ ."]), "255 ");
+}
+
+#[test]
+fn c_fetch_and_c_store_reject_addresses_outside_the_written_dictionary() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        assert_error!(&mut regs, "1 C@", ForthError::InvalidAddress(1));
+        assert_error!(&mut regs, "HERE C@", ForthError::InvalidAddress(_));
+        assert_error!(&mut regs, "1 1 C!", ForthError::InvalidAddress(1));
+        assert_error!(&mut regs, "1 HERE C!", ForthError::InvalidAddress(_));
+        assert_error!(&mut regs, "C@", ForthError::DataStackUnderflow);
+        assert_error!(&mut regs, "1 C!", ForthError::DataStackUnderflow);
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn c_comma_stores_bytes_in_a_row() {
+    assert_eq!(
+        output_of(&[
+            "CREATE B 1 C, 2 C, 511 C,",
+            "B C@ . B CHAR+ C@ . B CHAR+ CHAR+ C@ ."
+        ]),
+        "1 2 255 "
+    );
+}
+
+#[test]
+fn here_is_where_the_next_cell_goes() {
+    assert_eq!(output_of(&["HERE 42 , @ ."]), "42 ");
+}
+
+#[test]
+fn here_moves_by_bytes() {
+    assert_same_cells(&["HERE CHAR+ . 1 C, HERE ."]);
+    assert_same_cells(&["HERE 3 + . 3 ALLOT HERE ."]);
+    assert_same_cells(&["HERE . 0 ALLOT HERE ."]);
+}
+
+#[test]
+fn allot_reserves_cleared_space_after_a_word() {
+    assert_eq!(
+        output_of(&[
+            "CREATE B 3 CHARS ALLOT",
+            "7 B CHAR+ C!",
+            "B C@ . B CHAR+ C@ ."
+        ]),
+        "0 7 "
+    );
+}
+
+#[test]
+fn a_negative_allot_gives_back_the_newest_created_data() {
+    assert_same_cells(&["CREATE B B . 5 ALLOT -5 ALLOT HERE ."]);
+}
+
+#[test]
+fn a_negative_allot_stops_at_the_data_of_the_newest_word() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        assert_error!(&mut regs, "-1 ALLOT", ForthError::AllotBelowData(-1));
+        assert_error!(
+            &mut regs,
+            "CREATE B 2 ALLOT -3 ALLOT",
+            ForthError::AllotBelowData(-3)
+        );
+        assert_error!(
+            &mut regs,
+            ": X 5 ; -1 ALLOT",
+            ForthError::AllotBelowData(-1)
+        );
+        assert_error!(
+            &mut regs,
+            "7 CONSTANT K -1 ALLOT",
+            ForthError::AllotBelowData(-1)
+        );
+        outer_interpreter(&mut regs, "X . K .").unwrap();
+        assert_eq!(output.text(), "5 7 ");
+    }
+}
+
+#[test]
+fn allot_and_c_comma_report_a_full_dictionary() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = boot(output.clone(), smallest_cells()).unwrap();
+        assert_error!(&mut regs, "1 C,", ForthError::DictionaryOverflow);
+        assert_error!(&mut regs, "1 ALLOT", ForthError::DictionaryOverflow);
+        assert_error!(
+            &mut regs,
+            &format!("{} ALLOT", isize::MAX),
+            ForthError::DictionaryOverflow
+        );
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn cells_gives_a_size_in_bytes() {
+    let cell_size = mem::size_of::<Cell>();
+    assert_eq!(output_of(&["0 CELLS ."]), "0 ");
+    assert_eq!(output_of(&["3 CELLS ."]), format!("{} ", 3 * cell_size));
+    assert_eq!(output_of(&["-1 CELLS ."]), format!("-{} ", cell_size));
+}
+
+#[test]
+fn cells_indexes_a_table() {
+    assert_eq!(
+        output_of(&[
+            "CREATE T 3 CELLS ALLOT",
+            "5 T 2 CELLS + !",
+            "T 2 CELLS + @ . T 1 CELLS + @ .",
+        ]),
+        "5 0 "
+    );
+    assert_same_cells(&["CREATE T 3 CELLS ALLOT", "T 3 CELLS + . HERE ."]);
+}
+
+#[test]
+fn cells_reports_underflow() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        assert_error!(&mut regs, "CELLS", ForthError::DataStackUnderflow);
+    }
+}
+
+#[test]
+fn aligned_finds_the_next_cell_boundary() {
+    let cell_size = mem::size_of::<Cell>();
+    assert_eq!(output_of(&["0 ALIGNED ."]), "0 ");
+    assert_eq!(output_of(&["1 ALIGNED ."]), format!("{} ", cell_size));
+    assert_eq!(
+        output_of(&[&format!("{} ALIGNED .", cell_size)]),
+        format!("{} ", cell_size)
+    );
+}
+
+#[test]
+fn align_moves_here_to_a_cell_boundary() {
+    assert_same_cells(&["1 C, HERE ALIGNED . ALIGN HERE ."]);
+    assert_same_cells(&["ALIGN HERE . ALIGN HERE ."]);
+}
+
+#[test]
+fn comma_aligns_here_first() {
+    assert_eq!(output_of(&["1 C, HERE ALIGNED 99 , @ ."]), "99 ");
+}
+
+#[test]
+fn new_words_work_after_an_unaligned_here() {
+    assert_eq!(output_of(&["1 C,", ": FIVE 5 ;", "FIVE ."]), "5 ");
+    assert_eq!(output_of(&["1 C,", ":NONAME 6 ; EXECUTE ."]), "6 ");
+    assert_eq!(output_of(&["1 C,", "7 CONSTANT K", "K ."]), "7 ");
+    assert_eq!(output_of(&["1 C,", "VARIABLE V", "3 V ! V @ ."]), "3 ");
+    assert_eq!(output_of(&["1 C,", "CREATE C 8 , C @ ."]), "8 ");
+    assert_eq!(
+        output_of(&[
+            "3 ALLOT",
+            ": ADDER CREATE , DOES> @ + ;",
+            "2 ADDER ADD2",
+            "3 ADD2 ."
+        ]),
+        "5 "
+    );
+}
+
+#[test]
+fn a_failed_definition_restores_an_unaligned_here() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        outer_interpreter(&mut regs, "1 C, HERE .").unwrap();
+        assert_error!(&mut regs, ": X NOPE", ForthError::UnknownWord(_));
+        outer_interpreter(&mut regs, "HERE .").unwrap();
+        let text = output.text();
+        let cells: Vec<&str> = text.split_whitespace().collect();
+        assert_eq!(cells[0], cells[1]);
+    }
+}
+
+#[test]
+fn fetch_and_store_reject_a_cell_that_ends_past_here() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        assert_error!(
+            &mut regs,
+            "ALIGN HERE 1 C, @",
+            ForthError::InvalidAddress(_)
+        );
+        assert_error!(
+            &mut regs,
+            "ALIGN HERE 1 C, 2 SWAP !",
+            ForthError::InvalidAddress(_)
+        );
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn c_comma_and_allot_are_refused_in_an_open_definition() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        outer_interpreter(&mut regs, ": BYTE 1 C, ; IMMEDIATE").unwrap();
+        outer_interpreter(&mut regs, ": ROOM 3 ALLOT ; IMMEDIATE").unwrap();
+
+        assert_error!(&mut regs, ": X BYTE ;", ForthError::DefinitionOpen("C,"));
+        assert_error!(&mut regs, ": X ROOM ;", ForthError::DefinitionOpen("ALLOT"));
+        assert_error!(&mut regs, "X", ForthError::UnknownWord(name) if name == "X");
+        assert!(!regs.is_compiling());
+
+        // Outside a definition, the same words run.
+        outer_interpreter(&mut regs, "CREATE B BYTE ROOM B C@ .").unwrap();
+        assert_eq!(output.text(), "1 ");
+    }
+}
+
+#[test]
+fn c_comma_and_allot_can_be_compiled_into_a_word() {
+    assert_eq!(
+        output_of(&[": BYTES 5 C, 2 ALLOT ;", "CREATE B BYTES", "B C@ ."]),
+        "5 "
+    );
 }
 
 #[test]

@@ -51,12 +51,19 @@ pub enum ForthError {
     DoesWithoutCreate,
     /// A word that needs a definition in progress, named here, ran without one.
     NotCompiling(&'static str),
+    /// A word, named here, can't run while a definition is open, because it would leave a
+    /// thread with something other than whole Cells in it.
+    DefinitionOpen(&'static str),
+    /// `ALLOT` was asked to give back this many bytes, held as a negative number, which is
+    /// more than the data of the newest word, or that word wasn't made by `CREATE`.
+    AllotBelowData(isize),
     /// A word name of this many bytes is too long for a header.
     NameTooLong(usize),
     /// A token, held here, is neither a known word nor a number.
     UnknownWord(String),
-    /// `@` or `!` was given an address, held here, that it may not access: one outside
-    /// the written part of the dictionary, or one that is not cell-aligned.
+    /// A word that reads or writes memory was given an address, held here, that it may not
+    /// access: one outside the written part of the dictionary, or for `@` and `!`, one that
+    /// is not cell-aligned.
     InvalidAddress(Cell),
     /// `EXECUTE` or `>BODY` was given a Cell, held here, that isn't the code field of a
     /// finished word.
@@ -93,6 +100,16 @@ impl fmt::Display for ForthError {
             ForthError::DoesWithoutCreate => write!(f, "DOES> needs a word made by CREATE."),
             ForthError::NotCompiling(word) => {
                 write!(f, "{} can only be used while compiling.", word)
+            }
+            ForthError::DefinitionOpen(word) => {
+                write!(f, "{} can't be used while a definition is open.", word)
+            }
+            ForthError::AllotBelowData(bytes) => {
+                write!(
+                    f,
+                    "ALLOT of {} goes below the data of the newest word.",
+                    bytes
+                )
             }
             ForthError::NameTooLong(len) => write!(f, "Word name of {} bytes is too long.", len),
             ForthError::UnknownWord(token) => {

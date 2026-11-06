@@ -3,9 +3,10 @@
 //! Words that work on the data stack and on memory.
 
 use std::io::Write;
+use std::mem;
 
 use crate::cell::Cell;
-use crate::dictionary::pfa_of;
+use crate::dictionary::{self, pfa_of};
 use crate::error::ForthError;
 use crate::vm::Registers;
 
@@ -29,6 +30,62 @@ pub(super) unsafe fn store(regs: &mut Registers) {
     if let (Some(addr), Some(value)) = (regs.data_stack.pop(), regs.data_stack.pop()) {
         let result = regs.dictionary.store(addr, value);
         regs.check(result);
+    }
+}
+
+/// `C@ ( c-addr -- char )`: Pops a dictionary address from the stack and replaces it with the
+/// byte stored there. The address needn't be aligned.
+pub(super) unsafe fn c_fetch(regs: &mut Registers) {
+    if let Some(addr) = regs.pop() {
+        let result = regs.dictionary.fetch_byte(addr);
+        if let Some(value) = regs.check(result) {
+            regs.data_stack.push(value as Cell);
+        }
+    }
+}
+
+/// `C! ( char c-addr -- )`: Pops a dictionary address and a Cell from the stack, and stores
+/// the low byte of the Cell there. The address needn't be aligned.
+pub(super) unsafe fn c_store(regs: &mut Registers) {
+    if !regs.require(2) {
+        return;
+    }
+    if let (Some(addr), Some(value)) = (regs.data_stack.pop(), regs.data_stack.pop()) {
+        let result = regs.dictionary.store_byte(addr, value as u8);
+        regs.check(result);
+    }
+}
+
+/// `HERE ( -- addr )`: Pushes the address of the next free byte in the dictionary.
+pub(super) unsafe fn here(regs: &mut Registers) {
+    regs.data_stack.push(regs.dictionary.here());
+}
+
+/// `ALIGNED ( addr -- a-addr )`: Rounds an address up to the next cell-aligned address.
+pub(super) unsafe fn aligned(regs: &mut Registers) {
+    if let Some(addr) = regs.pop() {
+        regs.data_stack.push(dictionary::aligned(addr));
+    }
+}
+
+/// `CHAR+ ( c-addr1 -- c-addr2 )`: Adds the size of a character to an address, wrapping on
+/// overflow.
+pub(super) unsafe fn char_plus(regs: &mut Registers) {
+    if let Some(addr) = regs.pop() {
+        regs.data_stack.push(addr.wrapping_add(1));
+    }
+}
+
+/// `CHARS ( n1 -- n2 )`: Gives the size of `n1` characters in bytes. A character is one byte,
+/// so this only checks that the Cell is there.
+pub(super) unsafe fn chars(regs: &mut Registers) {
+    regs.require(1);
+}
+
+/// `CELLS ( n1 -- n2 )`: Gives the size of `n1` Cells in bytes, wrapping on overflow.
+pub(super) unsafe fn cells(regs: &mut Registers) {
+    if let Some(n) = regs.pop() {
+        regs.data_stack.push(n.wrapping_mul(mem::size_of::<Cell>()));
     }
 }
 
@@ -169,6 +226,104 @@ mod tests {
             regs.error
         );
         assert_eq!(regs.data_stack, before);
+    }
+
+    #[test]
+    fn c_fetch_replaces_an_address_with_its_byte() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let addr = regs.dictionary.here();
+            regs.dictionary.char_comma(0xAB).unwrap();
+            regs.data_stack.extend_from_slice(&[1, addr]);
+
+            c_fetch(&mut regs);
+            assert!(regs.error.is_none(), "got: {:?}", regs.error);
+            assert_eq!(regs.data_stack, [1, 0xAB]);
+        }
+    }
+
+    #[test]
+    fn c_store_stores_the_low_byte_and_pops_both_cells() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let addr = regs.dictionary.here();
+            regs.dictionary.char_comma(0).unwrap();
+            regs.data_stack.extend_from_slice(&[1, 0x1AB, addr]);
+
+            c_store(&mut regs);
+            assert!(regs.error.is_none(), "got: {:?}", regs.error);
+            assert_eq!(regs.data_stack, [1]);
+            assert_eq!(regs.dictionary.fetch_byte(addr).unwrap(), 0xAB);
+        }
+    }
+
+    #[test]
+    fn here_pushes_the_dictionary_pointer() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            regs.dictionary.char_comma(0).unwrap();
+            let expected = regs.dictionary.here();
+
+            here(&mut regs);
+            assert_eq!(regs.data_stack, [expected]);
+        }
+    }
+
+    #[test]
+    fn aligned_rounds_the_top_cell_up() {
+        unsafe {
+            let cell_size = mem::size_of::<Cell>();
+            assert_eq!(stack_after(aligned, &[9, 1]), [9, cell_size]);
+            assert_eq!(stack_after(aligned, &[cell_size]), [cell_size]);
+        }
+    }
+
+    #[test]
+    fn char_plus_adds_one_and_wraps() {
+        unsafe {
+            assert_eq!(stack_after(char_plus, &[9, 4]), [9, 5]);
+            assert_eq!(stack_after(char_plus, &[Cell::MAX]), [0]);
+        }
+    }
+
+    #[test]
+    fn chars_leaves_the_top_cell_as_it_is() {
+        unsafe {
+            assert_eq!(stack_after(chars, &[9, 4]), [9, 4]);
+        }
+    }
+
+    #[test]
+    fn cells_multiplies_by_the_size_of_a_cell() {
+        unsafe {
+            let cell_size = mem::size_of::<Cell>();
+            assert_eq!(stack_after(cells, &[9, 0]), [9, 0]);
+            assert_eq!(stack_after(cells, &[9, 3]), [9, 3 * cell_size]);
+        }
+    }
+
+    #[test]
+    fn cells_wraps_on_overflow() {
+        unsafe {
+            let cell_size = mem::size_of::<Cell>();
+            assert_eq!(
+                stack_after(cells, &[Cell::MAX]),
+                [0usize.wrapping_sub(cell_size)]
+            );
+        }
+    }
+
+    #[test]
+    fn byte_words_need_enough_cells() {
+        unsafe {
+            assert_underflow(c_fetch, &[]);
+            assert_underflow(c_store, &[]);
+            assert_underflow(c_store, &[1]);
+            assert_underflow(aligned, &[]);
+            assert_underflow(char_plus, &[]);
+            assert_underflow(chars, &[]);
+            assert_underflow(cells, &[]);
+        }
     }
 
     #[test]
