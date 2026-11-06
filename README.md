@@ -7,20 +7,41 @@ compiler for colon definitions and `CREATE ... DOES>` defining words.
 The program runs a scripted demo. There is no interactive prompt or file input
 yet.
 
-## Usage
+## Getting started
+
+You need `git`, `make`, and Rust with the `rustfmt` and `clippy` components. The
+oldest supported Rust version is the `rust-version` in [Cargo.toml](Cargo.toml).
+If you don't have Rust yet, install it with [rustup](https://rustup.rs), which
+includes both components.
+
+Get the code and run the demo:
 
 ```sh
-make demo       # Run the demo
-make test       # Run the unit and API tests
-make ci         # Run all the checks that work on the stable toolchain
-make doc-serve  # Serve the docs at http://localhost:8000/rust_forth_vm/
+git clone https://github.com/michahoiting/rust-forth-vm.git
+cd rust-forth-vm
+make demo
 ```
 
-`make ci-all` also runs the tests under Miri, which needs the nightly toolchain,
-and `make mutants` runs mutation testing, which needs `cargo-mutants`. Both print
-how to install what's missing.
+These commands are useful from there:
 
-Contributors and coding agents should follow [AGENTS.md](AGENTS.md).
+```sh
+make test       # Run the unit and API tests
+make ci         # Run all the checks that work on the stable toolchain
+make doc-serve  # Serve the docs at http://localhost:8000/rust_forth_vm/, needs python3
+```
+
+`cargo build --release` builds the program as `target/release/forth-vm`.
+
+To use the VM as a library, add it as a git dependency. It isn't published on
+crates.io. The [API docs](src/lib.rs) start with a complete example.
+
+```toml
+[dependencies]
+rust-forth-vm = { git = "https://github.com/michahoiting/rust-forth-vm" }
+```
+
+To work on the project, see [CONTRIBUTING.md](CONTRIBUTING.md). Notable changes
+are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Example
 
@@ -143,6 +164,12 @@ stacks, and rolls back any unfinished colon definition.
   can't be found or executed.
 - The dictionary size is chosen when the VM boots, and can't grow afterwards.
 - `!` can overwrite word headers and compiled code, which can crash the process.
+
+## Versioning
+
+This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). It
+is in initial development, so the API can still change. See
+[CONTRIBUTING.md](CONTRIBUTING.md#versioning) for what the version number covers.
 
 ## License
 
