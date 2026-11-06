@@ -97,6 +97,10 @@ pub(crate) unsafe fn install(regs: &mut Registers) -> Result<(), ForthError> {
         .add_primitive_word("QUIT", code_cell(runtime::quit), 0)?;
     regs.dictionary
         .add_primitive_word("ABORT", code_cell(runtime::abort), 0)?;
+    regs.dictionary
+        .add_primitive_word("BYE", code_cell(runtime::bye), 0)?;
+    regs.dictionary
+        .add_primitive_word("(BYE)", code_cell(runtime::bye_with_code), 0)?;
     let exit_cfa = regs
         .dictionary
         .add_primitive_word("EXIT", code_cell(runtime::exit), 0)?;

@@ -79,13 +79,15 @@ unsafe fn abort(regs: &mut Registers) {
 ///
 /// The word `QUIT` does the same, except that it keeps the data stack. It isn't a failure, but
 /// it's reported as [`ForthError::Quit`] so that a host knows the input didn't finish. The
-/// word `ABORT` does what an error does, and is reported as [`ForthError::Abort`].
+/// word `ABORT` does what an error does, and is reported as [`ForthError::Abort`]. `BYE` stops
+/// evaluation and is reported as [`ForthError::Bye`] with its exit code; the library doesn't
+/// leave the process.
 ///
 /// # Errors
 ///
 /// Returns the first [`ForthError`] that a word or token causes, such as
-/// [`ForthError::UnknownWord`], and [`ForthError::Quit`] or [`ForthError::Abort`] if that
-/// word ran.
+/// [`ForthError::UnknownWord`], [`ForthError::Quit`], [`ForthError::Abort`] or
+/// [`ForthError::Bye`] if that word ran.
 /// Returns [`ForthError::Output`] if the writer given to
 /// [`boot`](crate::boot) fails. A failed flush is ignored after another error, so the
 /// original error is the one reported.
@@ -144,7 +146,7 @@ pub unsafe fn outer_interpreter(regs: &mut Registers, input: &str) -> Result<(),
     while let Some(token) = regs.input.parse_name() {
         interpret_token(regs, &token);
         if let Some(error) = regs.error.take() {
-            if matches!(error, ForthError::Quit) {
+            if matches!(error, ForthError::Quit | ForthError::Bye(_)) {
                 quit(regs);
             } else {
                 abort(regs);

@@ -52,6 +52,18 @@ pub(super) unsafe fn abort(regs: &mut Registers) {
     regs.set_error(ForthError::Abort);
 }
 
+/// `BYE ( -- )`: Stops the text interpreter and leaves the program with exit code 0.
+pub(super) unsafe fn bye(regs: &mut Registers) {
+    regs.set_error(ForthError::Bye(0));
+}
+
+/// `(BYE) ( n -- )`: Stops the text interpreter and leaves the program with exit code `n`.
+pub(super) unsafe fn bye_with_code(regs: &mut Registers) {
+    if let Some(code) = regs.pop() {
+        regs.set_error(ForthError::Bye(code));
+    }
+}
+
 /// `EXECUTE ( i*x xt -- j*x )`: Pops an execution token and runs that word.
 pub(super) unsafe fn execute(regs: &mut Registers) {
     if let Some(xt) = regs.pop() {
@@ -122,6 +134,35 @@ mod tests {
             abort(&mut regs);
             assert!(matches!(regs.error, Some(ForthError::Abort)));
             assert_eq!(regs.data_stack, [7]);
+        }
+    }
+
+    #[test]
+    fn bye_stops_the_vm_with_code_zero() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            bye(&mut regs);
+            assert!(matches!(regs.error, Some(ForthError::Bye(0))));
+        }
+    }
+
+    #[test]
+    fn bye_with_code_pops_a_cell() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            regs.data_stack.push(3);
+            bye_with_code(&mut regs);
+            assert!(matches!(regs.error, Some(ForthError::Bye(3))));
+            assert!(regs.data_stack.is_empty());
+        }
+    }
+
+    #[test]
+    fn bye_with_code_reports_stack_underflow() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            bye_with_code(&mut regs);
+            assert!(matches!(regs.error, Some(ForthError::DataStackUnderflow)));
         }
     }
 
