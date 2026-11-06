@@ -10,6 +10,7 @@
 # make setup-dev  Installs the developer tools and the git hooks. Run it once after cloning.
 # make hooks      Installs only the git hooks in this clone.
 # make protect    Applies the GitHub ruleset for main, which needs gh and admin access.
+# make metrics    Reports PR lead time and issue throughput, which needs gh and python3.
 
 # Stops rustup from installing a missing toolchain when a target asks for it.
 export RUSTUP_AUTO_INSTALL := 0
@@ -21,7 +22,7 @@ MSRV := $(shell sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
 
 .DEFAULT_GOAL := ci
 
-.PHONY: ci ci-all fmt clippy build test test-release doc doc-serve miri miri-32 check-miri msrv msrv-version code-changed mutants demo setup-dev hooks protect
+.PHONY: ci ci-all fmt clippy build test test-release doc doc-serve miri miri-32 check-miri msrv msrv-version code-changed mutants demo setup-dev hooks protect metrics
 
 ci: fmt clippy build test test-release doc
 
@@ -82,6 +83,13 @@ code-changed:
 	@files=$$(git diff --no-renames --name-only $(BASE) HEAD) && \
 	if [ -z "$$files" ] || printf '%s\n' "$$files" | grep -qv '\.md$$'; then echo true; else echo false; fi
 
+# Pass options through ARGS, such as make metrics ARGS="--since 2026-12-01 --prs".
+metrics:
+	@for tool in gh python3; do \
+		command -v $$tool >/dev/null 2>&1 || { echo "$$tool is not installed."; exit 1; }; \
+	done
+	@python3 scripts/metrics.py $(ARGS)
+
 mutants:
 	@cargo mutants --version >/dev/null 2>&1 || { \
 		echo "cargo-mutants is not installed. Install it with:"; \
@@ -94,7 +102,7 @@ demo:
 	cargo run --locked -- --demo
 
 # Everything the other targets need, except what depends on the OS. Those tools are only
-# checked for: git and rustup are required, while python3 and gh are for one target each.
+# checked for: git and rustup are required, while python3 and gh are for a few targets.
 setup-dev:
 	@for tool in git rustup; do \
 		command -v $$tool >/dev/null 2>&1 || { \
@@ -108,8 +116,8 @@ setup-dev:
 	@rustup default >/dev/null 2>&1 || rustup default stable
 	@cargo +stable mutants --version >/dev/null 2>&1 || cargo +stable install cargo-mutants --locked
 	@$(MAKE) --no-print-directory hooks
-	@command -v python3 >/dev/null 2>&1 || echo "Note: python3 is not installed. make doc-serve needs it."
-	@command -v gh >/dev/null 2>&1 || echo "Note: gh is not installed. make protect needs it."
+	@command -v python3 >/dev/null 2>&1 || echo "Note: python3 is not installed. make doc-serve and make metrics need it."
+	@command -v gh >/dev/null 2>&1 || echo "Note: gh is not installed. make protect and make metrics need it."
 
 hooks:
 	git config core.hooksPath .githooks

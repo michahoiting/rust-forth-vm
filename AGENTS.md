@@ -29,12 +29,13 @@ make doc-serve # Serves the docs on localhost, including private items. Needs py
 
 CI uses the latest stable toolchain on purpose, so a new lint can fail it with no code change. Raise `rust-version` when code needs a newer feature, and check it with a PR's CI run. CI runs on PRs and on pushes to `main`, not on other branches. PRs that only change Markdown skip Miri.
 
-These three aren't part of CI:
+These four aren't part of CI:
 
 ```sh
 make setup-dev # Installs the developer tools and the git hooks. Run it once after cloning
 make hooks     # Installs only the git hooks from `.githooks/`
 make protect   # Applies the ruleset for `main`. Needs gh and admin access
+make metrics   # Reports PR lead time, reviews, CI reruns and closed issues. Needs gh and python3
 ```
 
 `main` is protected by the ruleset in `.github/rulesets/protect-main.json`. Renaming a CI job means updating its required check there too. Never bypass the hooks with `--no-verify` unless asked, and don't run `make protect` unless asked.
