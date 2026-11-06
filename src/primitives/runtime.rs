@@ -84,7 +84,7 @@ mod tests {
     fn execute_rejects_a_pending_word() {
         unsafe {
             let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
-            // Code 0 would crash if it ran, so this also shows that nothing ran.
+            // Code 0 would give another error if it ran, so this also shows that nothing ran.
             let xt = regs
                 .compiler
                 .begin_definition(&mut regs.dictionary, "X", 0, 0)

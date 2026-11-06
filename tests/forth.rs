@@ -316,6 +316,10 @@ fn errors_have_stable_messages() {
             "Invalid execution token 0x2a.",
         ),
         (
+            ForthError::EmptyCodeField(0x2a),
+            "Word at 0x2a has no code.",
+        ),
+        (
             ForthError::UnterminatedComment,
             "Comment has no closing parenthesis.",
         ),
@@ -1294,5 +1298,18 @@ fn does_works_on_a_word_in_the_last_cells_of_the_dictionary() {
 
         // The data of X would start at HERE, which is past the end of the dictionary.
         assert_error!(&mut regs, "X @", ForthError::InvalidAddress(_));
+    }
+}
+
+#[test]
+fn zero_code_field_is_an_error() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        outer_interpreter(&mut regs, "CREATE X 0 ' X !").unwrap();
+        assert_error!(&mut regs, "X", ForthError::EmptyCodeField(_));
+        assert_error!(&mut regs, "' X EXECUTE", ForthError::EmptyCodeField(_));
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
     }
 }

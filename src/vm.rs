@@ -177,7 +177,7 @@ unsafe fn dodoes(regs: &mut Registers) {
 /// # Safety
 ///
 /// W must point to a Code Field, which must hold the Cell of a primitive, or the address of
-/// an action thread that DOES> stored there.
+/// an action thread that DOES> stored there. Zero gives [`ForthError::EmptyCodeField`].
 #[inline(always)]
 pub(crate) unsafe fn enter_word(regs: &mut Registers) {
     // Fetch the contents of the CFA Cell (the raw bits of the machine-code pointer)
@@ -185,8 +185,14 @@ pub(crate) unsafe fn enter_word(regs: &mut Registers) {
 
     // Primitives are compiled into the binary, so their address is never in the dictionary,
     // and DOES> only stores addresses of threads, which always are.
-    if regs.dictionary.contains(code_bits) {
+    if regs.dictionary.is_in_arena(code_bits) {
         dodoes(regs);
+        return;
+    }
+
+    // A null function pointer is undefined behaviour, and `!` can write zero here.
+    if code_bits == 0 {
+        regs.set_error(ForthError::EmptyCodeField(regs.w as Cell));
         return;
     }
 
@@ -252,6 +258,27 @@ mod tests {
             assert_eq!(regs.data_stack, [pfa_of(cfa) as Cell]);
             assert_eq!(regs.return_stack, [thread.as_ptr()]);
             assert_eq!(regs.ip, *cfa as *const Cell);
+        }
+    }
+
+    #[test]
+    fn a_zero_code_field_is_an_error() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            outer_interpreter(&mut regs, "CREATE X").unwrap();
+            let cfa = cfa_of(regs.dictionary.find_word("X").unwrap());
+            *cfa = 0;
+            regs.data_stack.push(7);
+
+            regs.w = cfa;
+            enter_word(&mut regs);
+
+            assert!(matches!(
+                regs.error,
+                Some(ForthError::EmptyCodeField(xt)) if xt == cfa as Cell
+            ));
+            assert_eq!(regs.data_stack, [7]);
+            assert!(regs.return_stack.is_empty());
         }
     }
 }

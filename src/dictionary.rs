@@ -158,9 +158,9 @@ impl Dictionary {
         Ok(())
     }
 
-    /// Returns whether `addr` is inside the arena, written or not.
+    /// Returns whether `addr` points into the arena, to a written Cell or not.
     #[inline(always)]
-    pub(crate) fn contains(&self, addr: Cell) -> bool {
+    pub(crate) fn is_in_arena(&self, addr: Cell) -> bool {
         addr >= self.start as Cell && addr < self.end as Cell
     }
 
@@ -709,26 +709,26 @@ mod tests {
     }
 
     #[test]
-    fn contains_covers_exactly_the_arena() {
+    fn is_in_arena_covers_exactly_the_arena() {
         unsafe {
             let dictionary = Dictionary::new(2).unwrap();
             let start = dictionary.start as Cell;
-            assert!(dictionary.contains(start));
-            assert!(dictionary.contains(start + CELL_SIZE));
-            assert!(dictionary.contains(start + 2 * CELL_SIZE - 1));
-            assert!(!dictionary.contains(start - 1));
-            assert!(!dictionary.contains(start + 2 * CELL_SIZE));
+            assert!(dictionary.is_in_arena(start));
+            assert!(dictionary.is_in_arena(start + CELL_SIZE));
+            assert!(dictionary.is_in_arena(start + 2 * CELL_SIZE - 1));
+            assert!(!dictionary.is_in_arena(start - 1));
+            assert!(!dictionary.is_in_arena(start + 2 * CELL_SIZE));
         }
     }
 
     #[test]
-    fn contains_excludes_primitives_and_an_empty_arena() {
+    fn is_in_arena_excludes_primitives_and_an_empty_arena() {
         unsafe {
             let dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            assert!(!dictionary.contains(io::sink as fn() -> io::Sink as usize));
+            assert!(!dictionary.is_in_arena(io::sink as fn() -> io::Sink as usize));
 
             let empty = Dictionary::new(0).unwrap();
-            assert!(!empty.contains(empty.start as Cell));
+            assert!(!empty.is_in_arena(empty.start as Cell));
         }
     }
 

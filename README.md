@@ -137,13 +137,10 @@ dictionary directly in front of it.
 ```
 LFA        Link to the previous word
 NFA        Pointer to the name bytes
-LEN_FLAGS  Length of the name in bits 0-7, and the flags from bit 8 upwards
+LEN_FLAGS  Length of the name, and F_IMMEDIATE, F_HIDDEN, F_CREATED, F_PENDING
 CFA        Pointer to the machine code
 ...        Parameter Field
 ```
-
-The flags are `F_IMMEDIATE` (bit 8), `F_HIDDEN` (bit 9), `F_CREATED` (bit 10) and
-`F_PENDING` (bit 11).
 
 The Parameter Field always starts at `CFA + 1`, which `>BODY` gives from an execution
 token. What it holds depends on how the word was defined:
