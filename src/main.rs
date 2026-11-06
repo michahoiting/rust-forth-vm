@@ -12,7 +12,7 @@ const DICTIONARY_CELLS: usize = 1024;
 
 /// The demo sections, each with its title and one block of Forth source. All of them run in
 /// the same VM, so later sections can use words from earlier ones.
-const SECTIONS: [(&str, &str); 9] = [
+const SECTIONS: [(&str, &str); 10] = [
     (
         "Evaluating Text Operations",
         r"
@@ -38,12 +38,24 @@ STATIONARY-SOURCE @ .        \ prints 1337
 ",
     ),
     (
-        "Defining Words with DOES>",
+        "Constants",
         r"
-: CONSTANT CREATE , DOES> @ ;
 42 CONSTANT ANSWER
 7 CONSTANT LUCKY
-ANSWER . LUCKY .  \ prints 42 7
+ANSWER . LUCKY .              \ prints 42 7
+40 2 + CONSTANT COMPUTED      \ the value can come from a calculation
+COMPUTED .                    \ prints 42
+: ANSWER+1 ANSWER 1 + ;       \ a constant used from a colon word
+ANSWER+1 .                    \ prints 43
+",
+    ),
+    (
+        "Defining Words with DOES>",
+        r"
+: ADDER CREATE , DOES> @ + ;
+3 ADDER PLUS3
+10 ADDER PLUS10
+1 PLUS3 . 1 PLUS10 .          \ prints 4 11
 ",
     ),
     (

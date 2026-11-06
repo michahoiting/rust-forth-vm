@@ -4,7 +4,8 @@
 //! or compiled into threads.
 //!
 //! A word made by CREATE has two Cells behind its CFA: W + 1 is the action cell
-//! reserved for DOES>, and its data field starts at W + 2.
+//! reserved for DOES>, and its data field starts at W + 2. A word made by CONSTANT
+//! has one Cell behind its CFA: W + 1 holds its value.
 
 use crate::cell::Cell;
 use crate::error::ForthError;
@@ -23,6 +24,12 @@ pub(super) unsafe fn docol(regs: &mut Registers) {
 pub(super) unsafe fn dovar(regs: &mut Registers) {
     let data_address = regs.w.add(2) as Cell;
     regs.data_stack.push(data_address);
+}
+
+/// `DOCON`: Execution semantics of a word made by CONSTANT.
+/// It pushes the value held in the word's body (W + 1).
+pub(super) unsafe fn docon(regs: &mut Registers) {
+    regs.data_stack.push(*regs.w.add(1));
 }
 
 /// `DODOES`: Runtime execution semantics for a child word modified via DOES>.
@@ -78,6 +85,21 @@ mod tests {
 
     unsafe fn xt_of(regs: &Registers, name: &str) -> Cell {
         cfa_of(regs.dictionary.find_word(name).unwrap()) as Cell
+    }
+
+    #[test]
+    fn docon_pushes_the_cell_behind_the_code_field() {
+        unsafe {
+            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let word: [Cell; 3] = [0, 42, 99];
+            regs.w = word.as_ptr();
+            regs.data_stack.push(1);
+
+            docon(&mut regs);
+            assert!(regs.error.is_none(), "got: {:?}", regs.error);
+            assert_eq!(regs.data_stack, [1, 42]);
+            assert_eq!(word, [0, 42, 99]);
+        }
     }
 
     #[test]
