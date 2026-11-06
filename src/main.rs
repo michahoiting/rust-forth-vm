@@ -2,6 +2,9 @@ use std::io;
 
 use rust_forth_vm::{boot, outer_interpreter, Registers};
 
+// The size of the demo's Forth dictionary.
+const DICTIONARY_CELLS: usize = 1024;
+
 // Echoes a line of input, evaluates it, and ends the line with its result.
 // Output from Forth words appears between the two.
 unsafe fn evaluate(regs: &mut Registers, input: &str) {
@@ -14,7 +17,8 @@ unsafe fn evaluate(regs: &mut Registers, input: &str) {
 
 fn main() {
     unsafe {
-        let mut regs = boot(io::stdout());
+        let mut regs = boot(io::stdout(), DICTIONARY_CELLS)
+            .expect("the dictionary must be able to hold the primitives");
 
         println!("--- FORTH BOOTSEQUENCE COMPLETED ---");
         println!("The Text Interpreter (Outer Interpreter) is online.\n");

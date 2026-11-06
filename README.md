@@ -90,5 +90,5 @@ stacks, and rolls back any unfinished colon definition.
 - There are no stack words such as `DUP`, `DROP` or `SWAP`.
 - There is no control flow, such as `IF` or `BEGIN`, and so no loops.
 - There is no `IMMEDIATE`, `[` or `]`.
-- The dictionary has a fixed size of 1024 Cells.
+- The dictionary size is chosen when the VM boots, and can't grow afterwards.
 - `!` can overwrite word headers and compiled code, which can crash the process.

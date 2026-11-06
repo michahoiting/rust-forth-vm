@@ -30,19 +30,22 @@ pub struct Registers {
 }
 
 impl Registers {
-    // Creates a VM with an empty dictionary.
-    pub(crate) unsafe fn new(output: Box<dyn Write>) -> Registers {
-        Registers {
+    // Creates a VM with an empty dictionary of `dictionary_cells` Cells.
+    pub(crate) unsafe fn new(
+        output: Box<dyn Write>,
+        dictionary_cells: usize,
+    ) -> Result<Registers, ForthError> {
+        Ok(Registers {
             ip: ptr::null(),
             w: ptr::null(),
             data_stack: Vec::new(),
             return_stack: Vec::new(),
-            dictionary: Dictionary::new(),
+            dictionary: Dictionary::new(dictionary_cells)?,
             compiler: Compiler::default(),
             output,
             input: InputSource::default(),
             error: None,
-        }
+        })
     }
 
     // Records an error. The inner interpreter stops, and the outer interpreter aborts.

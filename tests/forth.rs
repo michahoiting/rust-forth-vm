@@ -7,7 +7,9 @@ use std::io::{self, BufWriter, Write};
 use std::mem;
 use std::rc::Rc;
 
-use rust_forth_vm::{boot, outer_interpreter, Cell, ForthError};
+use rust_forth_vm::{boot, outer_interpreter, Cell, ForthError, Registers};
+
+const TEST_CELLS: usize = 1024;
 
 // A writer whose contents stay readable after it is moved into the VM.
 #[derive(Clone, Default)]
@@ -43,11 +45,23 @@ impl Write for FailingWriter {
     }
 }
 
+// Boots a VM with a dictionary that is large enough for every test.
+unsafe fn test_vm(output: impl Write + 'static) -> Registers {
+    boot(output, TEST_CELLS).unwrap()
+}
+
+// Returns the size of the smallest dictionary that can hold the primitives.
+unsafe fn smallest_cells() -> usize {
+    (0..TEST_CELLS)
+        .find(|cells| boot(io::sink(), *cells).is_ok())
+        .unwrap()
+}
+
 // Evaluates the lines in order, and returns everything they wrote.
 fn output_of(lines: &[&str]) -> String {
     unsafe {
         let output = Capture::default();
-        let mut regs = boot(output.clone());
+        let mut regs = test_vm(output.clone());
         for line in lines {
             outer_interpreter(&mut regs, line).unwrap();
         }
@@ -80,7 +94,7 @@ fn create_comma_fetch() {
 fn name_is_owned_by_the_dictionary() {
     unsafe {
         let output = Capture::default();
-        let mut regs = boot(output.clone());
+        let mut regs = test_vm(output.clone());
         let line = String::from("CREATE X 1 ,");
         outer_interpreter(&mut regs, &line).unwrap();
         drop(line);
@@ -109,7 +123,7 @@ fn redefinition_calls_the_previous_word() {
 fn exit_leaves_a_definition_early() {
     unsafe {
         let output = Capture::default();
-        let mut regs = boot(output.clone());
+        let mut regs = test_vm(output.clone());
         outer_interpreter(&mut regs, ": A 1 EXIT 2 ;").unwrap();
         outer_interpreter(&mut regs, "A .").unwrap();
         assert_eq!(output.text(), "1 ");
@@ -132,7 +146,7 @@ fn does_gives_each_child_its_own_data() {
 #[test]
 fn does_requires_a_definition() {
     unsafe {
-        let mut regs = boot(io::sink());
+        let mut regs = test_vm(io::sink());
         assert_error!(
             &mut regs,
             "CREATE X DOES>",
@@ -144,7 +158,7 @@ fn does_requires_a_definition() {
 #[test]
 fn does_requires_a_created_word() {
     unsafe {
-        let mut regs = boot(io::sink());
+        let mut regs = test_vm(io::sink());
         outer_interpreter(&mut regs, ": BAD 1 DOES> ;").unwrap();
         assert_error!(&mut regs, "BAD", ForthError::DoesWithoutCreate);
     }
@@ -154,7 +168,7 @@ fn does_requires_a_created_word() {
 fn failed_definition_leaves_a_usable_vm() {
     unsafe {
         let output = Capture::default();
-        let mut regs = boot(output.clone());
+        let mut regs = test_vm(output.clone());
         assert_error!(&mut regs, ": BROKEN 1 NOPE ;", ForthError::UnknownWord(name) if name == "NOPE");
         assert_error!(&mut regs, "BROKEN", ForthError::UnknownWord(name) if name == "BROKEN");
         outer_interpreter(&mut regs, "1 2 + .").unwrap();
@@ -165,7 +179,7 @@ fn failed_definition_leaves_a_usable_vm() {
 #[test]
 fn stack_underflow_is_reported() {
     unsafe {
-        let mut regs = boot(io::sink());
+        let mut regs = test_vm(io::sink());
         assert_error!(&mut regs, "1 +", ForthError::DataStackUnderflow);
         assert_error!(&mut regs, ".", ForthError::DataStackUnderflow);
         assert_error!(&mut regs, "@", ForthError::DataStackUnderflow);
@@ -177,7 +191,7 @@ fn stack_underflow_is_reported() {
 #[test]
 fn misused_words_are_rejected() {
     unsafe {
-        let mut regs = boot(io::sink());
+        let mut regs = test_vm(io::sink());
         assert_error!(&mut regs, ";", ForthError::NotCompiling);
         assert_error!(&mut regs, ":", ForthError::MissingName(":"));
         assert_error!(&mut regs, "CREATE", ForthError::MissingName("CREATE"));
@@ -199,7 +213,7 @@ fn output_keeps_its_order() {
 fn output_before_an_error_is_kept() {
     unsafe {
         let output = Capture::default();
-        let mut regs = boot(BufWriter::new(output.clone()));
+        let mut regs = test_vm(BufWriter::new(output.clone()));
         assert_error!(&mut regs, "1 . +", ForthError::DataStackUnderflow);
         assert_eq!(output.text(), "1 ");
     }
@@ -209,7 +223,7 @@ fn output_before_an_error_is_kept() {
 fn underflow_in_dot_writes_nothing() {
     unsafe {
         let output = Capture::default();
-        let mut regs = boot(output.clone());
+        let mut regs = test_vm(output.clone());
         assert_error!(&mut regs, ".", ForthError::DataStackUnderflow);
         assert_eq!(output.text(), "");
     }
@@ -218,7 +232,7 @@ fn underflow_in_dot_writes_nothing() {
 #[test]
 fn failing_writer_is_reported() {
     unsafe {
-        let mut regs = boot(FailingWriter);
+        let mut regs = test_vm(FailingWriter);
         assert_error!(&mut regs, "1 .", ForthError::Output(_));
         outer_interpreter(&mut regs, "1 2 +").unwrap();
     }
@@ -227,7 +241,7 @@ fn failing_writer_is_reported() {
 #[test]
 fn failing_flush_is_reported() {
     unsafe {
-        let mut regs = boot(BufWriter::new(FailingWriter));
+        let mut regs = test_vm(BufWriter::new(FailingWriter));
         assert_error!(&mut regs, "1 .", ForthError::Output(_));
     }
 }
@@ -236,7 +250,7 @@ fn failing_flush_is_reported() {
 fn buffered_output_is_flushed_at_the_end_of_a_line() {
     unsafe {
         let output = Capture::default();
-        let mut regs = boot(BufWriter::new(output.clone()));
+        let mut regs = test_vm(BufWriter::new(output.clone()));
         outer_interpreter(&mut regs, "7 .").unwrap();
         assert_eq!(output.text(), "7 ");
     }
@@ -245,7 +259,7 @@ fn buffered_output_is_flushed_at_the_end_of_a_line() {
 #[test]
 fn output_error_keeps_its_cause() {
     unsafe {
-        let mut regs = boot(FailingWriter);
+        let mut regs = test_vm(FailingWriter);
         let error = outer_interpreter(&mut regs, "1 .").unwrap_err();
         assert_eq!(error.source().unwrap().to_string(), "write failed");
     }
@@ -274,6 +288,10 @@ fn errors_have_stable_messages() {
             ForthError::UnknownWord("NOPE".to_string()),
             "Word or numeric literal 'NOPE' not recognized.",
         ),
+        (
+            ForthError::DictionaryTooLarge(42),
+            "Cannot allocate a dictionary of 42 Cells.",
+        ),
         (ForthError::InvalidAddress(0x2a), "Invalid address 0x2a."),
         (ForthError::Output(io::Error::other("x")), "Output error."),
     ];
@@ -285,7 +303,7 @@ fn errors_have_stable_messages() {
 #[test]
 fn fetch_rejects_addresses_outside_the_dictionary() {
     unsafe {
-        let mut regs = boot(io::sink());
+        let mut regs = test_vm(io::sink());
         assert_error!(&mut regs, "0 @", ForthError::InvalidAddress(0));
         assert_error!(&mut regs, "5 @", ForthError::InvalidAddress(5));
         assert_error!(&mut regs, "-1 @", ForthError::InvalidAddress(Cell::MAX));
@@ -295,7 +313,7 @@ fn fetch_rejects_addresses_outside_the_dictionary() {
 #[test]
 fn fetch_rejects_misaligned_addresses() {
     unsafe {
-        let mut regs = boot(io::sink());
+        let mut regs = test_vm(io::sink());
         for offset in 1..mem::size_of::<Cell>() {
             let line = format!("CREATE X 7 , X {} + @", offset);
             assert_error!(&mut regs, &line, ForthError::InvalidAddress(_));
@@ -312,7 +330,7 @@ fn fetch_reads_aligned_cells_behind_the_first() {
 #[test]
 fn fetch_rejects_here() {
     unsafe {
-        let mut regs = boot(io::sink());
+        let mut regs = test_vm(io::sink());
         assert_error!(&mut regs, "CREATE X X @", ForthError::InvalidAddress(_));
     }
 }
@@ -320,7 +338,7 @@ fn fetch_rejects_here() {
 #[test]
 fn failed_definition_invalidates_its_addresses() {
     unsafe {
-        let mut regs = boot(io::sink());
+        let mut regs = test_vm(io::sink());
         outer_interpreter(&mut regs, "CREATE X 7 ,").unwrap();
         assert_error!(&mut regs, ": BROKEN NOPE ;", ForthError::UnknownWord(_));
 
@@ -346,7 +364,7 @@ fn fetch_reads_headers() {
 fn invalid_address_leaves_a_usable_vm() {
     unsafe {
         let output = Capture::default();
-        let mut regs = boot(output.clone());
+        let mut regs = test_vm(output.clone());
         assert_error!(&mut regs, "5 @", ForthError::InvalidAddress(5));
         outer_interpreter(&mut regs, "1 2 + .").unwrap();
         assert_eq!(output.text(), "3 ");
@@ -374,7 +392,7 @@ fn store_changes_a_does_child() {
 #[test]
 fn store_rejects_addresses_outside_the_dictionary() {
     unsafe {
-        let mut regs = boot(io::sink());
+        let mut regs = test_vm(io::sink());
         assert_error!(&mut regs, "1 0 !", ForthError::InvalidAddress(0));
         assert_error!(&mut regs, "1 5 !", ForthError::InvalidAddress(5));
         assert_error!(&mut regs, "1 -1 !", ForthError::InvalidAddress(Cell::MAX));
@@ -384,7 +402,7 @@ fn store_rejects_addresses_outside_the_dictionary() {
 #[test]
 fn store_rejects_misaligned_addresses() {
     unsafe {
-        let mut regs = boot(io::sink());
+        let mut regs = test_vm(io::sink());
         for offset in 1..mem::size_of::<Cell>() {
             let line = format!("CREATE X 7 , 9 X {} + !", offset);
             assert_error!(&mut regs, &line, ForthError::InvalidAddress(_));
@@ -395,7 +413,7 @@ fn store_rejects_misaligned_addresses() {
 #[test]
 fn store_rejects_here() {
     unsafe {
-        let mut regs = boot(io::sink());
+        let mut regs = test_vm(io::sink());
         assert_error!(&mut regs, "CREATE X 5 X !", ForthError::InvalidAddress(_));
     }
 }
@@ -404,7 +422,7 @@ fn store_rejects_here() {
 fn store_needs_two_stack_items() {
     unsafe {
         let output = Capture::default();
-        let mut regs = boot(output.clone());
+        let mut regs = test_vm(output.clone());
         outer_interpreter(&mut regs, "CREATE X 7 ,").unwrap();
         assert_error!(&mut regs, "X !", ForthError::DataStackUnderflow);
         outer_interpreter(&mut regs, "X @ .").unwrap();
@@ -415,7 +433,7 @@ fn store_needs_two_stack_items() {
 #[test]
 fn failed_definition_invalidates_its_addresses_for_store() {
     unsafe {
-        let mut regs = boot(io::sink());
+        let mut regs = test_vm(io::sink());
         outer_interpreter(&mut regs, "CREATE X 7 ,").unwrap();
         assert_error!(&mut regs, ": BROKEN NOPE ;", ForthError::UnknownWord(_));
 
@@ -429,9 +447,66 @@ fn failed_definition_invalidates_its_addresses_for_store() {
 fn invalid_store_leaves_a_usable_vm() {
     unsafe {
         let output = Capture::default();
-        let mut regs = boot(output.clone());
+        let mut regs = test_vm(output.clone());
         assert_error!(&mut regs, "1 5 !", ForthError::InvalidAddress(5));
         outer_interpreter(&mut regs, "1 2 + .").unwrap();
         assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn larger_dictionary_holds_more_cells() {
+    unsafe {
+        let mut regs = boot(io::sink(), TEST_CELLS * 4).unwrap();
+        let cells = "1 , ".repeat(TEST_CELLS * 2);
+        outer_interpreter(&mut regs, &cells).unwrap();
+    }
+}
+
+#[test]
+fn smaller_dictionary_overflows_sooner() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = boot(output.clone(), smallest_cells() + 2).unwrap();
+        outer_interpreter(&mut regs, "1 , 2 ,").unwrap();
+        assert_error!(&mut regs, "3 ,", ForthError::DictionaryOverflow);
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn boot_rejects_an_empty_dictionary() {
+    unsafe {
+        assert!(matches!(
+            boot(io::sink(), 0),
+            Err(ForthError::DictionaryOverflow)
+        ));
+    }
+}
+
+#[test]
+fn smallest_dictionary_boots_and_runs_forth() {
+    unsafe {
+        let smallest = smallest_cells();
+        assert!(matches!(
+            boot(io::sink(), smallest - 1),
+            Err(ForthError::DictionaryOverflow)
+        ));
+
+        let output = Capture::default();
+        let mut regs = boot(output.clone(), smallest).unwrap();
+        outer_interpreter(&mut regs, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn boot_rejects_a_dictionary_too_large_to_allocate() {
+    unsafe {
+        assert!(matches!(
+            boot(io::sink(), Cell::MAX),
+            Err(ForthError::DictionaryTooLarge(Cell::MAX))
+        ));
     }
 }
