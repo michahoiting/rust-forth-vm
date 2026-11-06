@@ -38,8 +38,23 @@ cargo run --locked
 
 It evaluates each line you enter, in one VM, and prints `ok` after a line that
 succeeds, unless a definition is still open. Press Ctrl-D to leave. `forth-vm`
-starts this way by default, and also accepts `--interactive`, and `--demo` for the
-demo.
+starts this way by default, and also accepts `--interactive`, `--demo` for the demo,
+and `--version`.
+
+`--version` prints the version, the UTC date of the build, and the git tag and hash:
+
+```text
+Rust Forth VM 0.1.0 (Built 2026-11-06, Git v0.1.0 5d28858)
+Copyright (c) 2026 M.W.R. Hoiting
+Type "HELP", "COPYRIGHT" or "LICENCE" for more information.
+```
+
+`(dirty)` follows the hash unless the build is a clean release, which means `HEAD` has a
+tag of its own and the working tree has no changes. So unlike the usual meaning of
+"dirty", any commit without a tag shows it, even with a clean tree, and its tag is shown
+as `none`. A build with no git, or outside a repository, shows `unknown` for the tag and
+the hash. These only update when a file that git knows about or git's own state changes,
+so a new untracked file on its own doesn't show up until the next such change.
 
 These commands are useful from there:
 
@@ -161,6 +176,9 @@ it.
 | `PICK`   | `( ... n -- ... x )` | Copies the `n`th Cell below `n`, counting from 0 |
 | `ROLL`   | `( ... n -- ... x )` | Moves the `n`th Cell below `n` to the top, counting from 0 |
 | `DEPTH`  | `( -- n )`   | Pushes the number of Cells on the stack           |
+| `HELP`   | `( -- )`     | Prints how to leave the program                   |
+| `COPYRIGHT` | `( -- )`  | Prints the copyright notice                       |
+| `LICENCE` | `( -- )`    | Prints the project's licence                      |
 
 Word names are case-sensitive, and can be up to 255 bytes long. Numbers are decimal,
 and may be negative.

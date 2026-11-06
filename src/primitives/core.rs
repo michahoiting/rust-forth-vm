@@ -10,6 +10,37 @@ use crate::dictionary::{self, pfa_of};
 use crate::error::ForthError;
 use crate::vm::Registers;
 
+/// The copyright notice, which `COPYRIGHT` prints.
+pub const COPYRIGHT: &str = "Copyright (c) 2026 M.W.R. Hoiting";
+
+/// What `HELP` prints.
+const HELP: &str = "Type BYE or press Ctrl-D to leave.\n";
+
+/// The project's licence, which `LICENCE` prints.
+const LICENCE: &str = include_str!("../../LICENSE");
+
+/// Writes `text` to the output.
+fn write_text(regs: &mut Registers, text: &str) {
+    let result = regs.output.write_all(text.as_bytes());
+    regs.check(result.map_err(ForthError::Output));
+}
+
+/// `HELP ( -- )`: Writes how to leave the program to the output.
+pub(super) unsafe fn help(regs: &mut Registers) {
+    write_text(regs, HELP);
+}
+
+/// `COPYRIGHT ( -- )`: Writes the copyright notice to the output.
+pub(super) unsafe fn copyright(regs: &mut Registers) {
+    write_text(regs, COPYRIGHT);
+    write_text(regs, "\n");
+}
+
+/// `LICENCE ( -- )`: Writes the project's licence to the output.
+pub(super) unsafe fn licence(regs: &mut Registers) {
+    write_text(regs, LICENCE);
+}
+
 /// `@ ( addr -- x )`: Pops a dictionary address from the stack and replaces it with the
 /// contents of that Cell.
 pub(super) unsafe fn fetch(regs: &mut Registers) {
@@ -192,8 +223,10 @@ pub(super) unsafe fn depth(regs: &mut Registers) {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
     use std::io;
     use std::mem;
+    use std::rc::Rc;
 
     use super::*;
     use crate::boot;
@@ -201,6 +234,55 @@ mod tests {
     use crate::vm::PrimitiveFn;
 
     const TEST_CELLS: usize = 1024;
+
+    // A writer that shares what it receives with the test.
+    #[derive(Clone, Default)]
+    struct Capture(Rc<RefCell<Vec<u8>>>);
+
+    impl Write for Capture {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.0.borrow_mut().write(bytes)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    // Runs a word on an empty stack, checks that it leaves the VM's state alone, and returns
+    // what it wrote.
+    unsafe fn output_of(word: PrimitiveFn) -> String {
+        let output = Capture::default();
+        let mut regs = boot(output.clone(), TEST_CELLS).unwrap();
+        let here = regs.dictionary.here();
+        word(&mut regs);
+        assert!(regs.error.is_none());
+        assert!(regs.data_stack.is_empty());
+        assert_eq!(regs.dictionary.here(), here);
+        let bytes = output.0.borrow().clone();
+        String::from_utf8(bytes).unwrap()
+    }
+
+    #[test]
+    fn help_writes_how_to_leave() {
+        unsafe {
+            assert_eq!(output_of(help), "Type BYE or press Ctrl-D to leave.\n");
+        }
+    }
+
+    #[test]
+    fn copyright_writes_the_notice_on_a_line() {
+        unsafe {
+            assert_eq!(output_of(copyright), "Copyright (c) 2026 M.W.R. Hoiting\n");
+        }
+    }
+
+    #[test]
+    fn licence_writes_the_licence_file() {
+        unsafe {
+            assert_eq!(output_of(licence), include_str!("../../LICENSE"));
+        }
+    }
 
     // Runs a word on a stack holding `before`.
     unsafe fn run_on(word: PrimitiveFn, before: &[Cell]) -> Registers {

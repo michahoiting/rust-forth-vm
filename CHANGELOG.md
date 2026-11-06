@@ -41,6 +41,10 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
   line that succeeds, and `Registers::is_compiling` tells it when a definition is open.
 - A `--demo` option with a menu to run all the demo sections or one of them, each in a new
   VM. `make demo` opens this menu.
+- A `--version` option, which prints the version, the build date, the git tag and hash,
+  and the copyright notice. `build.rs` provides the build information.
+- `HELP`, `COPYRIGHT` and `LICENCE`, which print how to leave the program, the copyright
+  notice, and the licence. The library exports the notice as `COPYRIGHT`.
 - The MIT licence, and a minimum supported Rust version.
 - This changelog, a contributing guide, a versioning policy, and getting-started steps in
   the README.

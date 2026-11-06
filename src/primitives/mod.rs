@@ -11,6 +11,8 @@ use crate::dictionary::{F_HIDDEN, F_IMMEDIATE};
 use crate::error::ForthError;
 use crate::vm::{code_cell, Registers};
 
+pub use self::core::COPYRIGHT;
+
 /// Registers the core primitives under their official text names.
 ///
 /// # Errors
@@ -59,6 +61,12 @@ pub(crate) unsafe fn install(regs: &mut Registers) -> Result<(), ForthError> {
         .add_primitive_word("ROLL", code_cell(core::roll), 0)?;
     regs.dictionary
         .add_primitive_word("DEPTH", code_cell(core::depth), 0)?;
+    regs.dictionary
+        .add_primitive_word("HELP", code_cell(core::help), 0)?;
+    regs.dictionary
+        .add_primitive_word("COPYRIGHT", code_cell(core::copyright), 0)?;
+    regs.dictionary
+        .add_primitive_word("LICENCE", code_cell(core::licence), 0)?;
     regs.dictionary
         .add_primitive_word(",", code_cell(compiler::comma), 0)?;
     regs.dictionary
