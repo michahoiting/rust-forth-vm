@@ -1,0 +1,12 @@
+# No test covers the demo yet, so changes to it would always survive.
+exclude_globs = ["src/main.rs"]
+
+# Mutated VM code can hang, so don't let one mutant run for long.
+minimum_test_timeout = 60
+
+# These stop parse_name from advancing, so the tests hang. That counts as detected, but
+# cargo-mutants reports a timeout, which would fail every weekly run.
+exclude_re = [
+    'replace \+= with \*= in InputSource::parse_name',
+    'replace \+ with \* in InputSource::parse_name',
+]

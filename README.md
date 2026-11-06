@@ -10,9 +10,14 @@ yet.
 ## Usage
 
 ```sh
-cargo run    # Run the demo
-cargo test   # Run the unit tests
+make demo    # Run the demo
+make test    # Run the unit and API tests
+make ci      # Run all the checks that work on the stable toolchain
 ```
+
+`make ci-all` also runs the tests under Miri, which needs the nightly toolchain,
+and `make mutants` runs mutation testing, which needs `cargo-mutants`. Both print
+how to install what's missing.
 
 Contributors and coding agents should follow [AGENTS.md](AGENTS.md).
 

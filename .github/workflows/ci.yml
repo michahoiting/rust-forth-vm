@@ -22,13 +22,34 @@ jobs:
           rustup default stable
 
       - name: Check formatting
-        run: cargo fmt --all --check
+        run: make fmt
 
       - name: Lint
-        run: cargo clippy --all-targets --locked -- -D warnings
+        run: make clippy
 
       - name: Build
-        run: cargo build --locked
+        run: make build
 
       - name: Test
-        run: cargo test --locked
+        run: make test
+
+      - name: Test in release mode
+        run: make test-release
+
+      - name: Check the documentation
+        run: make doc
+
+  miri:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup toolchain install nightly --profile minimal --component miri,rust-src
+
+      - name: Test under Miri
+        run: make miri
+
+      - name: Test under Miri on a 32-bit target
+        run: make miri-32
