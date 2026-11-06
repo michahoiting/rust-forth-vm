@@ -7,3 +7,11 @@ publish = false
 [[bin]]
 name = "forth-vm"
 path = "src/main.rs"
+
+# `make clippy` and `make doc` deny warnings, so undocumented code fails CI.
+[lints.rust]
+missing_docs = "warn"
+
+[lints.clippy]
+missing_docs_in_private_items = "warn"
+missing_errors_doc = "warn"

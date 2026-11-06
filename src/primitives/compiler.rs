@@ -6,7 +6,7 @@ use crate::dictionary::{cfa_of, is_created, F_CREATED, F_HIDDEN};
 use crate::error::ForthError;
 use crate::vm::{code_cell, Registers};
 
-// COMMA ( , ): Pops a Cell from the stack and presses it into the dictionary at HERE.
+/// `, ( x -- )`: Pops a Cell from the stack and presses it into the dictionary at HERE.
 pub(super) unsafe fn comma(regs: &mut Registers) {
     if let Some(value) = regs.pop() {
         let result = regs.dictionary.comma(value);
@@ -14,7 +14,7 @@ pub(super) unsafe fn comma(regs: &mut Registers) {
     }
 }
 
-// Parses a name on behalf of `word`, and allocates a new word with default DOVAR semantics.
+/// Parses a name on behalf of `word`, and allocates a new word with default DOVAR semantics.
 unsafe fn create_word(regs: &mut Registers, word: &'static str) {
     let Some(name) = regs.input.parse_name() else {
         regs.set_error(ForthError::MissingName(word));
@@ -29,12 +29,12 @@ unsafe fn create_word(regs: &mut Registers, word: &'static str) {
     }
 }
 
-// CREATE: Parses a name and allocates a new word with default DOVAR semantics.
+/// `CREATE ( -- )`: Parses a name and allocates a new word with default DOVAR semantics.
 pub(super) unsafe fn create(regs: &mut Registers) {
     create_word(regs, "CREATE");
 }
 
-// VARIABLE: Parses a name and creates a word that holds one Cell, initially 0.
+/// `VARIABLE ( -- )`: Parses a name and creates a word that holds one Cell, initially 0.
 pub(super) unsafe fn variable(regs: &mut Registers) {
     create_word(regs, "VARIABLE");
     if regs.error.is_none() {
@@ -43,8 +43,8 @@ pub(super) unsafe fn variable(regs: &mut Registers) {
     }
 }
 
-// (DOES>): Hijacks the CFA of the child word while the defining word is executing.
-// The Forth code compiled behind DOES> becomes the action of the child.
+/// `DOES> ( -- )`: Hijacks the CFA of the child word while the defining word is executing.
+/// The Forth code compiled behind DOES> becomes the action of the child.
 pub(super) unsafe fn runtime_does(regs: &mut Registers) {
     // An empty Return Stack means DOES> is running from the text interpreter. IP then
     // points into the temporary trampoline, which must not be stored in the child.
@@ -68,7 +68,7 @@ pub(super) unsafe fn runtime_does(regs: &mut Registers) {
     exit(regs);
 }
 
-// COLON ( : ): Parses a name and switches the text interpreter to compiling.
+/// `: ( -- )`: Parses a name and switches the text interpreter to compiling.
 pub(super) unsafe fn colon(regs: &mut Registers) {
     let Some(name) = regs.input.parse_name() else {
         regs.set_error(ForthError::MissingName(":"));
@@ -80,7 +80,7 @@ pub(super) unsafe fn colon(regs: &mut Registers) {
     regs.check(result);
 }
 
-// :NONAME ( -- xt ): Starts a definition without a name, and pushes its execution token.
+/// `:NONAME ( -- xt )`: Starts a definition without a name, and pushes its execution token.
 pub(super) unsafe fn colon_noname(regs: &mut Registers) {
     let result =
         regs.compiler
@@ -90,14 +90,14 @@ pub(super) unsafe fn colon_noname(regs: &mut Registers) {
     }
 }
 
-// SEMICOLON ( ; ): Ends the current definition. This word is immediate.
+/// `; ( -- )`: Ends the current definition. This word is immediate.
 pub(super) unsafe fn semicolon(regs: &mut Registers) {
     let result = regs.compiler.end_definition(&mut regs.dictionary);
     regs.check(result);
 }
 
-// IMMEDIATE ( -- ): Marks the most recently created word as immediate, so that it runs during
-// compilation instead of being compiled.
+/// `IMMEDIATE ( -- )`: Marks the most recently created word as immediate, so that it runs
+/// during compilation instead of being compiled.
 pub(super) unsafe fn immediate(regs: &mut Registers) {
     regs.dictionary.mark_last_immediate();
 }

@@ -6,7 +6,8 @@ use crate::cell::Cell;
 use crate::error::ForthError;
 use crate::vm::Registers;
 
-// FETCH ( @ ): Pops a dictionary address from the stack and replaces it with the contents of that Cell.
+/// `@ ( addr -- x )`: Pops a dictionary address from the stack and replaces it with the
+/// contents of that Cell.
 pub(super) unsafe fn fetch(regs: &mut Registers) {
     if let Some(addr) = regs.pop() {
         let result = regs.dictionary.fetch(addr);
@@ -16,7 +17,8 @@ pub(super) unsafe fn fetch(regs: &mut Registers) {
     }
 }
 
-// STORE ( ! ): Pops a dictionary address and a Cell from the stack, and stores the Cell there.
+/// `! ( x addr -- )`: Pops a dictionary address and a Cell from the stack, and stores the
+/// Cell there.
 pub(super) unsafe fn store(regs: &mut Registers) {
     if !regs.require(2) {
         return;
@@ -27,7 +29,8 @@ pub(super) unsafe fn store(regs: &mut Registers) {
     }
 }
 
-// PLUS ( + ): Pops two Cells from the stack, adds them, and pushes the result.
+/// `+ ( a b -- n )`: Pops two Cells from the stack, adds them, and pushes the result. Addition
+/// wraps on overflow.
 pub(super) unsafe fn plus(regs: &mut Registers) {
     if !regs.require(2) {
         return;
@@ -37,7 +40,7 @@ pub(super) unsafe fn plus(regs: &mut Registers) {
     }
 }
 
-// PRINT ( . ): Pops a Cell from the stack and writes it to the output as a signed number.
+/// `. ( x -- )`: Pops a Cell from the stack and writes it to the output as a signed number.
 pub(super) unsafe fn dot_print(regs: &mut Registers) {
     if let Some(value) = regs.pop() {
         let result = write!(regs.output, "{} ", value as isize);
@@ -45,7 +48,7 @@ pub(super) unsafe fn dot_print(regs: &mut Registers) {
     }
 }
 
-// DUP ( x -- x x ): Copies the top Cell.
+/// `DUP ( x -- x x )`: Copies the top Cell.
 pub(super) unsafe fn dup(regs: &mut Registers) {
     if regs.require(1) {
         let top = regs.data_stack[regs.data_stack.len() - 1];
@@ -53,7 +56,7 @@ pub(super) unsafe fn dup(regs: &mut Registers) {
     }
 }
 
-// ?DUP ( x -- 0 | x x ): Copies the top Cell if it isn't zero.
+/// `?DUP ( x -- 0 | x x )`: Copies the top Cell if it isn't zero.
 pub(super) unsafe fn question_dup(regs: &mut Registers) {
     if regs.require(1) {
         let top = regs.data_stack[regs.data_stack.len() - 1];
@@ -63,12 +66,12 @@ pub(super) unsafe fn question_dup(regs: &mut Registers) {
     }
 }
 
-// DROP ( x -- ): Removes the top Cell.
+/// `DROP ( x -- )`: Removes the top Cell.
 pub(super) unsafe fn drop(regs: &mut Registers) {
     regs.pop();
 }
 
-// SWAP ( a b -- b a ): Exchanges the top two Cells.
+/// `SWAP ( a b -- b a )`: Exchanges the top two Cells.
 pub(super) unsafe fn swap(regs: &mut Registers) {
     if regs.require(2) {
         let top = regs.data_stack.len() - 1;
@@ -76,7 +79,7 @@ pub(super) unsafe fn swap(regs: &mut Registers) {
     }
 }
 
-// OVER ( a b -- a b a ): Copies the second Cell to the top.
+/// `OVER ( a b -- a b a )`: Copies the second Cell to the top.
 pub(super) unsafe fn over(regs: &mut Registers) {
     if regs.require(2) {
         let second = regs.data_stack[regs.data_stack.len() - 2];
@@ -84,7 +87,7 @@ pub(super) unsafe fn over(regs: &mut Registers) {
     }
 }
 
-// ROT ( a b c -- b c a ): Moves the third Cell to the top.
+/// `ROT ( a b c -- b c a )`: Moves the third Cell to the top.
 pub(super) unsafe fn rot(regs: &mut Registers) {
     if regs.require(3) {
         let third = regs.data_stack.len() - 3;
@@ -92,7 +95,8 @@ pub(super) unsafe fn rot(regs: &mut Registers) {
     }
 }
 
-// PICK ( ... n -- ... x ): Replaces `n` with a copy of the `n`th Cell below it, counting from 0.
+/// `PICK ( ... n -- ... x )`: Replaces `n` with a copy of the `n`th Cell below it, counting
+/// from 0.
 pub(super) unsafe fn pick(regs: &mut Registers) {
     if let Some(index) = regs.indexed_cell() {
         let top = regs.data_stack.len() - 1;
@@ -100,7 +104,7 @@ pub(super) unsafe fn pick(regs: &mut Registers) {
     }
 }
 
-// ROLL ( ... n -- ... x ): Replaces `n` by moving the `n`th Cell below it to the top.
+/// `ROLL ( ... n -- ... x )`: Replaces `n` by moving the `n`th Cell below it to the top.
 pub(super) unsafe fn roll(regs: &mut Registers) {
     if let Some(index) = regs.indexed_cell() {
         regs.data_stack.pop();
@@ -109,7 +113,7 @@ pub(super) unsafe fn roll(regs: &mut Registers) {
     }
 }
 
-// DEPTH ( -- n ): Pushes the number of Cells that were on the stack.
+/// `DEPTH ( -- n )`: Pushes the number of Cells that were on the stack.
 pub(super) unsafe fn depth(regs: &mut Registers) {
     regs.data_stack.push(regs.data_stack.len() as Cell);
 }
