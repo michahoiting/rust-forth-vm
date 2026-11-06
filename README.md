@@ -143,3 +143,7 @@ stacks, and rolls back any unfinished colon definition.
   can't be found or executed.
 - The dictionary size is chosen when the VM boots, and can't grow afterwards.
 - `!` can overwrite word headers and compiled code, which can crash the process.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

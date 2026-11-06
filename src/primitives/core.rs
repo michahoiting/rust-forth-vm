@@ -1,3 +1,5 @@
+// Copyright (c) 2026 M.W.R. Hoiting
+
 //! Words that work on the data stack and on memory.
 
 use std::io::Write;

@@ -39,6 +39,18 @@ jobs:
       - name: Check the documentation
         run: make doc
 
+  msrv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup toolchain install "$(make -s msrv-version)" --profile minimal
+
+      - name: Check the oldest supported Rust version
+        run: make msrv
+
   miri:
     runs-on: ubuntu-latest
     timeout-minutes: 45

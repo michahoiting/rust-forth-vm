@@ -1,3 +1,5 @@
+// Copyright (c) 2026 M.W.R. Hoiting
+
 //! The Forth words implemented in Rust.
 
 mod compiler;

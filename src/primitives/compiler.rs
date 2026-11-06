@@ -1,3 +1,5 @@
+// Copyright (c) 2026 M.W.R. Hoiting
+
 //! Words that build the dictionary.
 
 use super::runtime::{docol, dodoes, dovar, exit};

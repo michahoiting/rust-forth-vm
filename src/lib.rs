@@ -1,3 +1,5 @@
+// Copyright (c) 2026 M.W.R. Hoiting
+
 //! A clean-room Forth virtual machine: indirect threaded, with a linked-list dictionary and
 //! no dependencies.
 //!
