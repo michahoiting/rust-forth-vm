@@ -73,14 +73,14 @@ pub enum ForthError {
     /// dictionary arena. This matches SIGSEGV, which a signal handler gets for an address
     /// that isn't there.
     AddressOutOfBounds(Cell),
+    /// `@` or `!` was given an address, held here, that is not cell-aligned. This matches
+    /// SIGBUS, and the alignment exception of ANS Forth. `C@` and `C!` can't give it.
+    MisalignedAddress(Cell),
     /// A word that reads or writes memory was given an address, held here, inside the
     /// dictionary arena but at or above HERE. This includes a Cell that starts below HERE and
     /// ends above it. This matches SIGBUS, which a signal handler gets for an address that is
     /// there but can't be accessed.
     UnwrittenAddress(Cell),
-    /// `@` or `!` was given an address, held here, that is not cell-aligned. This matches
-    /// SIGBUS, and the alignment exception of ANS Forth. `C@` and `C!` can't give it.
-    MisalignedAddress(Cell),
     /// `EXECUTE` or `>BODY` was given a Cell, held here, that isn't the code field of a
     /// finished word.
     InvalidExecutionToken(Cell),
