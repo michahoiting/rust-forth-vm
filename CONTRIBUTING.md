@@ -57,6 +57,23 @@ it, because the ruleset requires no approvals, so nothing else stops an unreview
 `CHANGELOG.md` uses git's `union` merge driver, so entries added on two branches don't
 conflict in a local merge or rebase. Check the order of the entries afterwards.
 
+## Mutation testing
+
+`make mutants` runs the full mutation suite, which also runs weekly in GitHub Actions. To
+test only mutations overlapping changes in a diff whose new side matches the working tree:
+
+```sh
+git diff origin/main HEAD > /tmp/pr.diff
+make mutants-diff DIFF=/tmp/pr.diff
+```
+
+Pull requests run the incremental suite as a non-required check. The Actions summary reports
+its mutation-testing time and results; same-repository PRs also get a comment for each run.
+Fork PRs don't get a comment. A failed advisory check doesn't block merging. The incremental
+suite doesn't replace the weekly run: it ignores changes outside the diff and can miss lost
+coverage caused by changes to tests. The configured exclusions still apply, and cargo-mutants
+skips `unsafe fn`, including the primitives.
+
 ## Measuring performance
 
 `make perf` measures the VM on a set of Forth workloads in `examples/perf/`, and compares the

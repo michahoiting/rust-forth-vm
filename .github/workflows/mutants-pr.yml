@@ -1,0 +1,159 @@
+name: Incremental mutation testing
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  incremental-mutants:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      outcome: ${{ steps.mutants.outcome }}
+      exit-code: ${{ steps.mutants.outputs.exit-code }}
+      duration: ${{ steps.mutants.outputs.duration }}
+      counts: ${{ steps.summary.outputs.counts }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Create the PR merge diff
+        run: |
+          test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3
+          git diff --no-ext-diff --no-renames HEAD^1 HEAD > "$RUNNER_TEMP/pr.diff"
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Install cargo-mutants
+        run: cargo install cargo-mutants --locked
+
+      - name: Test mutation reporting
+        run: make mutants-test
+
+      - name: Run incremental mutation testing
+        id: mutants
+        run: |
+          mkdir -p "$RUNNER_TEMP/mutation-output"
+          start=$(date +%s)
+          set +e
+          DIFF="$RUNNER_TEMP/pr.diff" MUTANTS_STATUS_FILE="$RUNNER_TEMP/mutants-status" \
+            CARGO_MUTANTS_OUTPUT="$RUNNER_TEMP/mutation-output" make mutants-diff
+          status=$?
+          set -e
+          echo "duration=$(($(date +%s) - start))" >> "$GITHUB_OUTPUT"
+          if [ -f "$RUNNER_TEMP/mutants-status" ]; then
+            code=$(cat "$RUNNER_TEMP/mutants-status")
+            case "$code" in
+              ''|*[!0-9]*) echo "Invalid cargo-mutants exit code" >&2; exit 1 ;;
+              *) echo "exit-code=$code" >> "$GITHUB_OUTPUT" ;;
+            esac
+          fi
+          exit "$status"
+
+      - name: Summarize mutation results
+        id: summary
+        if: ${{ always() && !cancelled() }}
+        env:
+          MUTANTS_OUTCOME: ${{ steps.mutants.outcome }}
+          MUTANTS_EXIT_CODE: ${{ steps.mutants.outputs.exit-code }}
+          MUTANTS_DURATION: ${{ steps.mutants.outputs.duration }}
+          MUTANTS_OUTCOMES: ${{ runner.temp }}/mutation-output/mutants.out/outcomes.json
+          FROM_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          python3 scripts/mutants_report.py
+          if [ "$FROM_FORK" = "true" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Fork PRs do not receive a result comment." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Keep the report
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: incremental-mutants.out
+          path: ${{ runner.temp }}/mutation-output/mutants.out
+          if-no-files-found: warn
+
+  comment:
+    needs: incremental-mutants
+    if: ${{ always() && !cancelled() && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Comment on the PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TESTED_SHA: ${{ github.sha }}
+          JOB_RESULT: ${{ needs.incremental-mutants.result }}
+          MUTANTS_OUTCOME: ${{ needs.incremental-mutants.outputs.outcome }}
+          MUTANTS_EXIT_CODE: ${{ needs.incremental-mutants.outputs.exit-code }}
+          MUTANTS_DURATION: ${{ needs.incremental-mutants.outputs.duration }}
+          MUTANTS_COUNTS: ${{ needs.incremental-mutants.outputs.counts }}
+        run: |
+          python3 - <<'PY' > "$RUNNER_TEMP/comment.json"
+          import json
+          import os
+          import re
+
+          env = os.environ
+          outcome = env["MUTANTS_OUTCOME"]
+          code = env["MUTANTS_EXIT_CODE"]
+          duration = env["MUTANTS_DURATION"]
+          counts = env["MUTANTS_COUNTS"]
+          if outcome == "success" and code == "0":
+              status = "Completed"
+          elif outcome in ("", "skipped"):
+              status = "Mutation command did not run"
+          else:
+              status = {
+                  "2": "Surviving mutants found",
+                  "3": "Mutation tests timed out",
+                  "4": "Baseline tests failed or timed out",
+              }.get(code, "Mutation command failed")
+          elapsed = f"{duration} seconds" if re.fullmatch(r"[0-9]{1,8}", duration) else "unavailable"
+          lines = [
+              "## Incremental mutation testing",
+              f"**Outcome:** {status}",
+              f"**Mutation command time:** {elapsed}",
+          ]
+          if re.fullmatch(r"[0-9]{1,8}(,[0-9]{1,8}){4}", counts):
+              total, caught, missed, timeout, unviable = map(int, counts.split(","))
+              lines.append(
+                  f"**Mutants tested:** {total}; caught: {caught}; missed: {missed}; "
+                  f"timeouts: {timeout}; unviable: {unviable}."
+              )
+              if total == 0 and outcome == "success" and code == "0":
+                  lines.append("No eligible mutants were tested.")
+          else:
+              lines.append("**Counts:** unavailable; see the Actions logs.")
+          if env["JOB_RESULT"] != "success":
+              lines.append("The advisory job did not succeed; see the Actions logs.")
+          sha = env["TESTED_SHA"]
+          if re.fullmatch(r"[0-9a-f]{40}", sha):
+              lines.append(f"**Tested merge commit:** `{sha}`")
+          url = f'{env["GITHUB_SERVER_URL"]}/{env["GITHUB_REPOSITORY"]}/actions/runs/{env["GITHUB_RUN_ID"]}'
+          lines.append(f"[Actions run and report]({url})")
+          print(json.dumps({"body": "\n\n".join(lines)}))
+          PY
+          case "$PR_NUMBER" in
+            ''|*[!0-9]*) echo "Invalid PR number" >&2; exit 1 ;;
+          esac
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --input "$RUNNER_TEMP/comment.json" > /dev/null
