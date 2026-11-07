@@ -42,7 +42,9 @@ starts this way by default, and also accepts `--interactive`, `--demo` for the d
 and `--version`.
 
 On a terminal, you can edit the line with the arrow keys and the usual Emacs keys. The
-up and down arrows go through the history, and Ctrl-R searches it. Ctrl-C discards the
+up and down arrows go through the history, and Ctrl-R searches it. Tab completes the
+word before the cursor from the dictionary, including your own definitions: a second
+Tab lists the matches, and Tab after a space lists all the words. Ctrl-C discards the
 line, and only stops the program while Forth is running. The history is kept in
 `~/.rustforth_history`, or only for the session if `HOME` isn't set. Input from a pipe
 is read as it is, and isn't saved.
