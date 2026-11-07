@@ -23,9 +23,9 @@ MSRV := $(shell sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
 
 .DEFAULT_GOAL := ci
 
-.PHONY: ci ci-all fmt clippy build test test-release doc doc-serve miri miri-32 check-miri msrv msrv-version code-changed mutants demo demo-expected setup-dev hooks protect metrics
+.PHONY: ci ci-all fmt clippy build test test-release test-minimal doc doc-serve miri miri-32 check-miri msrv msrv-version code-changed mutants demo demo-expected setup-dev hooks protect metrics
 
-ci: fmt clippy build test test-release doc
+ci: fmt clippy build test test-release test-minimal doc
 
 ci-all: ci msrv miri miri-32
 
@@ -34,6 +34,7 @@ fmt:
 
 clippy:
 	cargo clippy --all-targets --locked -- -D warnings
+	cargo clippy --all-targets --locked --no-default-features -- -D warnings
 
 build:
 	cargo build --locked
@@ -43,6 +44,10 @@ test:
 
 test-release:
 	cargo test --release --locked
+
+# Without line editing, which is what the library's users can choose.
+test-minimal:
+	cargo test --locked --no-default-features
 
 # Both views, because each one can have broken links that the other doesn't render.
 doc:

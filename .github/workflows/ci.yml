@@ -55,6 +55,9 @@ jobs:
       - name: Test in release mode
         run: make test-release
 
+      - name: Test without optional features
+        run: make test-minimal
+
       - name: Check the documentation
         run: make doc
 

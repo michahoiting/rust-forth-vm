@@ -10,6 +10,16 @@ publish = false
 name = "forth-vm"
 path = "src/main.rs"
 
+# The `forth-vm` prompt edits lines with `rustyline`. Library users can turn that off with
+# `default-features = false`, which leaves the library with no dependencies. Versions after 17
+# need a newer Rust than `rust-version`.
+[features]
+default = ["readline"]
+readline = ["dep:rustyline"]
+
+[dependencies]
+rustyline = { version = "17", default-features = false, features = ["with-file-history"], optional = true }
+
 # `make clippy` and `make doc` deny warnings, so undocumented code fails CI.
 [lints.rust]
 missing_docs = "warn"

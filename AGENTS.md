@@ -4,7 +4,7 @@ Instructions for coding agents working on this project.
 
 ## Project
 
-A clean-room Forth virtual machine in Rust: indirect threaded, with a linked-list dictionary and no dependencies.
+A clean-room Forth virtual machine in Rust: indirect threaded, with a linked-list dictionary and no dependencies in the library. The only dependency is `rustyline`, for line editing at the `forth-vm` prompt, behind the default `readline` feature. It stays at version 17 until `rust-version` allows a newer one.
 
 The FORTH-83 standard is the reference for how words behave. Later ANS Forth words are fine where they're useful.
 
@@ -48,6 +48,7 @@ Modules are layered, and the layering must stay free of cycles:
 ```
 main → lib → interpreter, primitives → vm → compiler → dictionary → error, cell
                                        vm → input
+main → line_editor
 ```
 
 - Header offsets stay private to `dictionary.rs`. Other modules use its accessors.

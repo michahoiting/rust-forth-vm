@@ -5,7 +5,9 @@
 
 #![cfg(not(miri))]
 
+use std::fs;
 use std::io::Write;
+use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
 /// The number of sections in the menu.
@@ -22,6 +24,9 @@ const MENU: &str = "Demo sections:";
 
 /// The end of the start-up text in interactive mode.
 const INTERACTIVE_HINT: &str = "for more information.\n\n";
+
+/// The byte that starts a terminal control sequence.
+const ESCAPE: u8 = 0x1b;
 
 /// The prompt of the menu.
 const PROMPT: &str = "Enter a section number, Q to quit [0]: ";
@@ -82,6 +87,25 @@ fn a_line_prints_its_output_and_ok() {
         assert!(output.ends_with(&format!("{}42 ok\n\n", INTERACTIVE_HINT)));
         assert!(!output.contains(MENU));
     }
+}
+
+#[test]
+fn piped_input_is_not_edited_or_saved() {
+    let home = Path::new(env!("CARGO_TARGET_TMPDIR")).join("piped-input-home");
+    let _ = fs::remove_dir_all(&home);
+    fs::create_dir_all(&home).unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_forth-vm"))
+        .env("HOME", &home)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(b"1 .\n").unwrap();
+    let output = child.wait_with_output().unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(!output.stdout.contains(&ESCAPE));
+    assert_eq!(fs::read_dir(&home).unwrap().count(), 0);
 }
 
 #[test]
