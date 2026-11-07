@@ -68,6 +68,7 @@ mod vm;
 pub use cell::Cell;
 pub use error::ForthError;
 pub use interpreter::outer_interpreter;
+pub use primitives::COPYRIGHT;
 pub use vm::Registers;
 
 /// Allocates the VM with a dictionary of `dictionary_cells` Cells, and registers the

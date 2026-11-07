@@ -14,7 +14,7 @@ use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
 use std::slice;
 
-use rust_forth_vm::{boot, outer_interpreter, ForthError, Registers};
+use rust_forth_vm::{boot, outer_interpreter, ForthError, Registers, COPYRIGHT};
 
 /// The size of the demo's Forth dictionary.
 const DICTIONARY_CELLS: usize = 1024;
@@ -22,7 +22,7 @@ const DICTIONARY_CELLS: usize = 1024;
 /// The usage line, printed for arguments the program doesn't know.
 const USAGE: &str = "Usage: forth-vm [--interactive | --demo | --version]";
 
-/// What `--version` prints. `build.rs` provides the build date and the git state.
+/// What `--version` prints, and the first line of the interactive prompt. `build.rs` provides the build date and the git state.
 const VERSION: &str = concat!(
     "Rust Forth VM ",
     env!("CARGO_PKG_VERSION"),
@@ -30,6 +30,9 @@ const VERSION: &str = concat!(
     env!("BUILD_INFO"),
     ")"
 );
+
+/// The last line that the interactive prompt prints when it starts.
+const MORE_INFORMATION: &str = r#"Type "HELP", "COPYRIGHT" or "LICENCE" for more information."#;
 
 /// The demo sections, each with its title and one block of Forth source. Each section runs in a
 /// new VM, so it must define everything it uses.
@@ -494,13 +497,12 @@ fn main() -> ExitCode {
         }
     };
 
-    println!("--- FORTH BOOTSEQUENCE COMPLETED ---");
-    println!("The Text Interpreter (Outer Interpreter) is online.");
     if demo {
-        println!();
+        println!("--- FORTH BOOTSEQUENCE COMPLETED ---");
+        println!("The Text Interpreter (Outer Interpreter) is online.\n");
         demo_menu(io::stdin().lock())
     } else {
-        println!("Press Ctrl-D to leave.\n");
+        println!("{}\n{}\n{}\n", VERSION, COPYRIGHT, MORE_INFORMATION);
         interactive(io::stdin().lock())
     }
 }

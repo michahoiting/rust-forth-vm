@@ -21,7 +21,7 @@ const FOOTER: &str = "-------------------------------------\n";
 const MENU: &str = "Demo sections:";
 
 /// The end of the start-up text in interactive mode.
-const INTERACTIVE_HINT: &str = "Press Ctrl-D to leave.\n\n";
+const INTERACTIVE_HINT: &str = "for more information.\n\n";
 
 /// The prompt of the menu.
 const PROMPT: &str = "Enter a section number, Q to quit [0]: ";
@@ -336,6 +336,19 @@ fn version_prints_what_the_program_was_built_from() {
         .unwrap();
     assert!(is_date(date), "{}", date);
     assert!(is_git_state(git), "{}", git);
+}
+
+#[test]
+fn the_interactive_prompt_starts_with_the_version_and_the_notice() {
+    let version = stdout_of(&["--version"], "");
+    let expected = format!(
+        "{}Copyright (c) 2026 M.W.R. Hoiting.\n\
+         All Rights Reserved.\n\
+         Type \"HELP\", \"COPYRIGHT\" or \"LICENCE\" for more information.\n\n\n",
+        version
+    );
+    assert_eq!(stdout_of(&[], ""), expected);
+    assert_eq!(stdout_of(&["--interactive"], ""), expected);
 }
 
 #[test]

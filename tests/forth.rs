@@ -9,7 +9,7 @@ use std::io::{self, BufWriter, Write};
 use std::mem;
 use std::rc::Rc;
 
-use rust_forth_vm::{boot, outer_interpreter, Cell, ForthError, Registers};
+use rust_forth_vm::{boot, outer_interpreter, Cell, ForthError, Registers, COPYRIGHT};
 
 const TEST_CELLS: usize = 1024;
 
@@ -217,10 +217,7 @@ fn dot_writes_a_signed_number() {
 #[test]
 fn information_words_write_their_text() {
     assert_eq!(output_of(&["HELP"]), "Type BYE or press Ctrl-D to leave.\n");
-    assert_eq!(
-        output_of(&["COPYRIGHT"]),
-        "Copyright (c) 2026 M.W.R. Hoiting\n"
-    );
+    assert_eq!(output_of(&["COPYRIGHT"]), format!("{}\n", COPYRIGHT));
     assert_eq!(output_of(&["LICENCE"]), include_str!("../LICENSE"));
 }
 
@@ -228,7 +225,7 @@ fn information_words_write_their_text() {
 fn information_words_work_from_a_definition() {
     assert_eq!(
         output_of(&[": ABOUT COPYRIGHT HELP ;", "ABOUT"]),
-        "Copyright (c) 2026 M.W.R. Hoiting\nType BYE or press Ctrl-D to leave.\n"
+        format!("{}\nType BYE or press Ctrl-D to leave.\n", COPYRIGHT)
     );
 }
 

@@ -41,10 +41,15 @@ succeeds, unless a definition is still open. Press Ctrl-D to leave. `forth-vm`
 starts this way by default, and also accepts `--interactive`, `--demo` for the demo,
 and `--version`.
 
-`--version` prints the version, the UTC date of the build, and the git tag and hash:
+`--version` prints the version, the UTC date of the build, and the git tag and hash. The
+prompt starts with the same line, followed by the copyright notice and the words that give
+more information:
 
 ```text
 Rust Forth VM 0.1.0 (Built 2026-11-06, Git v0.1.0 5d28858)
+Copyright (c) 2026 M.W.R. Hoiting.
+All Rights Reserved.
+Type "HELP", "COPYRIGHT" or "LICENCE" for more information.
 ```
 
 `(dirty)` follows the hash unless the build is a clean release, which means `HEAD` has a

@@ -42,9 +42,10 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 - A `--demo` option with a menu to run all the demo sections or one of them, each in a new
   VM. `make demo` opens this menu.
 - A `--version` option, which prints the version, the build date, and the git tag and
-  hash. `build.rs` provides the build information.
+  hash. `build.rs` provides the build information. The interactive prompt starts with
+  the same line, the copyright notice, and the words that give more information.
 - `HELP`, `COPYRIGHT` and `LICENCE`, which print how to leave the program, the copyright
-  notice, and the licence.
+  notice, and the licence. The library exports the notice as `COPYRIGHT`.
 - The MIT licence, and a minimum supported Rust version.
 - This changelog, a contributing guide, a versioning policy, and getting-started steps in
   the README.

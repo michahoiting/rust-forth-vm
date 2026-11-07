@@ -11,6 +11,8 @@ use crate::dictionary::{F_HIDDEN, F_IMMEDIATE};
 use crate::error::ForthError;
 use crate::vm::{code_cell, Registers};
 
+pub use self::core::COPYRIGHT;
+
 /// Registers the core primitives under their official text names.
 ///
 /// # Errors

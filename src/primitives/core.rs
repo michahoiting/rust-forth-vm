@@ -11,7 +11,7 @@ use crate::error::ForthError;
 use crate::vm::Registers;
 
 /// The copyright notice, which `COPYRIGHT` prints.
-const COPYRIGHT: &str = "Copyright (c) 2026 M.W.R. Hoiting";
+pub const COPYRIGHT: &str = "Copyright (c) 2026 M.W.R. Hoiting.\nAll Rights Reserved.";
 
 /// What `HELP` prints.
 const HELP: &str = "Type BYE or press Ctrl-D to leave.\n";
@@ -273,7 +273,10 @@ mod tests {
     #[test]
     fn copyright_writes_the_notice_on_a_line() {
         unsafe {
-            assert_eq!(output_of(copyright), "Copyright (c) 2026 M.W.R. Hoiting\n");
+            assert_eq!(
+                output_of(copyright),
+                "Copyright (c) 2026 M.W.R. Hoiting.\nAll Rights Reserved.\n"
+            );
         }
     }
 
