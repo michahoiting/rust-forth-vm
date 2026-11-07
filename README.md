@@ -46,7 +46,7 @@ prompt starts with the same line, followed by the copyright notice and the words
 more information:
 
 ```text
-Rust Forth VM 0.1.0 (Built 2026-11-06, Git v0.1.0 5d28858)
+Rust Forth VM 0.1.0 (Built 2026-11-06, Git 0.1.0 5d28858)
 Copyright (c) 2026 M.W.R. Hoiting.
 Type "HELP", "COPYRIGHT" or "LICENSE" for more information.
 ```
