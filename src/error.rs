@@ -19,11 +19,11 @@ use crate::cell::Cell;
 /// ```
 /// use std::io;
 ///
-/// use rust_forth_vm::{boot, outer_interpreter, ForthError};
+/// use rust_forth_vm::{boot, outer_interpreter, ForthError, VmConfig};
 ///
 /// // SAFETY: this VM is only used through the crate's functions.
 /// let result = unsafe {
-///     let mut regs = boot(io::sink(), 1024)?;
+///     let mut regs = boot(io::sink(), VmConfig::new(1024))?;
 ///     outer_interpreter(&mut regs, "HELLO")
 /// };
 ///
@@ -39,10 +39,18 @@ pub enum ForthError {
     DataStackUnderflow,
     /// `EXIT` ran with nothing to return to.
     ReturnStackUnderflow,
+    /// A push did not fit in the data stack, whose limit comes from
+    /// [`VmConfig`](crate::VmConfig).
+    DataStackOverflow,
+    /// A return address did not fit in the return stack, whose limit comes from
+    /// [`VmConfig`](crate::VmConfig). Colon words nested too deeply, as runaway recursion does.
+    ReturnStackOverflow,
     /// A write did not fit in the dictionary.
     DictionaryOverflow,
     /// A dictionary of this many Cells could not be allocated.
     DictionaryTooLarge(usize),
+    /// A stack of this many Cells could not be allocated.
+    StackTooLarge(usize),
     /// A parsing word, named here, found no name in the input.
     MissingName(&'static str),
     /// `DOES>` ran from the text interpreter.
@@ -92,9 +100,14 @@ impl fmt::Display for ForthError {
         match self {
             ForthError::DataStackUnderflow => write!(f, "Data stack underflow."),
             ForthError::ReturnStackUnderflow => write!(f, "Return stack underflow."),
+            ForthError::DataStackOverflow => write!(f, "Data stack overflow."),
+            ForthError::ReturnStackOverflow => write!(f, "Return stack overflow."),
             ForthError::DictionaryOverflow => write!(f, "Dictionary overflow."),
             ForthError::DictionaryTooLarge(cells) => {
                 write!(f, "Cannot allocate a dictionary of {} Cells.", cells)
+            }
+            ForthError::StackTooLarge(cells) => {
+                write!(f, "Cannot allocate a stack of {} Cells.", cells)
             }
             ForthError::MissingName(word) => write!(f, "{} needs a name.", word),
             ForthError::DoesOutsideDefinition => {

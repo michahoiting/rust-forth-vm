@@ -14,7 +14,7 @@ use crate::vm::{enter_word, Registers};
 /// `DOCOL`: Executed when entering a nested `:` (colon) word.
 pub(super) unsafe fn docol(regs: &mut Registers) {
     // Push the current IP to the Return Stack (return address)
-    regs.return_stack.push(regs.ip);
+    regs.push_return(regs.ip);
     // Move IP to the inside of the definition, which is the Parameter Field
     regs.ip = pfa_of(regs.w);
 }
@@ -22,13 +22,13 @@ pub(super) unsafe fn docol(regs: &mut Registers) {
 /// `DOVAR`: Default execution semantics for a word created via CREATE (or VARIABLE).
 /// It simply pushes the memory address of its own Parameter Field onto the stack.
 pub(super) unsafe fn dovar(regs: &mut Registers) {
-    regs.data_stack.push(pfa_of(regs.w) as Cell);
+    regs.push(pfa_of(regs.w) as Cell);
 }
 
 /// `DOCON`: Execution semantics of a word made by CONSTANT.
 /// It pushes the value held in the word's Parameter Field.
 pub(super) unsafe fn docon(regs: &mut Registers) {
-    regs.data_stack.push(*pfa_of(regs.w));
+    regs.push(*pfa_of(regs.w));
 }
 
 /// `EXIT ( -- )`: Cleans up and exits a nested `:` word (compiled by `;`).
@@ -80,7 +80,7 @@ pub(super) unsafe fn execute(regs: &mut Registers) {
 /// data cell.
 pub(super) unsafe fn lit(regs: &mut Registers) {
     let literal_value = *regs.ip;
-    regs.data_stack.push(literal_value);
+    regs.push(literal_value);
     regs.ip = regs.ip.add(1); // Skip the inline data cell
 }
 
@@ -89,8 +89,8 @@ mod tests {
     use std::io;
 
     use super::*;
-    use crate::boot;
     use crate::dictionary::cfa_of;
+    use crate::{boot, VmConfig};
 
     const TEST_CELLS: usize = 1024;
 
@@ -101,7 +101,7 @@ mod tests {
     #[test]
     fn docon_pushes_the_cell_behind_the_code_field() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             let word: [Cell; 3] = [0, 42, 99];
             regs.w = word.as_ptr();
             regs.data_stack.push(1);
@@ -116,7 +116,7 @@ mod tests {
     #[test]
     fn quit_stops_the_vm_and_leaves_the_data_stack_alone() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             regs.data_stack.push(7);
 
             quit(&mut regs);
@@ -128,7 +128,7 @@ mod tests {
     #[test]
     fn abort_stops_the_vm_and_leaves_the_stack_to_the_interpreter() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             regs.data_stack.push(7);
 
             abort(&mut regs);
@@ -140,7 +140,7 @@ mod tests {
     #[test]
     fn bye_stops_the_vm_with_code_zero() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             bye(&mut regs);
             assert!(matches!(regs.error, Some(ForthError::Bye(0))));
         }
@@ -149,7 +149,7 @@ mod tests {
     #[test]
     fn bye_with_code_pops_a_cell() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             regs.data_stack.push(3);
             bye_with_code(&mut regs);
             assert!(matches!(regs.error, Some(ForthError::Bye(3))));
@@ -160,7 +160,7 @@ mod tests {
     #[test]
     fn bye_with_code_reports_stack_underflow() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             bye_with_code(&mut regs);
             assert!(matches!(regs.error, Some(ForthError::DataStackUnderflow)));
         }
@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn execute_runs_a_word_and_consumes_the_xt() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             let xt = xt_of(&regs, "DUP");
             regs.data_stack.extend_from_slice(&[7, xt]);
 
@@ -182,7 +182,7 @@ mod tests {
     #[test]
     fn execute_rejects_a_pending_word() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             // Code 0 would give another error if it ran, so this also shows that nothing ran.
             let xt = regs
                 .compiler
@@ -201,7 +201,7 @@ mod tests {
     #[test]
     fn execute_rejects_a_number_without_running_anything() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             regs.data_stack.extend_from_slice(&[1, 5]);
 
             execute(&mut regs);
@@ -216,7 +216,7 @@ mod tests {
     #[test]
     fn execute_needs_a_cell() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             execute(&mut regs);
             assert!(matches!(regs.error, Some(ForthError::DataStackUnderflow)));
         }

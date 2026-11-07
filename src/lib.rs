@@ -3,7 +3,7 @@
 //! A clean-room Forth virtual machine: indirect threaded, with a linked-list dictionary and
 //! no dependencies.
 //!
-//! [`boot`] creates a VM, and [`outer_interpreter`] evaluates Forth source in it. All the
+//! [`boot`] creates a VM from a [`VmConfig`], and [`outer_interpreter`] evaluates Forth source in it. All the
 //! state lives in [`Registers`], and carries over from one call to the next. Errors are
 //! [`ForthError`]s. The stacks and the dictionary hold [`Cell`]s.
 //!
@@ -20,7 +20,7 @@
 //! use std::io::{self, Write};
 //! use std::rc::Rc;
 //!
-//! use rust_forth_vm::{boot, outer_interpreter, ForthError};
+//! use rust_forth_vm::{boot, outer_interpreter, ForthError, VmConfig};
 //!
 //! #[derive(Clone, Default)]
 //! struct Output(Rc<RefCell<Vec<u8>>>);
@@ -39,7 +39,7 @@
 //!
 //! // SAFETY: this VM is only used through the crate's functions.
 //! unsafe {
-//!     let mut regs = boot(output.clone(), 1024)?;
+//!     let mut regs = boot(output.clone(), VmConfig::new(1024))?;
 //!     outer_interpreter(&mut regs, ": DOUBLE DUP + ;")?;
 //!     outer_interpreter(&mut regs, "21 DOUBLE .")?;
 //! }
@@ -69,16 +69,17 @@ pub use cell::Cell;
 pub use error::ForthError;
 pub use interpreter::outer_interpreter;
 pub use primitives::COPYRIGHT;
-pub use vm::Registers;
+pub use vm::{Registers, VmConfig, DEFAULT_DATA_STACK_CELLS, DEFAULT_RETURN_STACK_CELLS};
 
-/// Allocates the VM with a dictionary of `dictionary_cells` Cells, and registers the
-/// core primitives. The dictionary can't grow later. Forth words write their output to
-/// `output`, which is flushed at the end of each evaluated input.
+/// Allocates the VM with the sizes in `config`, and registers the core primitives. The
+/// dictionary and the stacks can't grow later. Forth words write their output to `output`,
+/// which is flushed at the end of each evaluated input.
 ///
 /// # Errors
 ///
-/// Returns [`ForthError::DictionaryTooLarge`] if the dictionary can't be allocated, and
-/// [`ForthError::DictionaryOverflow`] if it is too small to hold the primitives.
+/// Returns [`ForthError::DictionaryTooLarge`] if the dictionary can't be allocated,
+/// [`ForthError::StackTooLarge`] if a stack can't be, and
+/// [`ForthError::DictionaryOverflow`] if the dictionary is too small to hold the primitives.
 ///
 /// # Safety
 ///
@@ -90,19 +91,19 @@ pub use vm::Registers;
 /// ```
 /// use std::io;
 ///
-/// use rust_forth_vm::{boot, ForthError};
+/// use rust_forth_vm::{boot, ForthError, VmConfig};
 ///
 /// // SAFETY: neither VM is used for anything else.
 /// unsafe {
-///     assert!(boot(io::stdout(), 1024).is_ok());
-///     assert!(matches!(boot(io::sink(), 1), Err(ForthError::DictionaryOverflow)));
+///     assert!(boot(io::stdout(), VmConfig::new(1024)).is_ok());
+///     assert!(matches!(boot(io::sink(), VmConfig::new(1)), Err(ForthError::DictionaryOverflow)));
 /// }
 /// ```
 pub unsafe fn boot(
     output: impl Write + 'static,
-    dictionary_cells: usize,
+    config: VmConfig,
 ) -> Result<Registers, ForthError> {
-    let mut regs = Registers::new(Box::new(output), dictionary_cells)?;
+    let mut regs = Registers::new(Box::new(output), config)?;
     primitives::install(&mut regs)?;
     Ok(regs)
 }

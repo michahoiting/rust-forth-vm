@@ -20,13 +20,13 @@ use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
 use std::slice;
 
-use rust_forth_vm::{boot, outer_interpreter, ForthError, Registers, COPYRIGHT};
+use rust_forth_vm::{boot, outer_interpreter, ForthError, Registers, VmConfig, COPYRIGHT};
 
 #[cfg(feature = "readline")]
 use line_editor::LineEditor;
 
 /// The size of the demo's Forth dictionary.
-const DICTIONARY_CELLS: usize = 1024;
+const DICTIONARY_CELLS: usize = 64 * 1024;
 
 /// The usage line, printed for arguments the program doesn't know.
 const USAGE: &str = "Usage: forth-vm [--interactive | --demo | --version]";
@@ -333,7 +333,7 @@ fn section(number: usize) -> (&'static str, &'static [&'static str]) {
 ///
 /// The result has the same requirements as the result of [`boot`].
 unsafe fn new_vm() -> Registers {
-    boot(io::stdout(), DICTIONARY_CELLS)
+    boot(io::stdout(), VmConfig::new(DICTIONARY_CELLS))
         .expect("the dictionary must be able to hold the primitives")
 }
 

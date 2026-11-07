@@ -25,6 +25,77 @@ use crate::input::InputSource;
 /// to point to the Code Field of their word, which [`enter_word`] arranges.
 pub(crate) type PrimitiveFn = unsafe fn(registers: &mut Registers);
 
+/// The data stack limit that [`VmConfig::new`] chooses, in Cells.
+pub const DEFAULT_DATA_STACK_CELLS: usize = 1024;
+
+/// The return stack limit that [`VmConfig::new`] chooses, in Cells.
+pub const DEFAULT_RETURN_STACK_CELLS: usize = 1024;
+
+/// The sizes of a VM, in Cells, which [`boot`](crate::boot) takes. None of them can change
+/// after that.
+///
+/// A push onto a full stack gives [`ForthError::DataStackOverflow`] or
+/// [`ForthError::ReturnStackOverflow`]. A stack limit of 0 is allowed, and makes the first push
+/// fail. The return stack holds one Cell for each level of nested colon words, including the
+/// word that the text interpreter runs.
+///
+/// # Examples
+///
+/// ```
+/// use std::io;
+///
+/// use rust_forth_vm::{boot, outer_interpreter, ForthError, VmConfig};
+///
+/// let config = VmConfig {
+///     data_stack_cells: 2,
+///     ..VmConfig::new(1024)
+/// };
+///
+/// // SAFETY: this VM is only used through the crate's functions.
+/// unsafe {
+///     let mut regs = boot(io::sink(), config)?;
+///     assert!(matches!(
+///         outer_interpreter(&mut regs, "1 2 3"),
+///         Err(ForthError::DataStackOverflow)
+///     ));
+/// }
+/// # Ok::<(), ForthError>(())
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VmConfig {
+    /// The size of the dictionary.
+    pub dictionary_cells: usize,
+    /// The most Cells that the data stack can hold.
+    pub data_stack_cells: usize,
+    /// The most Cells that the return stack can hold.
+    pub return_stack_cells: usize,
+}
+
+impl VmConfig {
+    /// Returns a configuration with a dictionary of `dictionary_cells` Cells, and stacks of
+    /// [`DEFAULT_DATA_STACK_CELLS`] and [`DEFAULT_RETURN_STACK_CELLS`] Cells.
+    pub fn new(dictionary_cells: usize) -> VmConfig {
+        VmConfig {
+            dictionary_cells,
+            data_stack_cells: DEFAULT_DATA_STACK_CELLS,
+            return_stack_cells: DEFAULT_RETURN_STACK_CELLS,
+        }
+    }
+}
+
+/// Creates an empty stack with room for `cells` entries, so that it doesn't reallocate later.
+///
+/// # Errors
+///
+/// Returns [`ForthError::StackTooLarge`] if the stack can't be allocated.
+fn reserved_stack<T>(cells: usize) -> Result<Vec<T>, ForthError> {
+    let mut stack = Vec::new();
+    stack
+        .try_reserve_exact(cells)
+        .map_err(|_| ForthError::StackTooLarge(cells))?;
+    Ok(stack)
+}
+
 /// The state of a Forth VM. Create one with [`boot`](crate::boot), and evaluate Forth with
 /// [`outer_interpreter`](crate::outer_interpreter).
 ///
@@ -42,6 +113,10 @@ pub struct Registers {
     pub(crate) data_stack: Vec<Cell>,
     /// Return stack (R-stack) for nested IP pointers.
     pub(crate) return_stack: Vec<*const Cell>,
+    /// The most Cells that the data stack can hold.
+    pub(crate) data_stack_limit: usize,
+    /// The most Cells that the return stack can hold.
+    pub(crate) return_stack_limit: usize,
     /// Word storage, HERE and the head of the word list.
     pub(crate) dictionary: Dictionary,
 
@@ -65,11 +140,11 @@ impl Registers {
     /// ```
     /// use std::io;
     ///
-    /// use rust_forth_vm::{boot, outer_interpreter, ForthError};
+    /// use rust_forth_vm::{boot, outer_interpreter, ForthError, VmConfig};
     ///
     /// // SAFETY: this VM is only used through the crate's functions.
     /// unsafe {
-    ///     let mut regs = boot(io::sink(), 1024)?;
+    ///     let mut regs = boot(io::sink(), VmConfig::new(1024))?;
     ///     assert!(!regs.is_compiling());
     ///     outer_interpreter(&mut regs, ": THREE 3")?;
     ///     assert!(regs.is_compiling());
@@ -96,11 +171,11 @@ impl Registers {
     /// ```
     /// use std::io;
     ///
-    /// use rust_forth_vm::{boot, outer_interpreter, ForthError};
+    /// use rust_forth_vm::{boot, outer_interpreter, ForthError, VmConfig};
     ///
     /// // SAFETY: this VM is only used through the crate's functions.
     /// unsafe {
-    ///     let mut regs = boot(io::sink(), 1024)?;
+    ///     let mut regs = boot(io::sink(), VmConfig::new(1024)).unwrap();
     ///     outer_interpreter(&mut regs, ": THREE 3 ;")?;
     ///     assert!(regs.word_names().iter().any(|name| name == "THREE"));
     /// }
@@ -114,17 +189,20 @@ impl Registers {
     ///
     /// # Errors
     ///
-    /// Returns [`ForthError::DictionaryTooLarge`] if the dictionary can't be allocated.
+    /// Returns [`ForthError::DictionaryTooLarge`] if the dictionary can't be allocated, and
+    /// [`ForthError::StackTooLarge`] if a stack can't be.
     pub(crate) unsafe fn new(
         output: Box<dyn Write>,
-        dictionary_cells: usize,
+        config: VmConfig,
     ) -> Result<Registers, ForthError> {
         Ok(Registers {
             ip: ptr::null(),
             w: ptr::null(),
-            data_stack: Vec::new(),
-            return_stack: Vec::new(),
-            dictionary: Dictionary::new(dictionary_cells)?,
+            data_stack: reserved_stack(config.data_stack_cells)?,
+            return_stack: reserved_stack(config.return_stack_cells)?,
+            data_stack_limit: config.data_stack_cells,
+            return_stack_limit: config.return_stack_cells,
+            dictionary: Dictionary::new(config.dictionary_cells)?,
             compiler: Compiler::default(),
             output,
             input: InputSource::default(),
@@ -137,6 +215,26 @@ impl Registers {
     pub(crate) fn set_error(&mut self, error: ForthError) {
         if self.error.is_none() {
             self.error = Some(error);
+        }
+    }
+
+    /// Pushes a Cell, flagging an error and leaving the stack alone when it is full. Everything
+    /// outside of tests pushes through here, so that the limit holds.
+    pub(crate) fn push(&mut self, value: Cell) {
+        if self.data_stack.len() < self.data_stack_limit {
+            self.data_stack.push(value);
+        } else {
+            self.set_error(ForthError::DataStackOverflow);
+        }
+    }
+
+    /// Pushes a return address, flagging an error and leaving the stack alone when it is full.
+    /// Everything outside of tests pushes through here, so that the limit holds.
+    pub(crate) fn push_return(&mut self, address: *const Cell) {
+        if self.return_stack.len() < self.return_stack_limit {
+            self.return_stack.push(address);
+        } else {
+            self.set_error(ForthError::ReturnStackOverflow);
         }
     }
 
@@ -217,10 +315,10 @@ unsafe fn next(regs: &mut Registers) {
 /// directly by [`enter_word`].
 unsafe fn dodoes(regs: &mut Registers) {
     // 1. Push the address of the word's data onto the stack
-    regs.data_stack.push(pfa_of(regs.w) as Cell);
+    regs.push(pfa_of(regs.w) as Cell);
 
     // 2. Save the current IP onto the Return Stack
-    regs.return_stack.push(regs.ip);
+    regs.push_return(regs.ip);
 
     // 3. Jump with the IP to the Forth action code stored behind DOES>
     regs.ip = *regs.w as *const Cell;
@@ -292,14 +390,118 @@ mod tests {
 
     use super::*;
     use crate::dictionary::cfa_of;
-    use crate::{boot, outer_interpreter};
+    use crate::{boot, outer_interpreter, VmConfig};
 
     const TEST_CELLS: usize = 1024;
+
+    // Boots a VM with these stack limits, and a dictionary large enough for every test.
+    unsafe fn limited_vm(data_stack_cells: usize, return_stack_cells: usize) -> Registers {
+        let config = VmConfig {
+            data_stack_cells,
+            return_stack_cells,
+            ..VmConfig::new(TEST_CELLS)
+        };
+        boot(io::sink(), config).unwrap()
+    }
+
+    #[test]
+    fn new_uses_the_default_stack_limits() {
+        assert_eq!(
+            VmConfig::new(TEST_CELLS),
+            VmConfig {
+                dictionary_cells: TEST_CELLS,
+                data_stack_cells: DEFAULT_DATA_STACK_CELLS,
+                return_stack_cells: DEFAULT_RETURN_STACK_CELLS,
+            }
+        );
+    }
+
+    #[test]
+    fn stacks_are_reserved_up_front() {
+        unsafe {
+            let regs = limited_vm(3, 2);
+            assert!(regs.data_stack.capacity() >= 3);
+            assert!(regs.return_stack.capacity() >= 2);
+        }
+    }
+
+    #[test]
+    fn push_fills_the_data_stack_up_to_its_limit() {
+        unsafe {
+            let mut regs = limited_vm(2, 2);
+            regs.push(1);
+            regs.push(2);
+            assert!(regs.error.is_none(), "got: {:?}", regs.error);
+            assert_eq!(regs.data_stack, [1, 2]);
+        }
+    }
+
+    #[test]
+    fn push_past_the_limit_is_an_error_and_keeps_the_data_stack() {
+        unsafe {
+            let mut regs = limited_vm(2, 2);
+            regs.push(1);
+            regs.push(2);
+            regs.push(3);
+            assert!(matches!(regs.error, Some(ForthError::DataStackOverflow)));
+            assert_eq!(regs.data_stack, [1, 2]);
+        }
+    }
+
+    #[test]
+    fn push_return_fills_the_return_stack_up_to_its_limit() {
+        unsafe {
+            let mut regs = limited_vm(2, 2);
+            let thread: [Cell; 2] = [0, 0];
+            regs.push_return(thread.as_ptr());
+            regs.push_return(thread.as_ptr().add(1));
+            assert!(regs.error.is_none(), "got: {:?}", regs.error);
+            assert_eq!(regs.return_stack, [thread.as_ptr(), thread.as_ptr().add(1)]);
+        }
+    }
+
+    #[test]
+    fn push_return_past_the_limit_is_an_error_and_keeps_the_return_stack() {
+        unsafe {
+            let mut regs = limited_vm(2, 2);
+            let thread: [Cell; 3] = [0, 0, 0];
+            regs.push_return(thread.as_ptr());
+            regs.push_return(thread.as_ptr().add(1));
+            regs.push_return(thread.as_ptr().add(2));
+            assert!(matches!(regs.error, Some(ForthError::ReturnStackOverflow)));
+            assert_eq!(regs.return_stack, [thread.as_ptr(), thread.as_ptr().add(1)]);
+        }
+    }
+
+    #[test]
+    fn a_word_changed_by_does_needs_room_on_both_stacks() {
+        unsafe {
+            let mut regs = limited_vm(8, 8);
+            outer_interpreter(&mut regs, ": D CREATE DOES> ; D X").unwrap();
+            let cfa = cfa_of(regs.dictionary.find_word("X").unwrap());
+            let thread: [Cell; 1] = [0];
+
+            regs.data_stack_limit = 0;
+            regs.w = cfa;
+            regs.ip = thread.as_ptr();
+            enter_word(&mut regs);
+            assert!(matches!(regs.error, Some(ForthError::DataStackOverflow)));
+
+            regs.error = None;
+            regs.return_stack.clear();
+            regs.data_stack_limit = 8;
+            regs.return_stack_limit = 0;
+            regs.w = cfa;
+            regs.ip = thread.as_ptr();
+            enter_word(&mut regs);
+            assert!(matches!(regs.error, Some(ForthError::ReturnStackOverflow)));
+        }
+    }
 
     #[test]
     fn a_word_changed_by_does_pushes_its_pfa_and_jumps_to_its_action() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             outer_interpreter(&mut regs, ": D CREATE DOES> ; D X").unwrap();
             let cfa = cfa_of(regs.dictionary.find_word("X").unwrap());
             let thread: [Cell; 1] = [0];
@@ -318,7 +520,7 @@ mod tests {
     #[test]
     fn a_zero_code_field_is_an_error() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             outer_interpreter(&mut regs, "CREATE X").unwrap();
             let cfa = cfa_of(regs.dictionary.find_word("X").unwrap());
             *cfa = 0;

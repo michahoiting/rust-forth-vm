@@ -38,7 +38,7 @@ unsafe fn parse_xt(regs: &mut Registers, word: &'static str) -> Option<Cell> {
 /// `' ( -- xt )`: Parses a name and pushes the execution token of that word.
 pub(super) unsafe fn tick(regs: &mut Registers) {
     if let Some(xt) = parse_xt(regs, "'") {
-        regs.data_stack.push(xt);
+        regs.push(xt);
     }
 }
 
@@ -60,14 +60,14 @@ mod tests {
 
     use super::*;
     use crate::dictionary::pfa_of;
-    use crate::{boot, outer_interpreter};
+    use crate::{boot, outer_interpreter, VmConfig};
 
     const TEST_CELLS: usize = 1024;
 
     #[test]
     fn paren_comment_skips_to_the_closing_parenthesis() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             regs.input.load("skipped ) next");
             regs.data_stack.push(7);
 
@@ -81,7 +81,7 @@ mod tests {
     #[test]
     fn paren_comment_reports_a_missing_parenthesis() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             regs.input.load("never closed");
 
             paren_comment(&mut regs);
@@ -92,7 +92,7 @@ mod tests {
     #[test]
     fn line_comment_skips_the_rest_of_the_line() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             regs.input.load("skipped\nnext");
             regs.data_stack.push(7);
 
@@ -106,7 +106,7 @@ mod tests {
     #[test]
     fn tick_pushes_the_execution_token() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             regs.input.load("DUP next");
             regs.data_stack.push(7);
 
@@ -121,7 +121,7 @@ mod tests {
     #[test]
     fn tick_leaves_the_stack_alone_on_an_error() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             regs.input.load("NOPE");
             regs.data_stack.push(7);
 
@@ -137,7 +137,7 @@ mod tests {
     #[test]
     fn bracket_tick_compiles_the_xt_as_a_literal() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             outer_interpreter(&mut regs, ": Y 5 ;").unwrap();
             let literal = cfa_of(regs.dictionary.find_word("Y").unwrap());
             let lit_cfa = *pfa_of(literal);
@@ -158,7 +158,7 @@ mod tests {
     #[test]
     fn bracket_tick_only_works_while_compiling() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             regs.input.load("DUP next");
 
             bracket_tick(&mut regs);

@@ -14,8 +14,11 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 
 - An indirect-threaded Forth VM with a linked-list dictionary, a text interpreter, and a
   compiler for colon definitions.
-- A library API: `boot` creates a VM with a chosen dictionary size and an output writer,
-  and `outer_interpreter` evaluates Forth source in it. Errors are `ForthError` values.
+- A library API: `boot` creates a VM from a `VmConfig` and an output writer, and
+  `outer_interpreter` evaluates Forth source in it. Errors are `ForthError` values.
+- Stack limits: `VmConfig` sets the dictionary size and the limit of each stack, which
+  defaults to 1024 Cells. Going past a limit gives `ForthError::DataStackOverflow` or
+  `ForthError::ReturnStackOverflow` instead of using up memory, and the VM stays usable.
 - Words for arithmetic and output: `+` and `.`.
 - Memory words: `@`, `!`, `,` and `VARIABLE`. `@` and `!` are limited to dictionary
   addresses below `HERE`.

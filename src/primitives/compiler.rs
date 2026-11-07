@@ -150,7 +150,7 @@ pub(super) unsafe fn colon_noname(regs: &mut Registers) {
         regs.compiler
             .begin_definition(&mut regs.dictionary, "", code_cell(docol), F_HIDDEN);
     if let Some(xt) = regs.check(result) {
-        regs.data_stack.push(xt);
+        regs.push(xt);
     }
 }
 
@@ -174,14 +174,14 @@ mod tests {
     use super::*;
     use crate::dictionary::{is_hidden, is_immediate, is_pending, pfa_of};
     use crate::vm::{enter_word, PrimitiveFn};
-    use crate::{boot, outer_interpreter};
+    use crate::{boot, outer_interpreter, VmConfig};
 
     const TEST_CELLS: usize = 1024;
 
     #[test]
     fn c_comma_presses_the_low_byte_and_pops_it() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             let addr = regs.dictionary.here();
             regs.data_stack.extend_from_slice(&[1, 0x1AB]);
 
@@ -196,7 +196,7 @@ mod tests {
     #[test]
     fn allot_moves_here_and_pops_the_size() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             let addr = regs.dictionary.here();
             regs.data_stack.extend_from_slice(&[1, 3]);
 
@@ -210,7 +210,7 @@ mod tests {
     #[test]
     fn allot_reads_its_size_as_a_signed_number() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             regs.input.load("X");
             create(&mut regs);
             let data = regs.dictionary.here();
@@ -226,7 +226,7 @@ mod tests {
     #[test]
     fn align_aligns_here() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             let addr = regs.dictionary.here();
             regs.dictionary.char_comma(1).unwrap();
 
@@ -239,7 +239,7 @@ mod tests {
     fn words_that_break_up_cells_are_refused_in_a_definition() {
         unsafe {
             for (word, name) in [(c_comma as PrimitiveFn, "C,"), (allot, "ALLOT")] {
-                let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+                let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
                 outer_interpreter(&mut regs, ": X").unwrap();
                 let before = regs.dictionary.mark();
                 regs.data_stack.push(1);
@@ -259,7 +259,7 @@ mod tests {
     #[test]
     fn constant_moves_its_value_into_a_new_word() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             regs.input.load("X");
             regs.data_stack.extend_from_slice(&[1, 42]);
 
@@ -285,7 +285,7 @@ mod tests {
     #[test]
     fn constant_needs_a_value_and_writes_nothing_without_one() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             regs.input.load("X");
             let before = regs.dictionary.mark();
 
@@ -298,7 +298,7 @@ mod tests {
     #[test]
     fn constant_needs_a_name_and_writes_nothing_without_one() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             regs.input.load("");
             regs.data_stack.push(42);
             let before = regs.dictionary.mark();
@@ -317,10 +317,10 @@ mod tests {
         unsafe {
             // The last size that fails has room for the header, but not for the value.
             let smallest = (0..TEST_CELLS)
-                .find(|cells| boot(io::sink(), *cells).is_ok())
+                .find(|cells| boot(io::sink(), VmConfig::new(*cells)).is_ok())
                 .unwrap();
             for cells in smallest..TEST_CELLS {
-                let mut regs = boot(io::sink(), cells).unwrap();
+                let mut regs = boot(io::sink(), VmConfig::new(cells)).unwrap();
                 regs.input.load("X");
                 regs.data_stack.push(42);
                 let before = regs.dictionary.mark();
@@ -340,7 +340,7 @@ mod tests {
     #[test]
     fn noname_starts_a_hidden_pending_definition_and_pushes_its_xt() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             colon_noname(&mut regs);
 
             assert!(regs.error.is_none());
@@ -355,7 +355,7 @@ mod tests {
     #[test]
     fn colon_starts_a_pending_definition_that_is_not_hidden() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             regs.input.load("X");
             colon(&mut regs);
 
@@ -371,7 +371,7 @@ mod tests {
     #[test]
     fn immediate_marks_the_newest_word_and_leaves_the_stack_alone() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             regs.input.load("X");
             create(&mut regs);
             regs.data_stack.push(7);
@@ -386,7 +386,7 @@ mod tests {
     #[test]
     fn does_stores_the_action_thread_in_the_code_field() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             outer_interpreter(&mut regs, ": D CREATE DOES> ; D X").unwrap();
 
             // The thread of D is CREATE, DOES>, EXIT, and the action is everything after DOES>.
