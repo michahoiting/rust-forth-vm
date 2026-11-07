@@ -86,6 +86,15 @@ pub(crate) unsafe fn is_created(header: *mut Cell) -> bool {
     *header.add(LEN_FLAGS) & F_CREATED != 0
 }
 
+/// Returns whether a name can find the word, so it's neither hidden nor still being defined.
+///
+/// # Safety
+///
+/// `header` must point to a word header.
+unsafe fn is_findable(header: *mut Cell) -> bool {
+    !is_hidden(header) && !is_pending(header)
+}
+
 /// Returns whether the word has [`F_HIDDEN`] set.
 ///
 /// # Safety
@@ -405,8 +414,7 @@ impl Dictionary {
             let len = *current_lfa.add(LEN_FLAGS) & LEN_MASK;
 
             // Reconstruct the name from raw dictionary data pointers
-            if !is_hidden(current_lfa)
-                && !is_pending(current_lfa)
+            if is_findable(current_lfa)
                 && std::slice::from_raw_parts(nfa_ptr, len) == token.as_bytes()
             {
                 return Some(current_lfa);
@@ -415,6 +423,32 @@ impl Dictionary {
             current_lfa = *current_lfa.add(LFA) as *mut Cell;
         }
         None
+    }
+
+    /// Returns the sorted names of the words that [`find_word`](Self::find_word) can find, each
+    /// one once. A name that isn't valid UTF-8, because `C!` overwrote it, comes back with
+    /// replacement characters.
+    ///
+    /// # Safety
+    ///
+    /// Every word header must be intact, as for [`find_word`](Self::find_word).
+    pub(crate) unsafe fn word_names(&self) -> Vec<String> {
+        let mut names = Vec::new();
+        let mut current_lfa = self.last_word;
+
+        while !current_lfa.is_null() {
+            let nfa_ptr = *current_lfa.add(NFA) as *const u8;
+            let len = *current_lfa.add(LEN_FLAGS) & LEN_MASK;
+
+            if is_findable(current_lfa) && len > 0 {
+                let name = std::slice::from_raw_parts(nfa_ptr, len);
+                names.push(String::from_utf8_lossy(name).into_owned());
+            }
+            current_lfa = *current_lfa.add(LFA) as *mut Cell;
+        }
+        names.sort_unstable();
+        names.dedup();
+        names
     }
 
     /// Returns the header of the most recently created word, or null if there are none.
@@ -1015,6 +1049,58 @@ mod tests {
             let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
             dictionary.write_header("X", 0, F_HIDDEN).unwrap();
             assert!(dictionary.find_word("X").is_none());
+        }
+    }
+
+    #[test]
+    fn word_names_are_sorted() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            assert_eq!(dictionary.word_names(), Vec::<String>::new());
+
+            dictionary.write_header("B", 0, 0).unwrap();
+            dictionary.write_header("A", 0, 0).unwrap();
+            assert_eq!(dictionary.word_names(), ["A", "B"]);
+        }
+    }
+
+    #[test]
+    fn word_names_holds_a_redefined_word_once() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            dictionary.write_header("X", 0, 0).unwrap();
+            dictionary.write_header("X", 0, 0).unwrap();
+            assert_eq!(dictionary.word_names(), ["X"]);
+        }
+    }
+
+    #[test]
+    fn word_names_skips_what_find_word_skips() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            dictionary.write_header("FOUND", 0, 0).unwrap();
+            dictionary.write_header("HIDDEN", 0, F_HIDDEN).unwrap();
+            dictionary.write_header("PENDING", 0, F_PENDING).unwrap();
+            assert_eq!(dictionary.word_names(), ["FOUND"]);
+        }
+    }
+
+    #[test]
+    fn word_names_skips_an_empty_name() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            dictionary.write_header("", 0, 0).unwrap();
+            assert_eq!(dictionary.word_names(), Vec::<String>::new());
+        }
+    }
+
+    #[test]
+    fn word_names_replaces_invalid_utf8() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let header = dictionary.write_header("X", 0, 0).unwrap();
+            *(*header.add(NFA) as *mut u8) = 0xff;
+            assert_eq!(dictionary.word_names(), ["\u{fffd}"]);
         }
     }
 

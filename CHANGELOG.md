@@ -42,6 +42,8 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 - Line editing at the interactive prompt on a terminal, with a history that's kept in
   `~/.rustforth_history`. It uses `rustyline`, behind the default `readline` feature, so
   the library needs no dependencies with `default-features = false`.
+- Tab completion of the words in the dictionary at the interactive prompt, and
+  `Registers::word_names`, which lists them.
 - A `--demo` option with a menu to run all the demo sections or one of them, each in a new
   VM. `make demo` opens this menu.
 - A `--version` option, which prints the version, the build date, and the git tag and

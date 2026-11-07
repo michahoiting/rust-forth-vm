@@ -1823,3 +1823,57 @@ fn zero_code_field_is_an_error() {
         assert_eq!(output.text(), "3 ");
     }
 }
+
+#[test]
+fn word_names_holds_primitives_and_new_definitions() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        let before = regs.word_names();
+        assert!(before.iter().any(|name| name == "DUP"));
+        assert!(!before.iter().any(|name| name == "GREET"));
+
+        outer_interpreter(&mut regs, ": GREET ;").unwrap();
+        assert!(regs.word_names().iter().any(|name| name == "GREET"));
+    }
+}
+
+#[test]
+fn word_names_leaves_out_hidden_words() {
+    unsafe {
+        let regs = test_vm(io::sink());
+        assert!(!regs.word_names().iter().any(|name| name == "LIT"));
+    }
+}
+
+#[test]
+fn word_names_leaves_out_an_open_definition() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        outer_interpreter(&mut regs, ": OPEN").unwrap();
+        assert!(!regs.word_names().iter().any(|name| name == "OPEN"));
+
+        outer_interpreter(&mut regs, ";").unwrap();
+        assert!(regs.word_names().iter().any(|name| name == "OPEN"));
+    }
+}
+
+#[test]
+fn word_names_holds_a_redefined_word_once() {
+    unsafe {
+        let mut regs = test_vm(io::sink());
+        outer_interpreter(&mut regs, ": TWICE ; : TWICE ;").unwrap();
+        let names = regs.word_names();
+        assert_eq!(names.iter().filter(|name| *name == "TWICE").count(), 1);
+    }
+}
+
+#[test]
+fn word_names_are_sorted() {
+    unsafe {
+        let regs = test_vm(io::sink());
+        let names = regs.word_names();
+        let mut sorted = names.clone();
+        sorted.sort();
+        assert_eq!(names, sorted);
+    }
+}

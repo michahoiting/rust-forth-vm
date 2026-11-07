@@ -471,13 +471,13 @@ fn demo_menu(mut input: impl BufRead) -> ExitCode {
 }
 
 /// Evaluates each line from `read_line` in one VM, until it returns an exit code or Forth ends
-/// the program.
-fn interactive(mut read_line: impl FnMut() -> Result<String, ExitCode>) -> ExitCode {
+/// the program. `read_line` gets the VM, for what it can complete.
+fn interactive(mut read_line: impl FnMut(&Registers) -> Result<String, ExitCode>) -> ExitCode {
     // SAFETY: `regs` comes from `boot`, through `new_vm`.
     unsafe {
         let mut regs = new_vm();
         loop {
-            match read_line() {
+            match read_line(&regs) {
                 Ok(line) => {
                     if let Err(code) = interpret(&mut regs, &line) {
                         return code;
@@ -495,12 +495,14 @@ fn prompt() -> ExitCode {
     #[cfg(feature = "readline")]
     if io::stdin().is_terminal() && io::stdout().is_terminal() {
         match LineEditor::new() {
-            Ok(mut editor) => return interactive(|| editor.read_line()),
+            // SAFETY: the VM's word headers are as intact as `interpret` needs them to be for
+            // the words of each line, which it finds through the same pointers.
+            Ok(mut editor) => return interactive(|regs| unsafe { editor.read_line(regs) }),
             Err(error) => eprintln!("Cannot edit lines: {}", error),
         }
     }
     let mut input = io::stdin().lock();
-    interactive(|| read_line(&mut input))
+    interactive(|_| read_line(&mut input))
 }
 
 /// Starts the interactive prompt or the demo menu, or prints the version, depending on the
