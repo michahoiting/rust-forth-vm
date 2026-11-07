@@ -45,7 +45,7 @@ const MORE_INFORMATION: &str = r#"Type "HELP", "COPYRIGHT" or "LICENSE" for more
 
 /// The demo sections, each with its title and one block of Forth source. Each section runs in a
 /// new VM, so it must define everything it uses.
-const SECTIONS: [(&str, &str); 13] = [
+const SECTIONS: [(&str, &str); 14] = [
     (
         "Evaluating Text Operations",
         r"
@@ -271,6 +271,23 @@ CREATE SCRATCH 16 ALLOT
 ",
     ),
     (
+        "Compiling Calls from an Immediate Word",
+        r"
+\ COMPILE, appends a call to the word with the given execution token, to the open definition
+: ADD1 1 + ;
+: TWICE ['] ADD1 COMPILE, ['] ADD1 COMPILE, ; IMMEDIATE
+: ADD2 TWICE ;                \ TWICE ran while ADD2 was compiled, so ADD2 calls ADD1 twice
+5 ADD2 .                      \ prints 7
+
+\ Any definition can use TWICE
+: ADD4 TWICE TWICE ;
+5 ADD4 .                      \ prints 9
+
+\ , can't write into a definition, so an immediate word has to use COMPILE,
+CREATE TABLE 5 , TABLE @ .    \ prints 5: , still works when no definition is open
+",
+    ),
+    (
         "Program Information",
         r"
 HELP                          \ prints how to leave the prompt
@@ -295,7 +312,7 @@ const RESTART_TESTS: [&str; 8] = [
 
 /// The error handling tests. An error discards the rest of its text, so each one is a separate
 /// block.
-const ERROR_TESTS: [&str; 8] = [
+const ERROR_TESTS: [&str; 11] = [
     ": BROKEN 1 NO-SUCH-WORD ;",
     "BROKEN",
     "+",
@@ -304,6 +321,9 @@ const ERROR_TESTS: [&str; 8] = [
     "9 PICK",
     "5 EXECUTE",
     "1 ( never closed",
+    ": W 5 , ; IMMEDIATE",
+    ": X W ;",
+    "' DUP COMPILE,",
 ];
 
 /// The sections with several blocks of source, which run after [`SECTIONS`]. Each one has its

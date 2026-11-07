@@ -1448,6 +1448,165 @@ fn to_body_refuses_lit() {
     }
 }
 
+// Checks that `lines` give a `DefinitionOpen` error for `word`, that the open definition is
+// gone with no trace, and that the VM still works.
+unsafe fn assert_refused_in_definition(lines: &[&str], word: &str, trace: &[&str]) {
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    let (last, setup) = lines.split_last().unwrap();
+    for line in setup {
+        outer_interpreter(&mut vm, line).unwrap();
+    }
+    let error = outer_interpreter(&mut vm, last).unwrap_err();
+    assert!(
+        matches!(&error, ForthError::DefinitionOpen(w) if *w == word),
+        "{}: got {}",
+        word,
+        error
+    );
+    assert!(!vm.is_compiling(), "{}", word);
+    let names = vm.word_names();
+    for name in trace {
+        assert!(!names.contains(&name.to_string()), "{}: {}", word, name);
+    }
+
+    // The same names can be defined and used afterwards.
+    outer_interpreter(&mut vm, ": FOO 7 . ; FOO").unwrap();
+    assert_eq!(output.text(), "7 ", "{}", word);
+}
+
+#[test]
+fn comma_is_refused_in_a_definition_opened_by_a_word() {
+    unsafe {
+        // The steps of #15: D opens FOO, and then writes a number into its thread.
+        let output = Capture::default();
+        let mut vm = test_vm(output.clone());
+        outer_interpreter(&mut vm, ": D : 5 , ;").unwrap();
+        assert_error!(&mut vm, "D FOO ;", ForthError::DefinitionOpen(","));
+        assert!(!vm.is_compiling());
+        assert_error!(&mut vm, "FOO", ForthError::UnknownWord(_));
+        outer_interpreter(&mut vm, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn comma_is_refused_in_an_immediate_word_that_runs_while_compiling() {
+    unsafe {
+        let lines = [": W 5 , ; IMMEDIATE", ": X W ;"];
+        assert_refused_in_definition(&lines, ",", &["X"]);
+    }
+}
+
+#[test]
+fn defining_words_are_refused_in_an_immediate_word_that_runs_while_compiling() {
+    unsafe {
+        let cases = [
+            ("CREATE", ": Z CREATE ; IMMEDIATE"),
+            ("VARIABLE", ": Z VARIABLE ; IMMEDIATE"),
+            ("CONSTANT", ": Z 5 CONSTANT ; IMMEDIATE"),
+            (":", ": Z : ; IMMEDIATE"),
+            (":NONAME", ": Z :NONAME ; IMMEDIATE"),
+        ];
+        for (word, immediate) in cases {
+            // FOO would be written into the open definition Y, and Y would never be found.
+            let lines = [immediate, ": Y Z FOO ;"];
+            assert_refused_in_definition(&lines, word, &["Y", "FOO"]);
+        }
+    }
+}
+
+#[test]
+fn comma_and_defining_words_still_work_when_not_compiling() {
+    let lines = [
+        ": W 5 , ; IMMEDIATE",
+        "CREATE X W X @ .",
+        ": MAKE CREATE 3 , ; MAKE Y Y @ .",
+        ": VAR VARIABLE ; VAR V 4 V ! V @ .",
+    ];
+    assert_eq!(output_of(&lines), "5 3 4 ");
+}
+
+#[test]
+fn compile_comma_lets_an_immediate_word_compile_a_call() {
+    let lines = [
+        ": ADD1 1 + ;",
+        ": TWICE ['] ADD1 COMPILE, ['] ADD1 COMPILE, ; IMMEDIATE",
+        ": ADD2 TWICE ;",
+        "5 ADD2 .",
+    ];
+    assert_eq!(output_of(&lines), "7 ");
+}
+
+#[test]
+fn compile_comma_compiles_a_call_to_a_primitive() {
+    let lines = [
+        ": DUP-IT ['] DUP COMPILE, ; IMMEDIATE",
+        ": T DUP-IT + ;",
+        "4 T .",
+    ];
+    assert_eq!(output_of(&lines), "8 ");
+}
+
+#[test]
+fn compile_comma_needs_an_open_definition() {
+    unsafe {
+        let output = Capture::default();
+        let mut vm = test_vm(output.clone());
+        assert_error!(
+            &mut vm,
+            "' DUP COMPILE,",
+            ForthError::NotCompiling("COMPILE,")
+        );
+        outer_interpreter(&mut vm, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn compile_comma_refuses_a_number_and_lit_and_rolls_back() {
+    unsafe {
+        let output = Capture::default();
+        let mut vm = test_vm(output.clone());
+        outer_interpreter(&mut vm, ": NUMBER 5 COMPILE, ; IMMEDIATE").unwrap();
+        assert_error!(
+            &mut vm,
+            ": T NUMBER ;",
+            ForthError::InvalidExecutionToken(5)
+        );
+        assert!(!vm.is_compiling());
+
+        // LIT would swallow the next Cell of the thread, which is the EXIT that `;` compiles.
+        let lines = [
+            "VARIABLE V".to_string(),
+            format!("{} V !", lit_cfa_of_noname()),
+            ": LIT-IT V @ COMPILE, ; IMMEDIATE".to_string(),
+        ];
+        for line in &lines {
+            outer_interpreter(&mut vm, line).unwrap();
+        }
+        assert_error!(
+            &mut vm,
+            ": T LIT-IT 99 ;",
+            ForthError::InvalidExecutionToken(_)
+        );
+        assert!(!vm.is_compiling());
+        assert!(!vm.word_names().contains(&"T".to_string()));
+        outer_interpreter(&mut vm, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn compile_comma_needs_an_execution_token_on_the_stack() {
+    unsafe {
+        let mut vm = test_vm(io::sink());
+        outer_interpreter(&mut vm, ": EMPTY COMPILE, ; IMMEDIATE").unwrap();
+        assert_error!(&mut vm, ": T EMPTY ;", ForthError::DataStackUnderflow);
+        assert!(!vm.is_compiling());
+    }
+}
+
 #[test]
 fn noname_definitions_stay_separate() {
     let line = ":NONAME 1 ; :NONAME 2 ; EXECUTE . EXECUTE .";

@@ -45,6 +45,11 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
   `ForthError::Abort`.
 - `BYE` and `(BYE)`, which stop evaluation and let the program leave with an exit code.
 - `'` and `[']`, which give the execution token of a named word.
+- `COMPILE,`, which compiles a call to the word with a given execution token into the open
+  definition, so that an immediate word can compile code. While a definition is open, `,`,
+  `CREATE`, `VARIABLE`, `CONSTANT`, `:` and `:NONAME` give `ForthError::DefinitionOpen`,
+  like `C,` and `ALLOT` do, because they would write into the definition and could make it
+  run an arbitrary Cell.
 - `>BODY`, which gives the address of a word's Parameter Field from its execution token.
 - Word names of up to 255 bytes.
 - Comments with `(` and `\`.

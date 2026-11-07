@@ -149,7 +149,8 @@ it.
 | `.`      | `( n -- )`   | Prints a Cell as a signed number                  |
 | `@`      | `( addr -- x )` | Fetches the Cell at a dictionary address below `HERE` |
 | `!`      | `( x addr -- )` | Stores a Cell at a dictionary address below `HERE` |
-| `,`      | `( x -- )`   | Aligns `HERE`, stores a Cell there and advances it |
+| `,`      | `( x -- )`   | Aligns `HERE`, stores a Cell there and advances it. It can't be used while a definition is open |
+| `COMPILE,` | `( xt -- )` | Appends a call to the word with this execution token to the open definition |
 | `C@`     | `( c-addr -- char )` | Fetches the byte at a dictionary address below `HERE` |
 | `C!`     | `( char c-addr -- )` | Stores the low byte of a Cell at a dictionary address below `HERE` |
 | `C,`     | `( char -- )` | Stores the low byte of a Cell at `HERE` and advances it, which can leave `HERE` unaligned |
@@ -248,10 +249,10 @@ stacks, and rolls back any unfinished colon definition.
 - There are no return stack words, such as `>R` and `R>`.
 - There is no control flow, such as `IF` or `BEGIN`, and so no loops.
 - There is no `[` or `]`.
-- Immediate words must not use `,` while a definition is being compiled, because it
-  writes into the thread and can crash the process (see issue #15). Using `CREATE`,
-  `VARIABLE`, `CONSTANT`, `:` or `:NONAME` there leaves the open definition unfinished,
-  so it can't be found or executed. `C,` and `ALLOT` give an error there instead.
+- While a definition is open, `,`, `C,`, `ALLOT`, `CREATE`, `VARIABLE`, `CONSTANT`, `:` and
+  `:NONAME` give an error, so that only the compiler writes to the definition. An immediate
+  word compiles a call with `COMPILE,` instead. `COMPILE,` refuses `LIT` and any other word
+  with an inline operand.
 - The dictionary size and the stack limits are chosen when the VM boots, through
   `VmConfig`, and can't grow afterwards. `forth-vm` uses 1024 Cells for each stack. Going
   past a limit gives `Data stack overflow.` or `Return stack overflow.`, and clears both
