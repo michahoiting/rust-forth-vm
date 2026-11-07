@@ -52,7 +52,7 @@ main → line_editor
 ```
 
 - Header offsets stay private to `dictionary.rs`. Other modules use its accessors.
-- `Dictionary` and `Compiler` can't see `Registers`, so they return `Result<_, ForthError>`. `Registers::check` turns that into a VM error.
+- `Dictionary` and `Compiler` can't see `Vm`, so they return `Result<_, ForthError>`. `Vm::check` turns that into a VM error.
 - Words go in `src/primitives/`:
   - `core.rs` for data and memory words.
   - `compiler.rs` for words that build the dictionary.

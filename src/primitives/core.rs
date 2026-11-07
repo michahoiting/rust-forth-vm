@@ -8,7 +8,7 @@ use std::mem;
 use crate::cell::Cell;
 use crate::dictionary::{self, pfa_of};
 use crate::error::ForthError;
-use crate::vm::Registers;
+use crate::vm::Vm;
 
 /// The copyright notice, which `COPYRIGHT` prints.
 pub const COPYRIGHT: &str = "Copyright (c) 2026 M.W.R. Hoiting.";
@@ -20,205 +20,205 @@ const HELP: &str = "Type BYE or press Ctrl-D to leave.\n";
 const LICENSE: &str = include_str!("../../LICENSE");
 
 /// Writes `text` to the output.
-fn write_text(regs: &mut Registers, text: &str) {
-    let result = regs.output.write_all(text.as_bytes());
-    regs.check(result.map_err(ForthError::Output));
+fn write_text(vm: &mut Vm, text: &str) {
+    let result = vm.output.write_all(text.as_bytes());
+    vm.check(result.map_err(ForthError::Output));
 }
 
 /// `HELP ( -- )`: Writes how to leave the program to the output.
-pub(super) unsafe fn help(regs: &mut Registers) {
-    write_text(regs, HELP);
+pub(super) unsafe fn help(vm: &mut Vm) {
+    write_text(vm, HELP);
 }
 
 /// `COPYRIGHT ( -- )`: Writes the copyright notice to the output.
-pub(super) unsafe fn copyright(regs: &mut Registers) {
-    write_text(regs, COPYRIGHT);
-    write_text(regs, "\n");
+pub(super) unsafe fn copyright(vm: &mut Vm) {
+    write_text(vm, COPYRIGHT);
+    write_text(vm, "\n");
 }
 
 /// `LICENSE ( -- )`: Writes the project's license to the output.
-pub(super) unsafe fn license(regs: &mut Registers) {
-    write_text(regs, LICENSE);
+pub(super) unsafe fn license(vm: &mut Vm) {
+    write_text(vm, LICENSE);
 }
 
 /// `@ ( addr -- x )`: Pops a dictionary address from the stack and replaces it with the
 /// contents of that Cell.
-pub(super) unsafe fn fetch(regs: &mut Registers) {
-    if let Some(addr) = regs.pop() {
-        let result = regs.dictionary.fetch(addr);
-        if let Some(value) = regs.check(result) {
-            regs.push(value);
+pub(super) unsafe fn fetch(vm: &mut Vm) {
+    if let Some(addr) = vm.pop() {
+        let result = vm.dictionary.fetch(addr);
+        if let Some(value) = vm.check(result) {
+            vm.push(value);
         }
     }
 }
 
 /// `! ( x addr -- )`: Pops a dictionary address and a Cell from the stack, and stores the
 /// Cell there.
-pub(super) unsafe fn store(regs: &mut Registers) {
-    if !regs.require(2) {
+pub(super) unsafe fn store(vm: &mut Vm) {
+    if !vm.require(2) {
         return;
     }
-    if let (Some(addr), Some(value)) = (regs.data_stack.pop(), regs.data_stack.pop()) {
-        let result = regs.dictionary.store(addr, value);
-        regs.check(result);
+    if let (Some(addr), Some(value)) = (vm.data_stack.pop(), vm.data_stack.pop()) {
+        let result = vm.dictionary.store(addr, value);
+        vm.check(result);
     }
 }
 
 /// `C@ ( c-addr -- char )`: Pops a dictionary address from the stack and replaces it with the
 /// byte stored there. The address needn't be aligned.
-pub(super) unsafe fn c_fetch(regs: &mut Registers) {
-    if let Some(addr) = regs.pop() {
-        let result = regs.dictionary.fetch_byte(addr);
-        if let Some(value) = regs.check(result) {
-            regs.push(value as Cell);
+pub(super) unsafe fn c_fetch(vm: &mut Vm) {
+    if let Some(addr) = vm.pop() {
+        let result = vm.dictionary.fetch_byte(addr);
+        if let Some(value) = vm.check(result) {
+            vm.push(value as Cell);
         }
     }
 }
 
 /// `C! ( char c-addr -- )`: Pops a dictionary address and a Cell from the stack, and stores
 /// the low byte of the Cell there. The address needn't be aligned.
-pub(super) unsafe fn c_store(regs: &mut Registers) {
-    if !regs.require(2) {
+pub(super) unsafe fn c_store(vm: &mut Vm) {
+    if !vm.require(2) {
         return;
     }
-    if let (Some(addr), Some(value)) = (regs.data_stack.pop(), regs.data_stack.pop()) {
-        let result = regs.dictionary.store_byte(addr, value as u8);
-        regs.check(result);
+    if let (Some(addr), Some(value)) = (vm.data_stack.pop(), vm.data_stack.pop()) {
+        let result = vm.dictionary.store_byte(addr, value as u8);
+        vm.check(result);
     }
 }
 
 /// `HERE ( -- addr )`: Pushes the address of the next free byte in the dictionary.
-pub(super) unsafe fn here(regs: &mut Registers) {
-    regs.push(regs.dictionary.here());
+pub(super) unsafe fn here(vm: &mut Vm) {
+    vm.push(vm.dictionary.here());
 }
 
 /// `ALIGNED ( addr -- a-addr )`: Rounds an address up to the next cell-aligned address.
-pub(super) unsafe fn aligned(regs: &mut Registers) {
-    if let Some(addr) = regs.pop() {
-        regs.push(dictionary::aligned(addr));
+pub(super) unsafe fn aligned(vm: &mut Vm) {
+    if let Some(addr) = vm.pop() {
+        vm.push(dictionary::aligned(addr));
     }
 }
 
 /// `CHAR+ ( c-addr1 -- c-addr2 )`: Adds the size of a character to an address, wrapping on
 /// overflow.
-pub(super) unsafe fn char_plus(regs: &mut Registers) {
-    if let Some(addr) = regs.pop() {
-        regs.push(addr.wrapping_add(1));
+pub(super) unsafe fn char_plus(vm: &mut Vm) {
+    if let Some(addr) = vm.pop() {
+        vm.push(addr.wrapping_add(1));
     }
 }
 
 /// `CHARS ( n1 -- n2 )`: Gives the size of `n1` characters in bytes. A character is one byte,
 /// so this only checks that the Cell is there.
-pub(super) unsafe fn chars(regs: &mut Registers) {
-    regs.require(1);
+pub(super) unsafe fn chars(vm: &mut Vm) {
+    vm.require(1);
 }
 
 /// `CELLS ( n1 -- n2 )`: Gives the size of `n1` Cells in bytes, wrapping on overflow.
-pub(super) unsafe fn cells(regs: &mut Registers) {
-    if let Some(n) = regs.pop() {
-        regs.push(n.wrapping_mul(mem::size_of::<Cell>()));
+pub(super) unsafe fn cells(vm: &mut Vm) {
+    if let Some(n) = vm.pop() {
+        vm.push(n.wrapping_mul(mem::size_of::<Cell>()));
     }
 }
 
 /// `>BODY ( xt -- pfa )`: Replaces an execution token with the address of that word's Parameter
 /// Field.
-pub(super) unsafe fn to_body(regs: &mut Registers) {
-    if let Some(xt) = regs.pop() {
-        if !regs.dictionary.is_execution_token(xt) {
-            regs.set_error(ForthError::InvalidExecutionToken(xt));
+pub(super) unsafe fn to_body(vm: &mut Vm) {
+    if let Some(xt) = vm.pop() {
+        if !vm.dictionary.is_execution_token(xt) {
+            vm.set_error(ForthError::InvalidExecutionToken(xt));
             return;
         }
-        regs.push(pfa_of(xt as *const Cell) as Cell);
+        vm.push(pfa_of(xt as *const Cell) as Cell);
     }
 }
 
 /// `+ ( a b -- n )`: Pops two Cells from the stack, adds them, and pushes the result. Addition
 /// wraps on overflow.
-pub(super) unsafe fn plus(regs: &mut Registers) {
-    if !regs.require(2) {
+pub(super) unsafe fn plus(vm: &mut Vm) {
+    if !vm.require(2) {
         return;
     }
-    if let (Some(b), Some(a)) = (regs.data_stack.pop(), regs.data_stack.pop()) {
-        regs.push(a.wrapping_add(b));
+    if let (Some(b), Some(a)) = (vm.data_stack.pop(), vm.data_stack.pop()) {
+        vm.push(a.wrapping_add(b));
     }
 }
 
 /// `. ( x -- )`: Pops a Cell from the stack and writes it to the output as a signed number.
-pub(super) unsafe fn dot_print(regs: &mut Registers) {
-    if let Some(value) = regs.pop() {
-        let result = write!(regs.output, "{} ", value as isize);
-        regs.check(result.map_err(ForthError::Output));
+pub(super) unsafe fn dot_print(vm: &mut Vm) {
+    if let Some(value) = vm.pop() {
+        let result = write!(vm.output, "{} ", value as isize);
+        vm.check(result.map_err(ForthError::Output));
     }
 }
 
 /// `DUP ( x -- x x )`: Copies the top Cell.
-pub(super) unsafe fn dup(regs: &mut Registers) {
-    if regs.require(1) {
-        let top = regs.data_stack[regs.data_stack.len() - 1];
-        regs.push(top);
+pub(super) unsafe fn dup(vm: &mut Vm) {
+    if vm.require(1) {
+        let top = vm.data_stack[vm.data_stack.len() - 1];
+        vm.push(top);
     }
 }
 
 /// `?DUP ( x -- 0 | x x )`: Copies the top Cell if it isn't zero.
-pub(super) unsafe fn question_dup(regs: &mut Registers) {
-    if regs.require(1) {
-        let top = regs.data_stack[regs.data_stack.len() - 1];
+pub(super) unsafe fn question_dup(vm: &mut Vm) {
+    if vm.require(1) {
+        let top = vm.data_stack[vm.data_stack.len() - 1];
         if top != 0 {
-            regs.push(top);
+            vm.push(top);
         }
     }
 }
 
 /// `DROP ( x -- )`: Removes the top Cell.
-pub(super) unsafe fn drop(regs: &mut Registers) {
-    regs.pop();
+pub(super) unsafe fn drop(vm: &mut Vm) {
+    vm.pop();
 }
 
 /// `SWAP ( a b -- b a )`: Exchanges the top two Cells.
-pub(super) unsafe fn swap(regs: &mut Registers) {
-    if regs.require(2) {
-        let top = regs.data_stack.len() - 1;
-        regs.data_stack.swap(top, top - 1);
+pub(super) unsafe fn swap(vm: &mut Vm) {
+    if vm.require(2) {
+        let top = vm.data_stack.len() - 1;
+        vm.data_stack.swap(top, top - 1);
     }
 }
 
 /// `OVER ( a b -- a b a )`: Copies the second Cell to the top.
-pub(super) unsafe fn over(regs: &mut Registers) {
-    if regs.require(2) {
-        let second = regs.data_stack[regs.data_stack.len() - 2];
-        regs.push(second);
+pub(super) unsafe fn over(vm: &mut Vm) {
+    if vm.require(2) {
+        let second = vm.data_stack[vm.data_stack.len() - 2];
+        vm.push(second);
     }
 }
 
 /// `ROT ( a b c -- b c a )`: Moves the third Cell to the top.
-pub(super) unsafe fn rot(regs: &mut Registers) {
-    if regs.require(3) {
-        let third = regs.data_stack.len() - 3;
-        regs.data_stack[third..].rotate_left(1);
+pub(super) unsafe fn rot(vm: &mut Vm) {
+    if vm.require(3) {
+        let third = vm.data_stack.len() - 3;
+        vm.data_stack[third..].rotate_left(1);
     }
 }
 
 /// `PICK ( ... n -- ... x )`: Replaces `n` with a copy of the `n`th Cell below it, counting
 /// from 0.
-pub(super) unsafe fn pick(regs: &mut Registers) {
-    if let Some(index) = regs.indexed_cell() {
-        let top = regs.data_stack.len() - 1;
-        regs.data_stack[top] = regs.data_stack[index];
+pub(super) unsafe fn pick(vm: &mut Vm) {
+    if let Some(index) = vm.indexed_cell() {
+        let top = vm.data_stack.len() - 1;
+        vm.data_stack[top] = vm.data_stack[index];
     }
 }
 
 /// `ROLL ( ... n -- ... x )`: Replaces `n` by moving the `n`th Cell below it to the top.
-pub(super) unsafe fn roll(regs: &mut Registers) {
-    if let Some(index) = regs.indexed_cell() {
-        regs.data_stack.pop();
-        let cell = regs.data_stack.remove(index);
-        regs.push(cell);
+pub(super) unsafe fn roll(vm: &mut Vm) {
+    if let Some(index) = vm.indexed_cell() {
+        vm.data_stack.pop();
+        let cell = vm.data_stack.remove(index);
+        vm.push(cell);
     }
 }
 
 /// `DEPTH ( -- n )`: Pushes the number of Cells that were on the stack.
-pub(super) unsafe fn depth(regs: &mut Registers) {
-    regs.push(regs.data_stack.len() as Cell);
+pub(super) unsafe fn depth(vm: &mut Vm) {
+    vm.push(vm.data_stack.len() as Cell);
 }
 
 #[cfg(test)]
@@ -253,12 +253,12 @@ mod tests {
     // what it wrote.
     unsafe fn output_of(word: PrimitiveFn) -> String {
         let output = Capture::default();
-        let mut regs = boot(output.clone(), VmConfig::new(TEST_CELLS)).unwrap();
-        let here = regs.dictionary.here();
-        word(&mut regs);
-        assert!(regs.error.is_none());
-        assert!(regs.data_stack.is_empty());
-        assert_eq!(regs.dictionary.here(), here);
+        let mut vm = boot(output.clone(), VmConfig::new(TEST_CELLS)).unwrap();
+        let here = vm.dictionary.here();
+        word(&mut vm);
+        assert!(vm.error.is_none());
+        assert!(vm.data_stack.is_empty());
+        assert_eq!(vm.dictionary.here(), here);
         let bytes = output.0.borrow().clone();
         String::from_utf8(bytes).unwrap()
     }
@@ -285,69 +285,69 @@ mod tests {
     }
 
     // Runs a word on a stack holding `before`.
-    unsafe fn run_on(word: PrimitiveFn, before: &[Cell]) -> Registers {
-        let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-        regs.data_stack.extend_from_slice(before);
-        word(&mut regs);
-        regs
+    unsafe fn run_on(word: PrimitiveFn, before: &[Cell]) -> Vm {
+        let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+        vm.data_stack.extend_from_slice(before);
+        word(&mut vm);
+        vm
     }
 
     // Runs a word that must succeed, and returns the resulting stack.
     unsafe fn stack_after(word: PrimitiveFn, before: &[Cell]) -> Vec<Cell> {
-        let regs = run_on(word, before);
-        assert!(regs.error.is_none(), "got: {:?}", regs.error);
-        regs.data_stack
+        let vm = run_on(word, before);
+        assert!(vm.error.is_none(), "got: {:?}", vm.error);
+        vm.data_stack
     }
 
     // Asserts that a word reports an underflow and leaves the stack unchanged.
     unsafe fn assert_underflow(word: PrimitiveFn, before: &[Cell]) {
-        let regs = run_on(word, before);
+        let vm = run_on(word, before);
         assert!(
-            matches!(regs.error, Some(ForthError::DataStackUnderflow)),
+            matches!(vm.error, Some(ForthError::DataStackUnderflow)),
             "got: {:?}",
-            regs.error
+            vm.error
         );
-        assert_eq!(regs.data_stack, before);
+        assert_eq!(vm.data_stack, before);
     }
 
     #[test]
     fn c_fetch_replaces_an_address_with_its_byte() {
         unsafe {
-            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            let addr = regs.dictionary.here();
-            regs.dictionary.char_comma(0xAB).unwrap();
-            regs.data_stack.extend_from_slice(&[1, addr]);
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            let addr = vm.dictionary.here();
+            vm.dictionary.char_comma(0xAB).unwrap();
+            vm.data_stack.extend_from_slice(&[1, addr]);
 
-            c_fetch(&mut regs);
-            assert!(regs.error.is_none(), "got: {:?}", regs.error);
-            assert_eq!(regs.data_stack, [1, 0xAB]);
+            c_fetch(&mut vm);
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+            assert_eq!(vm.data_stack, [1, 0xAB]);
         }
     }
 
     #[test]
     fn c_store_stores_the_low_byte_and_pops_both_cells() {
         unsafe {
-            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            let addr = regs.dictionary.here();
-            regs.dictionary.char_comma(0).unwrap();
-            regs.data_stack.extend_from_slice(&[1, 0x1AB, addr]);
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            let addr = vm.dictionary.here();
+            vm.dictionary.char_comma(0).unwrap();
+            vm.data_stack.extend_from_slice(&[1, 0x1AB, addr]);
 
-            c_store(&mut regs);
-            assert!(regs.error.is_none(), "got: {:?}", regs.error);
-            assert_eq!(regs.data_stack, [1]);
-            assert_eq!(regs.dictionary.fetch_byte(addr).unwrap(), 0xAB);
+            c_store(&mut vm);
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+            assert_eq!(vm.data_stack, [1]);
+            assert_eq!(vm.dictionary.fetch_byte(addr).unwrap(), 0xAB);
         }
     }
 
     #[test]
     fn here_pushes_the_dictionary_pointer() {
         unsafe {
-            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            regs.dictionary.char_comma(0).unwrap();
-            let expected = regs.dictionary.here();
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            vm.dictionary.char_comma(0).unwrap();
+            let expected = vm.dictionary.here();
 
-            here(&mut regs);
-            assert_eq!(regs.data_stack, [expected]);
+            here(&mut vm);
+            assert_eq!(vm.data_stack, [expected]);
         }
     }
 
@@ -530,33 +530,33 @@ mod tests {
     #[test]
     fn to_body_replaces_an_xt_with_its_pfa() {
         unsafe {
-            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            let xt = cfa_of(regs.dictionary.find_word("DUP").unwrap()) as Cell;
-            regs.data_stack.extend_from_slice(&[7, xt]);
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            let xt = cfa_of(vm.dictionary.find_word("DUP").unwrap()) as Cell;
+            vm.data_stack.extend_from_slice(&[7, xt]);
 
-            to_body(&mut regs);
-            assert!(regs.error.is_none(), "got: {:?}", regs.error);
-            assert_eq!(regs.data_stack, [7, xt + mem::size_of::<Cell>()]);
+            to_body(&mut vm);
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+            assert_eq!(vm.data_stack, [7, xt + mem::size_of::<Cell>()]);
         }
     }
 
     #[test]
     fn to_body_rejects_anything_else() {
         unsafe {
-            let regs = run_on(to_body, &[1, 5]);
+            let vm = run_on(to_body, &[1, 5]);
             assert!(matches!(
-                regs.error,
+                vm.error,
                 Some(ForthError::InvalidExecutionToken(5))
             ));
-            assert_eq!(regs.data_stack, [1]);
+            assert_eq!(vm.data_stack, [1]);
         }
     }
 
     #[test]
     fn to_body_needs_a_cell() {
         unsafe {
-            let regs = run_on(to_body, &[]);
-            assert!(matches!(regs.error, Some(ForthError::DataStackUnderflow)));
+            let vm = run_on(to_body, &[]);
+            assert!(matches!(vm.error, Some(ForthError::DataStackUnderflow)));
         }
     }
 }

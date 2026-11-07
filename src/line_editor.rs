@@ -9,7 +9,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use rust_forth_vm::Registers;
+use rust_forth_vm::Vm;
 use rustyline::completion::Completer;
 use rustyline::error::ReadlineError;
 use rustyline::highlight::Highlighter;
@@ -28,7 +28,7 @@ const PROMPT: &str = "";
 /// the VM. The dictionary doesn't change while a line is being edited.
 #[derive(Default)]
 struct WordHelper {
-    /// The names of the words, from [`Registers::word_names`].
+    /// The names of the words, from [`Vm::word_names`].
     words: Vec<String>,
 }
 
@@ -89,16 +89,16 @@ impl LineEditor {
         Ok(Self { editor, history })
     }
 
-    /// Reads a line, and adds it to the history. Tab completes the words of `regs`. Ctrl-C
+    /// Reads a line, and adds it to the history. Tab completes the words of `vm`. Ctrl-C
     /// discards the line being edited and starts a new one. Returns the exit code instead if
     /// the program should end.
     ///
     /// # Safety
     ///
-    /// The word headers of `regs` must be intact, as for [`Registers::word_names`].
-    pub(crate) unsafe fn read_line(&mut self, regs: &Registers) -> Result<String, ExitCode> {
+    /// The word headers of `vm` must be intact, as for [`Vm::word_names`].
+    pub(crate) unsafe fn read_line(&mut self, vm: &Vm) -> Result<String, ExitCode> {
         if let Some(helper) = self.editor.helper_mut() {
-            helper.words = regs.word_names();
+            helper.words = vm.word_names();
         }
         loop {
             if let Some(result) = outcome(self.editor.readline(PROMPT)) {

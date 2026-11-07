@@ -46,12 +46,12 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 - Word names of up to 255 bytes.
 - Comments with `(` and `\`.
 - A `forth-vm` binary that starts as an interactive Forth prompt. It prints `ok` after a
-  line that succeeds, and `Registers::is_compiling` tells it when a definition is open.
+  line that succeeds, and `Vm::is_compiling` tells it when a definition is open.
 - Line editing at the interactive prompt on a terminal, with a history that's kept in
   `~/.rustforth_history`. It uses `rustyline`, behind the default `readline` feature, so
   the library needs no dependencies with `default-features = false`.
 - Tab completion of the words in the dictionary at the interactive prompt, and
-  `Registers::word_names`, which lists them.
+  `Vm::word_names`, which lists them.
 - A `--demo` option with a menu to run all the demo sections or one of them, each in a new
   VM. `make demo` opens this menu.
 - A `--version` option, which prints the version, the build date, and the git tag and
