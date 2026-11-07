@@ -20,7 +20,7 @@ use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
 use std::slice;
 
-use rust_forth_vm::{boot, outer_interpreter, ForthError, Registers, VmConfig, COPYRIGHT};
+use rust_forth_vm::{boot, outer_interpreter, ForthError, Vm, VmConfig, COPYRIGHT};
 
 #[cfg(feature = "readline")]
 use line_editor::LineEditor;
@@ -332,7 +332,7 @@ fn section(number: usize) -> (&'static str, &'static [&'static str]) {
 /// # Safety
 ///
 /// The result has the same requirements as the result of [`boot`].
-unsafe fn new_vm() -> Registers {
+unsafe fn new_vm() -> Vm {
     boot(io::stdout(), VmConfig::new(DICTIONARY_CELLS))
         .expect("the dictionary must be able to hold the primitives")
 }
@@ -343,10 +343,10 @@ unsafe fn new_vm() -> Registers {
 ///
 /// # Safety
 ///
-/// `regs` must come from [`boot`].
-unsafe fn interpret(regs: &mut Registers, input: &str) -> Result<(), ExitCode> {
-    match outer_interpreter(regs, input) {
-        Ok(()) if regs.is_compiling() => {}
+/// `vm` must come from [`boot`].
+unsafe fn interpret(vm: &mut Vm, input: &str) -> Result<(), ExitCode> {
+    match outer_interpreter(vm, input) {
+        Ok(()) if vm.is_compiling() => {}
         Ok(()) => println!("ok"),
         Err(ForthError::Quit | ForthError::Abort) => println!(),
         Err(ForthError::Bye(code)) => return Err(ExitCode::from(code as u8)),
@@ -360,25 +360,25 @@ unsafe fn interpret(regs: &mut Registers, input: &str) -> Result<(), ExitCode> {
 ///
 /// # Safety
 ///
-/// `regs` must come from [`boot`].
-unsafe fn evaluate(regs: &mut Registers, input: &str) -> Result<(), ExitCode> {
+/// `vm` must come from [`boot`].
+unsafe fn evaluate(vm: &mut Vm, input: &str) -> Result<(), ExitCode> {
     println!("Input:");
     for line in input.trim().lines() {
         println!("{}", format!("    {}", line).trim_end());
     }
     print!("Output: ");
-    interpret(regs, input)
+    interpret(vm, input)
 }
 
 /// Runs one section in a new VM, given its number counting from 1.
 fn run_section(number: usize) -> Result<(), ExitCode> {
     let (title, blocks) = section(number);
     println!("--- TEST RUN {}: {} ---", number, title);
-    // SAFETY: `regs` comes from `boot`, through `new_vm`.
+    // SAFETY: `vm` comes from `boot`, through `new_vm`.
     unsafe {
-        let mut regs = new_vm();
+        let mut vm = new_vm();
         for source in blocks {
-            evaluate(&mut regs, source)?;
+            evaluate(&mut vm, source)?;
         }
     }
     println!("-------------------------------------\n");
@@ -472,14 +472,14 @@ fn demo_menu(mut input: impl BufRead) -> ExitCode {
 
 /// Evaluates each line from `read_line` in one VM, until it returns an exit code or Forth ends
 /// the program. `read_line` gets the VM, for what it can complete.
-fn interactive(mut read_line: impl FnMut(&Registers) -> Result<String, ExitCode>) -> ExitCode {
-    // SAFETY: `regs` comes from `boot`, through `new_vm`.
+fn interactive(mut read_line: impl FnMut(&Vm) -> Result<String, ExitCode>) -> ExitCode {
+    // SAFETY: `vm` comes from `boot`, through `new_vm`.
     unsafe {
-        let mut regs = new_vm();
+        let mut vm = new_vm();
         loop {
-            match read_line(&regs) {
+            match read_line(&vm) {
                 Ok(line) => {
-                    if let Err(code) = interpret(&mut regs, &line) {
+                    if let Err(code) = interpret(&mut vm, &line) {
                         return code;
                     }
                 }
@@ -497,7 +497,7 @@ fn prompt() -> ExitCode {
         match LineEditor::new() {
             // SAFETY: the VM's word headers are as intact as `interpret` needs them to be for
             // the words of each line, which it finds through the same pointers.
-            Ok(mut editor) => return interactive(|regs| unsafe { editor.read_line(regs) }),
+            Ok(mut editor) => return interactive(|vm| unsafe { editor.read_line(vm) }),
             Err(error) => eprintln!("Cannot edit lines: {}", error),
         }
     }

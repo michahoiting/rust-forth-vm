@@ -9,113 +9,113 @@ mod runtime;
 
 use crate::dictionary::{F_HIDDEN, F_IMMEDIATE};
 use crate::error::ForthError;
-use crate::vm::{code_cell, Registers};
+use crate::vm::{code_cell, Vm};
 
 pub use self::core::COPYRIGHT;
 
-/// Registers the core primitives under their official text names.
+/// Vm the core primitives under their official text names.
 ///
 /// # Errors
 ///
 /// Returns [`ForthError::DictionaryOverflow`] if they don't fit in the dictionary.
-pub(crate) unsafe fn install(regs: &mut Registers) -> Result<(), ForthError> {
-    regs.dictionary
+pub(crate) unsafe fn install(vm: &mut Vm) -> Result<(), ForthError> {
+    vm.dictionary
         .add_primitive_word("+", code_cell(core::plus), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word(".", code_cell(core::dot_print), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("@", code_cell(core::fetch), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("C@", code_cell(core::c_fetch), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("C!", code_cell(core::c_store), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("HERE", code_cell(core::here), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("ALIGNED", code_cell(core::aligned), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("CHAR+", code_cell(core::char_plus), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("CHARS", code_cell(core::chars), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("CELLS", code_cell(core::cells), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word(">BODY", code_cell(core::to_body), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("!", code_cell(core::store), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("DUP", code_cell(core::dup), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("?DUP", code_cell(core::question_dup), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("DROP", code_cell(core::drop), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("SWAP", code_cell(core::swap), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("OVER", code_cell(core::over), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("ROT", code_cell(core::rot), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("PICK", code_cell(core::pick), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("ROLL", code_cell(core::roll), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("DEPTH", code_cell(core::depth), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("HELP", code_cell(core::help), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("COPYRIGHT", code_cell(core::copyright), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("LICENSE", code_cell(core::license), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word(",", code_cell(compiler::comma), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("C,", code_cell(compiler::c_comma), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("ALLOT", code_cell(compiler::allot), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("ALIGN", code_cell(compiler::align), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("CREATE", code_cell(compiler::create), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("VARIABLE", code_cell(compiler::variable), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("CONSTANT", code_cell(compiler::constant), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("DOES>", code_cell(compiler::runtime_does), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word(":", code_cell(compiler::colon), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word(":NONAME", code_cell(compiler::colon_noname), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word(";", code_cell(compiler::semicolon), F_IMMEDIATE)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("IMMEDIATE", code_cell(compiler::immediate), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("(", code_cell(parsing::paren_comment), F_IMMEDIATE)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("\\", code_cell(parsing::line_comment), F_IMMEDIATE)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("'", code_cell(parsing::tick), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("[']", code_cell(parsing::bracket_tick), F_IMMEDIATE)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("EXECUTE", code_cell(runtime::execute), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("QUIT", code_cell(runtime::quit), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("ABORT", code_cell(runtime::abort), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("BYE", code_cell(runtime::bye), 0)?;
-    regs.dictionary
+    vm.dictionary
         .add_primitive_word("(BYE)", code_cell(runtime::bye_with_code), 0)?;
-    let exit_cfa = regs
+    let exit_cfa = vm
         .dictionary
         .add_primitive_word("EXIT", code_cell(runtime::exit), 0)?;
     // LIT reads its operand from the thread, so it only makes sense in compiled code.
-    let lit_cfa = regs
+    let lit_cfa = vm
         .dictionary
         .add_primitive_word("LIT", code_cell(runtime::lit), F_HIDDEN)?;
-    regs.compiler.link_primitives(lit_cfa, exit_cfa);
+    vm.compiler.link_primitives(lit_cfa, exit_cfa);
     Ok(())
 }

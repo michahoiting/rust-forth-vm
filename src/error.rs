@@ -23,8 +23,8 @@ use crate::cell::Cell;
 ///
 /// // SAFETY: this VM is only used through the crate's functions.
 /// let result = unsafe {
-///     let mut regs = boot(io::sink(), VmConfig::new(1024))?;
-///     outer_interpreter(&mut regs, "HELLO")
+///     let mut vm = boot(io::sink(), VmConfig::new(1024))?;
+///     outer_interpreter(&mut vm, "HELLO")
 /// };
 ///
 /// match result {

@@ -1061,18 +1061,18 @@ mod tests {
     #[test]
     fn store_can_change_a_word_header() {
         unsafe {
-            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            outer_interpreter(&mut regs, "CREATE X 7 ,").unwrap();
-            let header = regs.dictionary.find_word("X").unwrap();
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            outer_interpreter(&mut vm, "CREATE X 7 ,").unwrap();
+            let header = vm.dictionary.find_word("X").unwrap();
 
             let addr = header.add(LEN_FLAGS) as Cell;
             let flags = 1 | F_CREATED | F_HIDDEN; // The length of the name stays the same
-            outer_interpreter(&mut regs, &format!("{} {} !", flags, addr)).unwrap();
+            outer_interpreter(&mut vm, &format!("{} {} !", flags, addr)).unwrap();
 
-            outer_interpreter(&mut regs, &format!("{} @", addr)).unwrap();
-            assert_eq!(regs.data_stack, vec![flags]);
+            outer_interpreter(&mut vm, &format!("{} @", addr)).unwrap();
+            assert_eq!(vm.data_stack, vec![flags]);
 
-            let error = outer_interpreter(&mut regs, "X").unwrap_err();
+            let error = outer_interpreter(&mut vm, "X").unwrap_err();
             assert!(matches!(error, ForthError::UnknownWord(name) if name == "X"));
         }
     }

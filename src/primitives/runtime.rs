@@ -9,79 +9,79 @@
 use crate::cell::Cell;
 use crate::dictionary::pfa_of;
 use crate::error::ForthError;
-use crate::vm::{enter_word, Registers};
+use crate::vm::{enter_word, Vm};
 
 /// `DOCOL`: Executed when entering a nested `:` (colon) word.
-pub(super) unsafe fn docol(regs: &mut Registers) {
+pub(super) unsafe fn docol(vm: &mut Vm) {
     // Push the current IP to the Return Stack (return address)
-    regs.push_return(regs.ip);
+    vm.push_return(vm.ip);
     // Move IP to the inside of the definition, which is the Parameter Field
-    regs.ip = pfa_of(regs.w);
+    vm.ip = pfa_of(vm.w);
 }
 
 /// `DOVAR`: Default execution semantics for a word created via CREATE (or VARIABLE).
 /// It simply pushes the memory address of its own Parameter Field onto the stack.
-pub(super) unsafe fn dovar(regs: &mut Registers) {
-    regs.push(pfa_of(regs.w) as Cell);
+pub(super) unsafe fn dovar(vm: &mut Vm) {
+    vm.push(pfa_of(vm.w) as Cell);
 }
 
 /// `DOCON`: Execution semantics of a word made by CONSTANT.
 /// It pushes the value held in the word's Parameter Field.
-pub(super) unsafe fn docon(regs: &mut Registers) {
-    regs.push(*pfa_of(regs.w));
+pub(super) unsafe fn docon(vm: &mut Vm) {
+    vm.push(*pfa_of(vm.w));
 }
 
 /// `EXIT ( -- )`: Cleans up and exits a nested `:` word (compiled by `;`).
-pub(super) unsafe fn exit(regs: &mut Registers) {
-    match regs.return_stack.pop() {
-        Some(old_ip) => regs.ip = old_ip,
-        None => regs.set_error(ForthError::ReturnStackUnderflow),
+pub(super) unsafe fn exit(vm: &mut Vm) {
+    match vm.return_stack.pop() {
+        Some(old_ip) => vm.ip = old_ip,
+        None => vm.set_error(ForthError::ReturnStackUnderflow),
     }
 }
 
 /// `QUIT ( -- )`: Stops the threaded code and the current input, and returns to the text
 /// interpreter. The interpreter does the rest: see
 /// [`outer_interpreter`](crate::outer_interpreter).
-pub(super) unsafe fn quit(regs: &mut Registers) {
-    regs.set_error(ForthError::Quit);
+pub(super) unsafe fn quit(vm: &mut Vm) {
+    vm.set_error(ForthError::Quit);
 }
 
 /// `ABORT ( i*x -- )`: Does the same as `QUIT`, and also clears the data stack. The
 /// interpreter does that part too, so that a host can tell the two apart.
-pub(super) unsafe fn abort(regs: &mut Registers) {
-    regs.set_error(ForthError::Abort);
+pub(super) unsafe fn abort(vm: &mut Vm) {
+    vm.set_error(ForthError::Abort);
 }
 
 /// `BYE ( -- )`: Stops the text interpreter and leaves the program with exit code 0.
-pub(super) unsafe fn bye(regs: &mut Registers) {
-    regs.set_error(ForthError::Bye(0));
+pub(super) unsafe fn bye(vm: &mut Vm) {
+    vm.set_error(ForthError::Bye(0));
 }
 
 /// `(BYE) ( n -- )`: Stops the text interpreter and leaves the program with exit code `n`.
-pub(super) unsafe fn bye_with_code(regs: &mut Registers) {
-    if let Some(code) = regs.pop() {
-        regs.set_error(ForthError::Bye(code));
+pub(super) unsafe fn bye_with_code(vm: &mut Vm) {
+    if let Some(code) = vm.pop() {
+        vm.set_error(ForthError::Bye(code));
     }
 }
 
 /// `EXECUTE ( i*x xt -- j*x )`: Pops an execution token and runs that word.
-pub(super) unsafe fn execute(regs: &mut Registers) {
-    if let Some(xt) = regs.pop() {
-        if !regs.dictionary.is_execution_token(xt) {
-            regs.set_error(ForthError::InvalidExecutionToken(xt));
+pub(super) unsafe fn execute(vm: &mut Vm) {
+    if let Some(xt) = vm.pop() {
+        if !vm.dictionary.is_execution_token(xt) {
+            vm.set_error(ForthError::InvalidExecutionToken(xt));
             return;
         }
-        regs.w = xt as *const Cell;
-        enter_word(regs);
+        vm.w = xt as *const Cell;
+        enter_word(vm);
     }
 }
 
 /// `LIT ( -- x )`: Fetches the inline literal value from the thread, pushes it, and skips the
 /// data cell.
-pub(super) unsafe fn lit(regs: &mut Registers) {
-    let literal_value = *regs.ip;
-    regs.push(literal_value);
-    regs.ip = regs.ip.add(1); // Skip the inline data cell
+pub(super) unsafe fn lit(vm: &mut Vm) {
+    let literal_value = *vm.ip;
+    vm.push(literal_value);
+    vm.ip = vm.ip.add(1); // Skip the inline data cell
 }
 
 #[cfg(test)]
@@ -94,21 +94,21 @@ mod tests {
 
     const TEST_CELLS: usize = 1024;
 
-    unsafe fn xt_of(regs: &Registers, name: &str) -> Cell {
-        cfa_of(regs.dictionary.find_word(name).unwrap()) as Cell
+    unsafe fn xt_of(vm: &Vm, name: &str) -> Cell {
+        cfa_of(vm.dictionary.find_word(name).unwrap()) as Cell
     }
 
     #[test]
     fn docon_pushes_the_cell_behind_the_code_field() {
         unsafe {
-            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             let word: [Cell; 3] = [0, 42, 99];
-            regs.w = word.as_ptr();
-            regs.data_stack.push(1);
+            vm.w = word.as_ptr();
+            vm.data_stack.push(1);
 
-            docon(&mut regs);
-            assert!(regs.error.is_none(), "got: {:?}", regs.error);
-            assert_eq!(regs.data_stack, [1, 42]);
+            docon(&mut vm);
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+            assert_eq!(vm.data_stack, [1, 42]);
             assert_eq!(word, [0, 42, 99]);
         }
     }
@@ -116,83 +116,83 @@ mod tests {
     #[test]
     fn quit_stops_the_vm_and_leaves_the_data_stack_alone() {
         unsafe {
-            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            regs.data_stack.push(7);
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            vm.data_stack.push(7);
 
-            quit(&mut regs);
-            assert!(matches!(regs.error, Some(ForthError::Quit)));
-            assert_eq!(regs.data_stack, [7]);
+            quit(&mut vm);
+            assert!(matches!(vm.error, Some(ForthError::Quit)));
+            assert_eq!(vm.data_stack, [7]);
         }
     }
 
     #[test]
     fn abort_stops_the_vm_and_leaves_the_stack_to_the_interpreter() {
         unsafe {
-            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            regs.data_stack.push(7);
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            vm.data_stack.push(7);
 
-            abort(&mut regs);
-            assert!(matches!(regs.error, Some(ForthError::Abort)));
-            assert_eq!(regs.data_stack, [7]);
+            abort(&mut vm);
+            assert!(matches!(vm.error, Some(ForthError::Abort)));
+            assert_eq!(vm.data_stack, [7]);
         }
     }
 
     #[test]
     fn bye_stops_the_vm_with_code_zero() {
         unsafe {
-            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            bye(&mut regs);
-            assert!(matches!(regs.error, Some(ForthError::Bye(0))));
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            bye(&mut vm);
+            assert!(matches!(vm.error, Some(ForthError::Bye(0))));
         }
     }
 
     #[test]
     fn bye_with_code_pops_a_cell() {
         unsafe {
-            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            regs.data_stack.push(3);
-            bye_with_code(&mut regs);
-            assert!(matches!(regs.error, Some(ForthError::Bye(3))));
-            assert!(regs.data_stack.is_empty());
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            vm.data_stack.push(3);
+            bye_with_code(&mut vm);
+            assert!(matches!(vm.error, Some(ForthError::Bye(3))));
+            assert!(vm.data_stack.is_empty());
         }
     }
 
     #[test]
     fn bye_with_code_reports_stack_underflow() {
         unsafe {
-            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            bye_with_code(&mut regs);
-            assert!(matches!(regs.error, Some(ForthError::DataStackUnderflow)));
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            bye_with_code(&mut vm);
+            assert!(matches!(vm.error, Some(ForthError::DataStackUnderflow)));
         }
     }
 
     #[test]
     fn execute_runs_a_word_and_consumes_the_xt() {
         unsafe {
-            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            let xt = xt_of(&regs, "DUP");
-            regs.data_stack.extend_from_slice(&[7, xt]);
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            let xt = xt_of(&vm, "DUP");
+            vm.data_stack.extend_from_slice(&[7, xt]);
 
-            execute(&mut regs);
-            assert!(regs.error.is_none(), "got: {:?}", regs.error);
-            assert_eq!(regs.data_stack, [7, 7]);
+            execute(&mut vm);
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+            assert_eq!(vm.data_stack, [7, 7]);
         }
     }
 
     #[test]
     fn execute_rejects_a_pending_word() {
         unsafe {
-            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             // Code 0 would give another error if it ran, so this also shows that nothing ran.
-            let xt = regs
+            let xt = vm
                 .compiler
-                .begin_definition(&mut regs.dictionary, "X", 0, 0)
+                .begin_definition(&mut vm.dictionary, "X", 0, 0)
                 .unwrap();
-            regs.data_stack.push(xt);
+            vm.data_stack.push(xt);
 
-            execute(&mut regs);
+            execute(&mut vm);
             assert!(matches!(
-                regs.error,
+                vm.error,
                 Some(ForthError::InvalidExecutionToken(token)) if token == xt
             ));
         }
@@ -201,24 +201,24 @@ mod tests {
     #[test]
     fn execute_rejects_a_number_without_running_anything() {
         unsafe {
-            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            regs.data_stack.extend_from_slice(&[1, 5]);
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            vm.data_stack.extend_from_slice(&[1, 5]);
 
-            execute(&mut regs);
+            execute(&mut vm);
             assert!(matches!(
-                regs.error,
+                vm.error,
                 Some(ForthError::InvalidExecutionToken(5))
             ));
-            assert_eq!(regs.data_stack, [1]);
+            assert_eq!(vm.data_stack, [1]);
         }
     }
 
     #[test]
     fn execute_needs_a_cell() {
         unsafe {
-            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            execute(&mut regs);
-            assert!(matches!(regs.error, Some(ForthError::DataStackUnderflow)));
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            execute(&mut vm);
+            assert!(matches!(vm.error, Some(ForthError::DataStackUnderflow)));
         }
     }
 }
