@@ -70,6 +70,8 @@ pub(crate) unsafe fn install(vm: &mut Vm) -> Result<(), ForthError> {
     vm.dictionary
         .add_primitive_word(",", code_cell(compiler::comma), 0)?;
     vm.dictionary
+        .add_primitive_word("COMPILE,", code_cell(compiler::compile_comma), 0)?;
+    vm.dictionary
         .add_primitive_word("C,", code_cell(compiler::c_comma), 0)?;
     vm.dictionary
         .add_primitive_word("ALLOT", code_cell(compiler::allot), 0)?;
