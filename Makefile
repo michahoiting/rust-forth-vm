@@ -6,6 +6,8 @@
 # make ci-all     Also Miri, which needs the nightly toolchain.
 # make msrv       Checks the oldest supported Rust version, which needs that toolchain.
 # make mutants    Mutation testing, which needs cargo-mutants.
+# make mutants-diff DIFF=path  Test mutations overlapping a diff.
+# make mutants-test  Test incremental mutation reporting.
 # make doc-serve  Serves the docs on localhost, which needs python3.
 # make setup-dev  Installs the developer tools and the git hooks. Run it once after cloning.
 # make hooks      Installs only the git hooks in this clone.
@@ -28,7 +30,7 @@ MSRV := $(shell sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
 
 .DEFAULT_GOAL := ci
 
-.PHONY: ci ci-all fmt clippy build test test-release test-minimal doc doc-serve miri miri-32 check-miri msrv msrv-version code-changed mutants demo demo-expected setup-dev hooks protect metrics perf perf-report perf-compare perf-pad-check perf-test check-python
+.PHONY: ci ci-all fmt clippy build test test-release test-minimal doc doc-serve miri miri-32 check-miri msrv msrv-version code-changed mutants mutants-diff mutants-test check-mutants demo demo-expected setup-dev hooks protect metrics perf perf-report perf-compare perf-pad-check perf-test check-python
 
 ci: fmt clippy build test test-release test-minimal doc
 
@@ -121,13 +123,30 @@ perf-pad-check: check-python
 perf-test: check-python
 	@cd scripts && python3 -m unittest test_perf
 
-mutants:
+check-mutants:
 	@cargo mutants --version >/dev/null 2>&1 || { \
 		echo "cargo-mutants is not installed. Install it with:"; \
 		echo "  cargo install cargo-mutants --locked"; \
 		exit 1; \
 	}
+
+mutants: check-mutants
 	cargo mutants
+
+export DIFF
+mutants-diff: check-mutants
+	@test -n "$$DIFF" && test -f "$$DIFF" && test -r "$$DIFF" || { \
+		echo "Set DIFF to a readable diff file, for example make mutants-diff DIFF=/tmp/pr.diff"; \
+		exit 1; \
+	}
+	@cargo mutants --in-diff "$$DIFF"; status=$$?; \
+	if [ -n "$$MUTANTS_STATUS_FILE" ]; then \
+		printf '%s\n' "$$status" > "$$MUTANTS_STATUS_FILE" || exit 1; \
+	fi; \
+	exit $$status
+
+mutants-test: check-python
+	@cd scripts && python3 -m unittest test_mutants_report test_mutants_workflow
 
 demo:
 	cargo run --locked -- --demo

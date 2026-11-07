@@ -21,6 +21,8 @@ make ci        # Formatting, lints, build, debug and release tests, and docs
 make ci-all    # Also Miri, on 64-bit and 32-bit targets. Needs nightly
 make msrv      # Checks the oldest supported Rust version, from `rust-version`
 make mutants   # Mutation testing, which CI runs weekly. Needs cargo-mutants
+make mutants-diff DIFF=/tmp/pr.diff # Test mutations overlapping a diff
+make mutants-test # Test incremental mutation reporting
 make demo      # Opens the demo menu
 make doc-serve # Serves the docs on localhost, including private items. Needs python3
 ```

@@ -12,6 +12,7 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 
 ### Added
 
+- An advisory incremental mutation check on pull requests, with elapsed time and results.
 - Performance measurement: `make perf` runs Forth workloads for each part of the VM, counts
   their instructions, and stores the results in a SQLite database under `target/perf`.
   `make perf-report` shows the development, and `make perf-compare` compares with another commit.
