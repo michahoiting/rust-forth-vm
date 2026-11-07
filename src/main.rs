@@ -26,7 +26,7 @@ use rust_forth_vm::{boot, outer_interpreter, ForthError, Registers, VmConfig, CO
 use line_editor::LineEditor;
 
 /// The size of the demo's Forth dictionary.
-const DICTIONARY_CELLS: usize = 1024;
+const DICTIONARY_CELLS: usize = 64 * 1024;
 
 /// The usage line, printed for arguments the program doesn't know.
 const USAGE: &str = "Usage: forth-vm [--interactive | --demo | --version]";
