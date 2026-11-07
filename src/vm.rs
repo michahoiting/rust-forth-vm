@@ -171,11 +171,11 @@ impl Registers {
     /// ```
     /// use std::io;
     ///
-    /// use rust_forth_vm::{boot, outer_interpreter, ForthError};
+    /// use rust_forth_vm::{boot, outer_interpreter, ForthError, VmConfig};
     ///
     /// // SAFETY: this VM is only used through the crate's functions.
     /// unsafe {
-    ///     let mut regs = boot(io::sink(), 1024)?;
+    ///     let mut regs = boot(io::sink(), VmConfig::new(1024)).unwrap();
     ///     outer_interpreter(&mut regs, ": THREE 3 ;")?;
     ///     assert!(regs.word_names().iter().any(|name| name == "THREE"));
     /// }
