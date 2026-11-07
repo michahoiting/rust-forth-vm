@@ -7,7 +7,7 @@ mod core;
 mod parsing;
 mod runtime;
 
-use crate::dictionary::{F_HIDDEN, F_IMMEDIATE};
+use crate::dictionary::{F_COMPILE_ONLY, F_HIDDEN, F_IMMEDIATE};
 use crate::error::ForthError;
 use crate::vm::{code_cell, Vm};
 
@@ -112,10 +112,13 @@ pub(crate) unsafe fn install(vm: &mut Vm) -> Result<(), ForthError> {
     let exit_cfa = vm
         .dictionary
         .add_primitive_word("EXIT", code_cell(runtime::exit), 0)?;
-    // LIT reads its operand from the thread, so it only makes sense in compiled code.
-    let lit_cfa = vm
-        .dictionary
-        .add_primitive_word("LIT", code_cell(runtime::lit), F_HIDDEN)?;
+    // LIT reads its operand from the thread, so it only makes sense in compiled code. EXECUTE
+    // would run it with IP somewhere else. Every word with an inline operand needs F_COMPILE_ONLY.
+    let lit_cfa = vm.dictionary.add_primitive_word(
+        "LIT",
+        code_cell(runtime::lit),
+        F_HIDDEN | F_COMPILE_ONLY,
+    )?;
     vm.compiler.link_primitives(lit_cfa, exit_cfa);
     Ok(())
 }
