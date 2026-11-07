@@ -3,18 +3,27 @@
 //! An interactive Forth prompt, and a scripted demo of the Forth VM.
 //!
 //! By default, or with `--interactive`, the program evaluates each line from stdin in one VM.
+//! On a terminal, the lines can be edited, and there's a history.
 //!
 //! With `--demo`, it shows a menu of demo sections. Each section shows the normal use of some
 //! words, and the last one shows how errors are handled.
 //!
 //! With `--version`, it prints what it was built from, and exits.
 
+#[cfg(feature = "readline")]
+mod line_editor;
+
 use std::env;
+#[cfg(feature = "readline")]
+use std::io::IsTerminal;
 use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
 use std::slice;
 
 use rust_forth_vm::{boot, outer_interpreter, ForthError, Registers, COPYRIGHT};
+
+#[cfg(feature = "readline")]
+use line_editor::LineEditor;
 
 /// The size of the demo's Forth dictionary.
 const DICTIONARY_CELLS: usize = 1024;
@@ -461,13 +470,14 @@ fn demo_menu(mut input: impl BufRead) -> ExitCode {
     }
 }
 
-/// Evaluates each line of `input` in one VM, until the input ends.
-fn interactive(mut input: impl BufRead) -> ExitCode {
+/// Evaluates each line from `read_line` in one VM, until it returns an exit code or Forth ends
+/// the program.
+fn interactive(mut read_line: impl FnMut() -> Result<String, ExitCode>) -> ExitCode {
     // SAFETY: `regs` comes from `boot`, through `new_vm`.
     unsafe {
         let mut regs = new_vm();
         loop {
-            match read_line(&mut input) {
+            match read_line() {
                 Ok(line) => {
                     if let Err(code) = interpret(&mut regs, &line) {
                         return code;
@@ -477,6 +487,20 @@ fn interactive(mut input: impl BufRead) -> ExitCode {
             }
         }
     }
+}
+
+/// Runs the interactive prompt, with line editing if both ends are a terminal. Input from
+/// anything else is read as it is, so nothing but its output reaches a pipe.
+fn prompt() -> ExitCode {
+    #[cfg(feature = "readline")]
+    if io::stdin().is_terminal() && io::stdout().is_terminal() {
+        match LineEditor::new() {
+            Ok(mut editor) => return interactive(|| editor.read_line()),
+            Err(error) => eprintln!("Cannot edit lines: {}", error),
+        }
+    }
+    let mut input = io::stdin().lock();
+    interactive(|| read_line(&mut input))
 }
 
 /// Starts the interactive prompt or the demo menu, or prints the version, depending on the
@@ -503,7 +527,7 @@ fn main() -> ExitCode {
         demo_menu(io::stdin().lock())
     } else {
         println!("{}\n{}\n{}\n", VERSION, COPYRIGHT, MORE_INFORMATION);
-        interactive(io::stdin().lock())
+        prompt()
     }
 }
 

@@ -41,6 +41,12 @@ succeeds, unless a definition is still open. Press Ctrl-D to leave. `forth-vm`
 starts this way by default, and also accepts `--interactive`, `--demo` for the demo,
 and `--version`.
 
+On a terminal, you can edit the line with the arrow keys and the usual Emacs keys. The
+up and down arrows go through the history, and Ctrl-R searches it. Ctrl-C discards the
+line, and only stops the program while Forth is running. The history is kept in
+`~/.rustforth_history`, or only for the session if `HOME` isn't set. Input from a pipe
+is read as it is, and isn't saved.
+
 `--version` prints the version, the UTC date of the build, and the git tag and hash. The
 prompt starts with the same line, followed by the copyright notice and the words that give
 more information:
@@ -69,11 +75,13 @@ make doc-serve  # Serve the docs at http://localhost:8000/rust_forth_vm/
 `cargo build --release` builds the program as `target/release/forth-vm`.
 
 To use the VM as a library, add it as a git dependency. It isn't published on
-crates.io. The [API docs](src/lib.rs) start with a complete example.
+crates.io. The [API docs](src/lib.rs) start with a complete example. The library has
+no dependencies, so turn off the default `readline` feature, which is only for the
+prompt of `forth-vm`.
 
 ```toml
 [dependencies]
-rust-forth-vm = { git = "https://github.com/michahoiting/rust-forth-vm" }
+rust-forth-vm = { git = "https://github.com/michahoiting/rust-forth-vm", default-features = false }
 ```
 
 To work on the project, run `make setup-dev`, which installs all the developer
