@@ -15,9 +15,10 @@ Demo sections:
   10. Comments
   11. Reaching a Word's Parameter Field
   12. Bytes and Reserved Memory
-  13. Program Information
-  14. Returning to the Interpreter with QUIT and ABORT
-  15. Error Handling
+  13. Compiling Calls from an Immediate Word
+  14. Program Information
+  15. Returning to the Interpreter with QUIT and ABORT
+  16. Error Handling
 Enter a section number, Q to quit [0]: --- TEST RUN 1: Evaluating Text Operations ---
 Input:
     40 2 +            \ leaves 42 on the stack
@@ -242,7 +243,24 @@ Input:
 Output: 72 105 0 5 99 7 7 11 22 ok
 -------------------------------------
 
---- TEST RUN 13: Program Information ---
+--- TEST RUN 13: Compiling Calls from an Immediate Word ---
+Input:
+    \ COMPILE, appends a call to the word with the given execution token, to the open definition
+    : ADD1 1 + ;
+    : TWICE ['] ADD1 COMPILE, ['] ADD1 COMPILE, ; IMMEDIATE
+    : ADD2 TWICE ;                \ TWICE ran while ADD2 was compiled, so ADD2 calls ADD1 twice
+    5 ADD2 .                      \ prints 7
+
+    \ Any definition can use TWICE
+    : ADD4 TWICE TWICE ;
+    5 ADD4 .                      \ prints 9
+
+    \ , can't write into a definition, so an immediate word has to use COMPILE,
+    CREATE TABLE 5 , TABLE @ .    \ prints 5: , still works when no definition is open
+Output: 7 9 5 ok
+-------------------------------------
+
+--- TEST RUN 14: Program Information ---
 Input:
     HELP                          \ prints how to leave the prompt
     COPYRIGHT                     \ prints the copyright notice
@@ -273,7 +291,7 @@ SOFTWARE.
 ok
 -------------------------------------
 
---- TEST RUN 14: Returning to the Interpreter with QUIT and ABORT ---
+--- TEST RUN 15: Returning to the Interpreter with QUIT and ABORT ---
 Input:
     7 1 . QUIT 2 .                  \ prints 1, and leaves 7 on the stack
 Output: 1 
@@ -300,7 +318,7 @@ Input:
 Output: 0 ok
 -------------------------------------
 
---- TEST RUN 15: Error Handling ---
+--- TEST RUN 16: Error Handling ---
 Input:
     : BROKEN 1 NO-SUCH-WORD ;
 Output: Forth Error: Word or numeric literal 'NO-SUCH-WORD' not recognized.
@@ -325,6 +343,15 @@ Output: Forth Error: Invalid execution token 0x5.
 Input:
     1 ( never closed
 Output: Forth Error: Comment has no closing parenthesis.
+Input:
+    : W 5 , ; IMMEDIATE
+Output: ok
+Input:
+    : X W ;
+Output: Forth Error: , can't be used while a definition is open.
+Input:
+    ' DUP COMPILE,
+Output: Forth Error: COMPILE, can only be used while compiling.
 -------------------------------------
 
 Demo sections:
@@ -341,7 +368,8 @@ Demo sections:
   10. Comments
   11. Reaching a Word's Parameter Field
   12. Bytes and Reserved Memory
-  13. Program Information
-  14. Returning to the Interpreter with QUIT and ABORT
-  15. Error Handling
+  13. Compiling Calls from an Immediate Word
+  14. Program Information
+  15. Returning to the Interpreter with QUIT and ABORT
+  16. Error Handling
 Enter a section number, Q to quit [0]: 

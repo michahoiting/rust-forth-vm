@@ -8,22 +8,49 @@ use crate::dictionary::{cfa_of, is_created, F_CREATED, F_HIDDEN};
 use crate::error::ForthError;
 use crate::vm::{code_cell, Vm};
 
-/// `, ( x -- )`: Pops a Cell from the stack and presses it into the dictionary at HERE.
-pub(super) unsafe fn comma(vm: &mut Vm) {
-    if let Some(value) = vm.pop() {
-        let result = vm.dictionary.comma(value);
-        vm.check(result);
-    }
-}
-
 /// Reports an error if a definition is open, and returns whether one is. `word` would put
-/// something other than a whole Cell into its thread, which would then run as code.
+/// something other than the compiler's own cells into its thread, which would then run as code,
+/// or would write a word header into the middle of it.
 fn refuse_in_definition(vm: &mut Vm, word: &'static str) -> bool {
     let open = vm.compiler.is_compiling();
     if open {
         vm.set_error(ForthError::DefinitionOpen(word));
     }
     open
+}
+
+/// `, ( x -- )`: Pops a Cell from the stack and presses it into the dictionary at HERE. It
+/// can't be used while a definition is open, because only the compiler writes to the thread.
+/// An immediate word compiles a call with `COMPILE,` instead.
+pub(super) unsafe fn comma(vm: &mut Vm) {
+    if refuse_in_definition(vm, ",") {
+        return;
+    }
+    if let Some(value) = vm.pop() {
+        let result = vm.dictionary.comma(value);
+        vm.check(result);
+    }
+}
+
+/// `COMPILE, ( xt -- )`: Pops an execution token and compiles a call to that word into the open
+/// definition. This is how an immediate word compiles code.
+///
+/// It reports [`ForthError::NotCompiling`] if no definition is open, and
+/// [`ForthError::InvalidExecutionToken`] unless `xt` can run from anywhere, which refuses a
+/// pending word and a word with an inline operand such as `LIT`.
+pub(super) unsafe fn compile_comma(vm: &mut Vm) {
+    if !vm.compiler.is_compiling() {
+        vm.set_error(ForthError::NotCompiling("COMPILE,"));
+        return;
+    }
+    if let Some(xt) = vm.pop() {
+        if !vm.dictionary.is_execution_token(xt) {
+            vm.set_error(ForthError::InvalidExecutionToken(xt));
+            return;
+        }
+        let result = vm.compiler.compile_word(&mut vm.dictionary, xt);
+        vm.check(result);
+    }
 }
 
 /// `C, ( char -- )`: Pops a Cell from the stack and presses its low byte into the dictionary
@@ -57,7 +84,12 @@ pub(super) unsafe fn align(vm: &mut Vm) {
 }
 
 /// Parses a name on behalf of `word`, and allocates a new word with default DOVAR semantics.
+/// It can't be used while a definition is open, because the header would go into that
+/// definition.
 unsafe fn create_word(vm: &mut Vm, word: &'static str) {
+    if refuse_in_definition(vm, word) {
+        return;
+    }
     let Some(name) = vm.input.parse_name() else {
         vm.set_error(ForthError::MissingName(word));
         return;
@@ -86,8 +118,12 @@ pub(super) unsafe fn variable(vm: &mut Vm) {
 }
 
 /// `CONSTANT ( x -- )`: Parses a name and creates a word that pushes `x`. The word is not
-/// marked as made by CREATE, so DOES> can't overwrite its value.
+/// marked as made by CREATE, so DOES> can't overwrite its value. It can't be used while a
+/// definition is open.
 pub(super) unsafe fn constant(vm: &mut Vm) {
+    if refuse_in_definition(vm, "CONSTANT") {
+        return;
+    }
     let Some(value) = vm.pop() else {
         return;
     };
@@ -132,8 +168,12 @@ pub(super) unsafe fn runtime_does(vm: &mut Vm) {
     exit(vm);
 }
 
-/// `: ( -- )`: Parses a name and switches the text interpreter to compiling.
+/// `: ( -- )`: Parses a name and switches the text interpreter to compiling. It can't be used
+/// while a definition is open.
 pub(super) unsafe fn colon(vm: &mut Vm) {
+    if refuse_in_definition(vm, ":") {
+        return;
+    }
     let Some(name) = vm.input.parse_name() else {
         vm.set_error(ForthError::MissingName(":"));
         return;
@@ -144,8 +184,12 @@ pub(super) unsafe fn colon(vm: &mut Vm) {
     vm.check(result);
 }
 
-/// `:NONAME ( -- xt )`: Starts a definition without a name, and pushes its execution token.
+/// `:NONAME ( -- xt )`: Starts a definition without a name, and pushes its execution token. It
+/// can't be used while a definition is open.
 pub(super) unsafe fn colon_noname(vm: &mut Vm) {
+    if refuse_in_definition(vm, ":NONAME") {
+        return;
+    }
     let result = vm
         .compiler
         .begin_definition(&mut vm.dictionary, "", code_cell(docol), F_HIDDEN);
@@ -253,6 +297,134 @@ mod tests {
                 assert_eq!(vm.data_stack, [1]);
                 assert_eq!(vm.dictionary.mark(), before);
             }
+        }
+    }
+
+    #[test]
+    fn words_that_write_into_a_thread_or_make_headers_are_refused_in_a_definition() {
+        unsafe {
+            let words: [(PrimitiveFn, &str); 6] = [
+                (comma, ","),
+                (create, "CREATE"),
+                (variable, "VARIABLE"),
+                (constant, "CONSTANT"),
+                (colon, ":"),
+                (colon_noname, ":NONAME"),
+            ];
+            for (word, name) in words {
+                let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+                outer_interpreter(&mut vm, ": X").unwrap();
+                vm.input.load("Y");
+                let before = vm.dictionary.mark();
+                vm.data_stack.push(1);
+
+                word(&mut vm);
+                assert!(
+                    matches!(vm.error, Some(ForthError::DefinitionOpen(n)) if n == name),
+                    "{}: {:?}",
+                    name,
+                    vm.error
+                );
+                assert_eq!(vm.data_stack, [1], "{}", name);
+                assert_eq!(vm.dictionary.mark(), before, "{}", name);
+                assert!(vm.compiler.is_compiling(), "{}", name);
+            }
+        }
+    }
+
+    #[test]
+    fn comma_still_works_outside_a_definition() {
+        unsafe {
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            let addr = vm.dictionary.here();
+            vm.data_stack.extend_from_slice(&[1, 42]);
+
+            comma(&mut vm);
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+            assert_eq!(vm.data_stack, [1]);
+            assert_eq!(vm.dictionary.fetch(addr).unwrap(), 42);
+        }
+    }
+
+    // Starts a definition, and returns the address that its thread starts at.
+    unsafe fn open_definition(vm: &mut Vm) -> Cell {
+        outer_interpreter(vm, ": X").unwrap();
+        vm.dictionary.here()
+    }
+
+    #[test]
+    fn compile_comma_appends_a_call_and_pops_the_xt() {
+        unsafe {
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            let thread = open_definition(&mut vm);
+            let dup = cfa_of(vm.dictionary.find_word("DUP").unwrap()) as Cell;
+            vm.data_stack.extend_from_slice(&[1, dup]);
+
+            compile_comma(&mut vm);
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+            assert_eq!(vm.data_stack, [1]);
+            assert_eq!(vm.dictionary.here(), thread + mem::size_of::<Cell>());
+            assert_eq!(vm.dictionary.fetch(thread).unwrap(), dup);
+        }
+    }
+
+    #[test]
+    fn compile_comma_needs_an_open_definition() {
+        unsafe {
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            let dup = cfa_of(vm.dictionary.find_word("DUP").unwrap()) as Cell;
+            let before = vm.dictionary.mark();
+            vm.data_stack.push(dup);
+
+            compile_comma(&mut vm);
+            assert!(matches!(
+                vm.error,
+                Some(ForthError::NotCompiling("COMPILE,"))
+            ));
+            assert_eq!(vm.data_stack, [dup]);
+            assert_eq!(vm.dictionary.mark(), before);
+        }
+    }
+
+    #[test]
+    fn compile_comma_refuses_anything_but_an_execution_token() {
+        unsafe {
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            let thread = open_definition(&mut vm);
+            // The thread of X starts with the CFA of LIT, which a compiled literal writes.
+            vm.compiler.compile_literal(&mut vm.dictionary, 5).unwrap();
+            let lit = vm.dictionary.fetch(thread).unwrap();
+            let pending = cfa_of(vm.dictionary.last_word()) as Cell;
+            let before = vm.dictionary.mark();
+
+            for xt in [lit, pending, 5, 0] {
+                vm.error = None;
+                vm.data_stack.clear();
+                vm.data_stack.push(xt);
+
+                compile_comma(&mut vm);
+                assert!(
+                    matches!(vm.error, Some(ForthError::InvalidExecutionToken(t)) if t == xt),
+                    "{:#x}: {:?}",
+                    xt,
+                    vm.error
+                );
+                assert!(vm.data_stack.is_empty());
+                assert_eq!(vm.dictionary.mark(), before);
+            }
+        }
+    }
+
+    #[test]
+    fn compile_comma_needs_a_cell() {
+        unsafe {
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            open_definition(&mut vm);
+            let before = vm.dictionary.mark();
+
+            compile_comma(&mut vm);
+            assert!(matches!(vm.error, Some(ForthError::DataStackUnderflow)));
+            assert_eq!(vm.dictionary.mark(), before);
         }
     }
 
