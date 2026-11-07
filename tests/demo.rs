@@ -325,7 +325,7 @@ fn version_prints_what_the_program_was_built_from() {
     assert!(output.stderr.is_empty());
     let stdout = String::from_utf8(output.stdout).unwrap();
     let lines: Vec<&str> = stdout.lines().collect();
-    assert_eq!(lines.len(), 3);
+    assert_eq!(lines.len(), 2);
 
     let prefix = format!("Rust Forth VM {} (Built ", env!("CARGO_PKG_VERSION"));
     let build = lines[0].strip_prefix(&prefix).unwrap();
@@ -338,10 +338,6 @@ fn version_prints_what_the_program_was_built_from() {
     assert!(is_git_state(git), "{}", git);
 
     assert_eq!(lines[1], "Copyright (c) 2026 M.W.R. Hoiting");
-    assert_eq!(
-        lines[2],
-        r#"Type "HELP", "COPYRIGHT" or "LICENCE" for more information."#
-    );
 }
 
 #[test]

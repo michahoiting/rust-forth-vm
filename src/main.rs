@@ -31,9 +31,6 @@ const VERSION: &str = concat!(
     ")"
 );
 
-/// The last line of `--version`.
-const MORE_INFORMATION: &str = r#"Type "HELP", "COPYRIGHT" or "LICENCE" for more information."#;
-
 /// The demo sections, each with its title and one block of Forth source. Each section runs in a
 /// new VM, so it must define everything it uses.
 const SECTIONS: [(&str, &str); 13] = [
@@ -488,7 +485,7 @@ fn main() -> ExitCode {
         (Some(argument), None) if argument == "--interactive" => false,
         (Some(argument), None) if argument == "--demo" => true,
         (Some(argument), None) if argument == "--version" => {
-            println!("{}\n{}\n{}", VERSION, COPYRIGHT, MORE_INFORMATION);
+            println!("{}\n{}", VERSION, COPYRIGHT);
             return ExitCode::SUCCESS;
         }
         _ => {
