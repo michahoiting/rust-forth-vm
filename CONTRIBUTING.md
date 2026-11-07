@@ -111,5 +111,5 @@ The project owner makes releases:
    git switch main
    git pull --ff-only
    git tag -a 0.2.0 -m "Version 0.2.0"
-   git push origin v0.2.0
+   git push origin 0.2.0
    ```

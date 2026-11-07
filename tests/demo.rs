@@ -312,8 +312,8 @@ fn is_git_state(text: &str) -> bool {
     let is_hash = |hash: &str| hash.len() >= 7 && hash.bytes().all(|b| b.is_ascii_hexdigit());
     match text.split(' ').collect::<Vec<_>>()[..] {
         ["unknown", "unknown"] => true,
-        ["none", hash, "(dirty)"] => is_hash(hash),
-        [tag, hash] | [tag, hash, "(dirty)"] => tag.starts_with('v') && is_hash(hash),
+        [tag, hash] => tag != "none" && is_hash(hash),
+        [_, hash, "(dirty)"] => is_hash(hash),
         _ => false,
     }
 }
