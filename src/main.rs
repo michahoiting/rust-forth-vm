@@ -20,7 +20,7 @@ use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
 use std::slice;
 
-use rust_forth_vm::{boot, outer_interpreter, ForthError, Registers, COPYRIGHT};
+use rust_forth_vm::{boot, outer_interpreter, ForthError, Registers, VmConfig, COPYRIGHT};
 
 #[cfg(feature = "readline")]
 use line_editor::LineEditor;
@@ -333,7 +333,7 @@ fn section(number: usize) -> (&'static str, &'static [&'static str]) {
 ///
 /// The result has the same requirements as the result of [`boot`].
 unsafe fn new_vm() -> Registers {
-    boot(io::stdout(), DICTIONARY_CELLS)
+    boot(io::stdout(), VmConfig::new(DICTIONARY_CELLS))
         .expect("the dictionary must be able to hold the primitives")
 }
 

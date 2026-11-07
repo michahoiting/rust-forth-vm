@@ -477,7 +477,7 @@ mod tests {
     use std::io;
 
     use super::*;
-    use crate::{boot, outer_interpreter};
+    use crate::{boot, outer_interpreter, VmConfig};
 
     const CELL_SIZE: usize = mem::size_of::<Cell>();
     const TEST_CELLS: usize = 1024;
@@ -940,7 +940,7 @@ mod tests {
     #[test]
     fn store_can_change_a_word_header() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             outer_interpreter(&mut regs, "CREATE X 7 ,").unwrap();
             let header = regs.dictionary.find_word("X").unwrap();
 

@@ -9,7 +9,10 @@ use std::io::{self, BufWriter, Write};
 use std::mem;
 use std::rc::Rc;
 
-use rust_forth_vm::{boot, outer_interpreter, Cell, ForthError, Registers, COPYRIGHT};
+use rust_forth_vm::{
+    boot, outer_interpreter, Cell, ForthError, Registers, VmConfig, COPYRIGHT,
+    DEFAULT_DATA_STACK_CELLS, DEFAULT_RETURN_STACK_CELLS,
+};
 
 const TEST_CELLS: usize = 1024;
 
@@ -49,13 +52,13 @@ impl Write for FailingWriter {
 
 // Boots a VM with a dictionary that is large enough for every test.
 unsafe fn test_vm(output: impl Write + 'static) -> Registers {
-    boot(output, TEST_CELLS).unwrap()
+    boot(output, VmConfig::new(TEST_CELLS)).unwrap()
 }
 
 // Returns the size of the smallest dictionary that can hold the primitives.
 unsafe fn smallest_cells() -> usize {
     (0..TEST_CELLS)
-        .find(|cells| boot(io::sink(), *cells).is_ok())
+        .find(|cells| boot(io::sink(), VmConfig::new(*cells)).is_ok())
         .unwrap()
 }
 
@@ -445,6 +448,8 @@ fn errors_have_stable_messages() {
     let cases = [
         (ForthError::DataStackUnderflow, "Data stack underflow."),
         (ForthError::ReturnStackUnderflow, "Return stack underflow."),
+        (ForthError::DataStackOverflow, "Data stack overflow."),
+        (ForthError::ReturnStackOverflow, "Return stack overflow."),
         (ForthError::DictionaryOverflow, "Dictionary overflow."),
         (ForthError::MissingName("CREATE"), "CREATE needs a name."),
         (
@@ -482,6 +487,10 @@ fn errors_have_stable_messages() {
         (
             ForthError::DictionaryTooLarge(42),
             "Cannot allocate a dictionary of 42 Cells.",
+        ),
+        (
+            ForthError::StackTooLarge(42),
+            "Cannot allocate a stack of 42 Cells.",
         ),
         (ForthError::InvalidAddress(0x2a), "Invalid address 0x2a."),
         (
@@ -663,7 +672,7 @@ fn invalid_store_leaves_a_usable_vm() {
 #[test]
 fn larger_dictionary_holds_more_cells() {
     unsafe {
-        let mut regs = boot(io::sink(), TEST_CELLS * 4).unwrap();
+        let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS * 4)).unwrap();
         let cells = "1 , ".repeat(TEST_CELLS * 2);
         outer_interpreter(&mut regs, &cells).unwrap();
     }
@@ -673,7 +682,7 @@ fn larger_dictionary_holds_more_cells() {
 fn smaller_dictionary_overflows_sooner() {
     unsafe {
         let output = Capture::default();
-        let mut regs = boot(output.clone(), smallest_cells() + 2).unwrap();
+        let mut regs = boot(output.clone(), VmConfig::new(smallest_cells() + 2)).unwrap();
         outer_interpreter(&mut regs, "1 , 2 ,").unwrap();
         assert_error!(&mut regs, "3 ,", ForthError::DictionaryOverflow);
         outer_interpreter(&mut regs, "1 2 + .").unwrap();
@@ -685,7 +694,7 @@ fn smaller_dictionary_overflows_sooner() {
 fn boot_rejects_an_empty_dictionary() {
     unsafe {
         assert!(matches!(
-            boot(io::sink(), 0),
+            boot(io::sink(), VmConfig::new(0)),
             Err(ForthError::DictionaryOverflow)
         ));
     }
@@ -696,12 +705,12 @@ fn smallest_dictionary_boots_and_runs_forth() {
     unsafe {
         let smallest = smallest_cells();
         assert!(matches!(
-            boot(io::sink(), smallest - 1),
+            boot(io::sink(), VmConfig::new(smallest - 1)),
             Err(ForthError::DictionaryOverflow)
         ));
 
         let output = Capture::default();
-        let mut regs = boot(output.clone(), smallest).unwrap();
+        let mut regs = boot(output.clone(), VmConfig::new(smallest)).unwrap();
         outer_interpreter(&mut regs, "1 2 + .").unwrap();
         assert_eq!(output.text(), "3 ");
     }
@@ -711,8 +720,208 @@ fn smallest_dictionary_boots_and_runs_forth() {
 fn boot_rejects_a_dictionary_too_large_to_allocate() {
     unsafe {
         assert!(matches!(
-            boot(io::sink(), Cell::MAX),
+            boot(io::sink(), VmConfig::new(Cell::MAX)),
             Err(ForthError::DictionaryTooLarge(Cell::MAX))
+        ));
+    }
+}
+
+// Boots a VM with these stack limits, and a dictionary large enough for every test.
+unsafe fn limited_vm(
+    output: impl Write + 'static,
+    data_stack_cells: usize,
+    return_stack_cells: usize,
+) -> Registers {
+    let config = VmConfig {
+        data_stack_cells,
+        return_stack_cells,
+        ..VmConfig::new(TEST_CELLS)
+    };
+    boot(output, config).unwrap()
+}
+
+// Defines the words L1 to L`levels`, where each one but L1 calls the one before it, so that
+// running L`levels` nests that many colon words.
+unsafe fn define_nested_words(regs: &mut Registers, levels: usize) {
+    outer_interpreter(regs, ": L1 ;").unwrap();
+    for level in 2..=levels {
+        let definition = format!(": L{} L{} ;", level, level - 1);
+        outer_interpreter(regs, &definition).unwrap();
+    }
+}
+
+// The recursion from issue 32: a word that calls itself through a variable, without end.
+const RUNAWAY_RECURSION: &str = "VARIABLE V :NONAME V @ EXECUTE ; DUP V ! EXECUTE";
+
+#[test]
+fn default_limits_are_the_limits_of_a_new_config() {
+    let config = VmConfig::new(TEST_CELLS);
+    assert_eq!(config.dictionary_cells, TEST_CELLS);
+    assert_eq!(config.data_stack_cells, DEFAULT_DATA_STACK_CELLS);
+    assert_eq!(config.return_stack_cells, DEFAULT_RETURN_STACK_CELLS);
+}
+
+#[test]
+fn data_stack_holds_exactly_its_limit() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = limited_vm(output.clone(), 3, 1);
+        outer_interpreter(&mut regs, "1 2 3").unwrap();
+        outer_interpreter(&mut regs, "DROP DEPTH . . .").unwrap();
+        assert_eq!(output.text(), "2 2 1 ");
+    }
+}
+
+#[test]
+fn a_literal_past_the_limit_overflows_and_clears_the_stacks() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = limited_vm(output.clone(), 3, 1);
+        assert!(matches!(
+            outer_interpreter(&mut regs, "1 2 3 4 5 6"),
+            Err(ForthError::DataStackOverflow)
+        ));
+        outer_interpreter(&mut regs, "DEPTH .").unwrap();
+        assert_eq!(output.text(), "0 ");
+    }
+}
+
+#[test]
+fn every_word_that_grows_the_stack_overflows_at_the_limit() {
+    let cases = [
+        "HERE",
+        "DUP",
+        "?DUP",
+        "OVER",
+        "DEPTH",
+        "X",
+        "C",
+        "D",
+        "' DUP",
+        "T",
+        ":NONAME ;",
+    ];
+    for word in cases {
+        unsafe {
+            let mut regs = limited_vm(io::sink(), 8, 2);
+            outer_interpreter(
+                &mut regs,
+                "VARIABLE X 5 CONSTANT C : M CREATE DOES> ; M D : T 7 ;",
+            )
+            .unwrap();
+            outer_interpreter(&mut regs, "1 1 1 1 1 1 1 1").unwrap();
+            let result = outer_interpreter(&mut regs, word);
+            assert!(
+                matches!(result, Err(ForthError::DataStackOverflow)),
+                "{}: {:?}",
+                word,
+                result
+            );
+        }
+    }
+}
+
+#[test]
+fn return_stack_holds_exactly_its_limit() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = limited_vm(output.clone(), 8, 4);
+        define_nested_words(&mut regs, 4);
+        outer_interpreter(&mut regs, "L4 1 .").unwrap();
+        assert_eq!(output.text(), "1 ");
+    }
+}
+
+#[test]
+fn nesting_past_the_limit_overflows_the_return_stack() {
+    unsafe {
+        let mut regs = limited_vm(io::sink(), 8, 4);
+        define_nested_words(&mut regs, 5);
+        assert!(matches!(
+            outer_interpreter(&mut regs, "L5"),
+            Err(ForthError::ReturnStackOverflow)
+        ));
+    }
+}
+
+#[test]
+fn runaway_recursion_gives_an_error_and_leaves_the_vm_usable() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        assert!(matches!(
+            outer_interpreter(&mut regs, RUNAWAY_RECURSION),
+            Err(ForthError::ReturnStackOverflow)
+        ));
+        outer_interpreter(&mut regs, "DEPTH . 1 2 + . : T 4 ; T .").unwrap();
+        assert_eq!(output.text(), "0 3 4 ");
+    }
+}
+
+#[test]
+fn runaway_recursion_with_a_growing_data_stack_overflows_it() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = limited_vm(output.clone(), 16, 1024);
+        assert!(matches!(
+            outer_interpreter(
+                &mut regs,
+                "VARIABLE V :NONAME 1 V @ EXECUTE ; DUP V ! EXECUTE"
+            ),
+            Err(ForthError::DataStackOverflow)
+        ));
+        outer_interpreter(&mut regs, "DEPTH .").unwrap();
+        assert_eq!(output.text(), "0 ");
+    }
+}
+
+#[test]
+fn a_stack_limit_of_zero_is_allowed() {
+    unsafe {
+        let mut regs = limited_vm(io::sink(), 0, 0);
+        assert!(matches!(
+            outer_interpreter(&mut regs, "1"),
+            Err(ForthError::DataStackOverflow)
+        ));
+        outer_interpreter(&mut regs, ": T ;").unwrap();
+        assert!(matches!(
+            outer_interpreter(&mut regs, "T"),
+            Err(ForthError::ReturnStackOverflow)
+        ));
+    }
+}
+
+#[test]
+fn each_vm_keeps_its_own_limits() {
+    unsafe {
+        let mut small = limited_vm(io::sink(), 1, 1);
+        let mut large = limited_vm(io::sink(), 2, 1);
+        assert!(outer_interpreter(&mut large, "1 2").is_ok());
+        assert!(matches!(
+            outer_interpreter(&mut small, "1 2"),
+            Err(ForthError::DataStackOverflow)
+        ));
+    }
+}
+
+#[test]
+fn boot_rejects_stacks_too_large_to_allocate() {
+    unsafe {
+        let data = VmConfig {
+            data_stack_cells: Cell::MAX,
+            ..VmConfig::new(TEST_CELLS)
+        };
+        let returns = VmConfig {
+            return_stack_cells: Cell::MAX,
+            ..VmConfig::new(TEST_CELLS)
+        };
+        assert!(matches!(
+            boot(io::sink(), data),
+            Err(ForthError::StackTooLarge(Cell::MAX))
+        ));
+        assert!(matches!(
+            boot(io::sink(), returns),
+            Err(ForthError::StackTooLarge(Cell::MAX))
         ));
     }
 }
@@ -812,7 +1021,7 @@ fn constant_that_does_not_fit_leaves_no_word() {
         let smallest = smallest_cells();
         for cells in smallest..TEST_CELLS {
             let output = Capture::default();
-            let mut regs = boot(output.clone(), cells).unwrap();
+            let mut regs = boot(output.clone(), VmConfig::new(cells)).unwrap();
             match outer_interpreter(&mut regs, "1 CONSTANT X") {
                 Ok(()) => {
                     assert!(cells > smallest);
@@ -843,7 +1052,7 @@ fn variable_needs_a_name() {
 fn variable_overflows_a_full_dictionary() {
     unsafe {
         let output = Capture::default();
-        let mut regs = boot(output.clone(), smallest_cells()).unwrap();
+        let mut regs = boot(output.clone(), VmConfig::new(smallest_cells())).unwrap();
         assert_error!(&mut regs, "VARIABLE X", ForthError::DictionaryOverflow);
         outer_interpreter(&mut regs, "1 2 + .").unwrap();
         assert_eq!(output.text(), "3 ");
@@ -1487,7 +1696,7 @@ fn a_negative_allot_stops_at_the_data_of_the_newest_word() {
 fn allot_and_c_comma_report_a_full_dictionary() {
     unsafe {
         let output = Capture::default();
-        let mut regs = boot(output.clone(), smallest_cells()).unwrap();
+        let mut regs = boot(output.clone(), VmConfig::new(smallest_cells())).unwrap();
         assert_error!(&mut regs, "1 C,", ForthError::DictionaryOverflow);
         assert_error!(&mut regs, "1 ALLOT", ForthError::DictionaryOverflow);
         assert_error!(
@@ -1757,7 +1966,7 @@ fn failed_create_leaves_no_word() {
         let smallest = smallest_cells();
         let mut failures = 0;
         for extra in 0..TEST_CELLS {
-            let mut regs = boot(io::sink(), smallest + extra).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(smallest + extra)).unwrap();
             if outer_interpreter(&mut regs, "CREATE X").is_ok() {
                 outer_interpreter(&mut regs, "X").unwrap();
                 break;
@@ -1775,13 +1984,13 @@ fn failed_variable_leaves_no_word_and_gives_its_space_back() {
         let smallest = smallest_cells();
         let fits = (0..TEST_CELLS)
             .find(|extra| {
-                let mut regs = boot(io::sink(), smallest + *extra).unwrap();
+                let mut regs = boot(io::sink(), VmConfig::new(smallest + *extra)).unwrap();
                 outer_interpreter(&mut regs, "VARIABLE X").is_ok()
             })
             .unwrap();
 
         // One Cell less fits the header but not the value.
-        let mut regs = boot(io::sink(), smallest + fits - 1).unwrap();
+        let mut regs = boot(io::sink(), VmConfig::new(smallest + fits - 1)).unwrap();
         assert_error!(&mut regs, "VARIABLE X", ForthError::DictionaryOverflow);
         assert_error!(&mut regs, "X", ForthError::UnknownWord(_));
         outer_interpreter(&mut regs, "CREATE X").unwrap();
@@ -1795,13 +2004,13 @@ fn does_works_on_a_word_in_the_last_cells_of_the_dictionary() {
         let source = ": Z DOES> ; CREATE X";
         let fits = (0..TEST_CELLS)
             .find(|extra| {
-                let mut regs = boot(io::sink(), smallest + *extra).unwrap();
+                let mut regs = boot(io::sink(), VmConfig::new(smallest + *extra)).unwrap();
                 outer_interpreter(&mut regs, source).is_ok()
             })
             .unwrap();
 
         let output = Capture::default();
-        let mut regs = boot(output.clone(), smallest + fits).unwrap();
+        let mut regs = boot(output.clone(), VmConfig::new(smallest + fits)).unwrap();
         outer_interpreter(&mut regs, source).unwrap();
         outer_interpreter(&mut regs, "Z X DEPTH .").unwrap();
         assert_eq!(output.text(), "1 ");

@@ -40,7 +40,7 @@ unsafe fn interpret_token(regs: &mut Registers, token: &str) {
             let result = regs.compiler.compile_literal(&mut regs.dictionary, number);
             regs.check(result);
         } else {
-            regs.data_stack.push(number); // Push directly onto the parameter stack
+            regs.push(number); // Push directly onto the parameter stack
         }
     } else {
         // --- CASE C: SYNTAX / COMPILATION ERROR ---
@@ -114,13 +114,13 @@ unsafe fn abort(regs: &mut Registers) {
 /// #         Ok(())
 /// #     }
 /// # }
-/// use rust_forth_vm::{boot, outer_interpreter, ForthError};
+/// use rust_forth_vm::{boot, outer_interpreter, ForthError, VmConfig};
 ///
 /// let output = Output::default();
 ///
 /// // SAFETY: this VM is only used through the crate's functions.
 /// unsafe {
-///     let mut regs = boot(output.clone(), 1024)?;
+///     let mut regs = boot(output.clone(), VmConfig::new(1024))?;
 ///     outer_interpreter(&mut regs, "40 2 + .")?;
 ///
 ///     // The error discards the rest of the input, so the second `.` never runs.
@@ -167,8 +167,8 @@ mod tests {
     use std::io;
 
     use super::*;
-    use crate::boot;
     use crate::vm::run;
+    use crate::{boot, VmConfig};
 
     const TEST_CELLS: usize = 1024;
 
@@ -183,7 +183,7 @@ mod tests {
     #[test]
     fn failed_definition_is_rolled_back() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             let mark = regs.dictionary.mark();
             assert_error!(&mut regs, ": BROKEN 1 NOPE ;", ForthError::UnknownWord(name) if name == "NOPE");
             assert_eq!(regs.dictionary.mark(), mark);
@@ -194,7 +194,7 @@ mod tests {
     #[test]
     fn dictionary_overflow_is_reported() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             let cells = "1 , ".repeat(TEST_CELLS);
             assert_error!(&mut regs, &cells, ForthError::DictionaryOverflow);
             assert_error!(&mut regs, "1 ,", ForthError::DictionaryOverflow);
@@ -205,7 +205,7 @@ mod tests {
     #[test]
     fn long_threads_do_not_grow_the_rust_stack() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             outer_interpreter(&mut regs, ": NOOP ;").unwrap();
             let cfa = cfa_of(regs.dictionary.find_word("NOOP").unwrap());
 

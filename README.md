@@ -248,7 +248,10 @@ stacks, and rolls back any unfinished colon definition.
   writes into the thread and can crash the process (see issue #15). Using `CREATE`,
   `VARIABLE`, `CONSTANT`, `:` or `:NONAME` there leaves the open definition unfinished,
   so it can't be found or executed. `C,` and `ALLOT` give an error there instead.
-- The dictionary size is chosen when the VM boots, and can't grow afterwards.
+- The dictionary size and the stack limits are chosen when the VM boots, through
+  `VmConfig`, and can't grow afterwards. `forth-vm` uses 1024 Cells for each stack. Going
+  past a limit gives `Data stack overflow.` or `Return stack overflow.`, and clears both
+  stacks like any other error.
 - The interactive prompt evaluates each line by itself, so a `(` comment must end on
   the line where it starts.
 - `!` and `C!` can overwrite word headers and compiled code, which can crash the process.

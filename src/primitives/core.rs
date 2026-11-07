@@ -47,7 +47,7 @@ pub(super) unsafe fn fetch(regs: &mut Registers) {
     if let Some(addr) = regs.pop() {
         let result = regs.dictionary.fetch(addr);
         if let Some(value) = regs.check(result) {
-            regs.data_stack.push(value);
+            regs.push(value);
         }
     }
 }
@@ -70,7 +70,7 @@ pub(super) unsafe fn c_fetch(regs: &mut Registers) {
     if let Some(addr) = regs.pop() {
         let result = regs.dictionary.fetch_byte(addr);
         if let Some(value) = regs.check(result) {
-            regs.data_stack.push(value as Cell);
+            regs.push(value as Cell);
         }
     }
 }
@@ -89,13 +89,13 @@ pub(super) unsafe fn c_store(regs: &mut Registers) {
 
 /// `HERE ( -- addr )`: Pushes the address of the next free byte in the dictionary.
 pub(super) unsafe fn here(regs: &mut Registers) {
-    regs.data_stack.push(regs.dictionary.here());
+    regs.push(regs.dictionary.here());
 }
 
 /// `ALIGNED ( addr -- a-addr )`: Rounds an address up to the next cell-aligned address.
 pub(super) unsafe fn aligned(regs: &mut Registers) {
     if let Some(addr) = regs.pop() {
-        regs.data_stack.push(dictionary::aligned(addr));
+        regs.push(dictionary::aligned(addr));
     }
 }
 
@@ -103,7 +103,7 @@ pub(super) unsafe fn aligned(regs: &mut Registers) {
 /// overflow.
 pub(super) unsafe fn char_plus(regs: &mut Registers) {
     if let Some(addr) = regs.pop() {
-        regs.data_stack.push(addr.wrapping_add(1));
+        regs.push(addr.wrapping_add(1));
     }
 }
 
@@ -116,7 +116,7 @@ pub(super) unsafe fn chars(regs: &mut Registers) {
 /// `CELLS ( n1 -- n2 )`: Gives the size of `n1` Cells in bytes, wrapping on overflow.
 pub(super) unsafe fn cells(regs: &mut Registers) {
     if let Some(n) = regs.pop() {
-        regs.data_stack.push(n.wrapping_mul(mem::size_of::<Cell>()));
+        regs.push(n.wrapping_mul(mem::size_of::<Cell>()));
     }
 }
 
@@ -128,7 +128,7 @@ pub(super) unsafe fn to_body(regs: &mut Registers) {
             regs.set_error(ForthError::InvalidExecutionToken(xt));
             return;
         }
-        regs.data_stack.push(pfa_of(xt as *const Cell) as Cell);
+        regs.push(pfa_of(xt as *const Cell) as Cell);
     }
 }
 
@@ -139,7 +139,7 @@ pub(super) unsafe fn plus(regs: &mut Registers) {
         return;
     }
     if let (Some(b), Some(a)) = (regs.data_stack.pop(), regs.data_stack.pop()) {
-        regs.data_stack.push(a.wrapping_add(b));
+        regs.push(a.wrapping_add(b));
     }
 }
 
@@ -155,7 +155,7 @@ pub(super) unsafe fn dot_print(regs: &mut Registers) {
 pub(super) unsafe fn dup(regs: &mut Registers) {
     if regs.require(1) {
         let top = regs.data_stack[regs.data_stack.len() - 1];
-        regs.data_stack.push(top);
+        regs.push(top);
     }
 }
 
@@ -164,7 +164,7 @@ pub(super) unsafe fn question_dup(regs: &mut Registers) {
     if regs.require(1) {
         let top = regs.data_stack[regs.data_stack.len() - 1];
         if top != 0 {
-            regs.data_stack.push(top);
+            regs.push(top);
         }
     }
 }
@@ -186,7 +186,7 @@ pub(super) unsafe fn swap(regs: &mut Registers) {
 pub(super) unsafe fn over(regs: &mut Registers) {
     if regs.require(2) {
         let second = regs.data_stack[regs.data_stack.len() - 2];
-        regs.data_stack.push(second);
+        regs.push(second);
     }
 }
 
@@ -212,13 +212,13 @@ pub(super) unsafe fn roll(regs: &mut Registers) {
     if let Some(index) = regs.indexed_cell() {
         regs.data_stack.pop();
         let cell = regs.data_stack.remove(index);
-        regs.data_stack.push(cell);
+        regs.push(cell);
     }
 }
 
 /// `DEPTH ( -- n )`: Pushes the number of Cells that were on the stack.
 pub(super) unsafe fn depth(regs: &mut Registers) {
-    regs.data_stack.push(regs.data_stack.len() as Cell);
+    regs.push(regs.data_stack.len() as Cell);
 }
 
 #[cfg(test)]
@@ -229,9 +229,9 @@ mod tests {
     use std::rc::Rc;
 
     use super::*;
-    use crate::boot;
     use crate::dictionary::cfa_of;
     use crate::vm::PrimitiveFn;
+    use crate::{boot, VmConfig};
 
     const TEST_CELLS: usize = 1024;
 
@@ -253,7 +253,7 @@ mod tests {
     // what it wrote.
     unsafe fn output_of(word: PrimitiveFn) -> String {
         let output = Capture::default();
-        let mut regs = boot(output.clone(), TEST_CELLS).unwrap();
+        let mut regs = boot(output.clone(), VmConfig::new(TEST_CELLS)).unwrap();
         let here = regs.dictionary.here();
         word(&mut regs);
         assert!(regs.error.is_none());
@@ -286,7 +286,7 @@ mod tests {
 
     // Runs a word on a stack holding `before`.
     unsafe fn run_on(word: PrimitiveFn, before: &[Cell]) -> Registers {
-        let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+        let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
         regs.data_stack.extend_from_slice(before);
         word(&mut regs);
         regs
@@ -313,7 +313,7 @@ mod tests {
     #[test]
     fn c_fetch_replaces_an_address_with_its_byte() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             let addr = regs.dictionary.here();
             regs.dictionary.char_comma(0xAB).unwrap();
             regs.data_stack.extend_from_slice(&[1, addr]);
@@ -327,7 +327,7 @@ mod tests {
     #[test]
     fn c_store_stores_the_low_byte_and_pops_both_cells() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             let addr = regs.dictionary.here();
             regs.dictionary.char_comma(0).unwrap();
             regs.data_stack.extend_from_slice(&[1, 0x1AB, addr]);
@@ -342,7 +342,7 @@ mod tests {
     #[test]
     fn here_pushes_the_dictionary_pointer() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             regs.dictionary.char_comma(0).unwrap();
             let expected = regs.dictionary.here();
 
@@ -530,7 +530,7 @@ mod tests {
     #[test]
     fn to_body_replaces_an_xt_with_its_pfa() {
         unsafe {
-            let mut regs = boot(io::sink(), TEST_CELLS).unwrap();
+            let mut regs = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
             let xt = cfa_of(regs.dictionary.find_word("DUP").unwrap()) as Cell;
             regs.data_stack.extend_from_slice(&[7, xt]);
 
