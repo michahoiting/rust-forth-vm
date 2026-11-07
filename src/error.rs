@@ -69,17 +69,25 @@ pub enum ForthError {
     NameTooLong(usize),
     /// A token, held here, is neither a known word nor a number.
     UnknownWord(String),
-    /// A word that reads or writes memory was given an address, held here, that it may not
-    /// access: one outside the written part of the dictionary, or for `@` and `!`, one that
-    /// is not cell-aligned.
-    InvalidAddress(Cell),
+    /// A word that reads or writes memory was given an address, held here, outside the
+    /// dictionary arena. This matches SIGSEGV, which a signal handler gets for an address
+    /// that isn't there.
+    AddressOutOfBounds(Cell),
+    /// `@` or `!` was given an address, held here, that is not cell-aligned. This matches
+    /// SIGBUS, and the alignment exception of ANS Forth. `C@` and `C!` can't give it.
+    MisalignedAddress(Cell),
+    /// A word that reads or writes memory was given an address, held here, inside the
+    /// dictionary arena but at or above HERE. This includes a Cell that starts below HERE and
+    /// ends above it. This matches SIGBUS, which a signal handler gets for an address that is
+    /// there but can't be accessed.
+    UnwrittenAddress(Cell),
     /// `EXECUTE` or `>BODY` was given a Cell, held here, that isn't the code field of a
     /// finished word.
     InvalidExecutionToken(Cell),
     /// `(` found no closing `)` in the input.
     UnterminatedComment,
     /// A word, whose execution token is held here, has a null pointer in its code field.
-    NullPointerCheck(Cell),
+    NullCodeField(Cell),
     /// The output writer failed.
     Output(io::Error),
     /// `QUIT` ran, which isn't a failure. The VM is ready for new input, and the data stack is
@@ -131,13 +139,21 @@ impl fmt::Display for ForthError {
             ForthError::UnknownWord(token) => {
                 write!(f, "Word or numeric literal '{}' not recognized.", token)
             }
-            ForthError::InvalidAddress(addr) => write!(f, "Invalid address {:#x}.", addr),
+            ForthError::AddressOutOfBounds(addr) => {
+                write!(f, "Address {:#x} is outside the dictionary.", addr)
+            }
+            ForthError::UnwrittenAddress(addr) => {
+                write!(f, "Address {:#x} is not written yet.", addr)
+            }
+            ForthError::MisalignedAddress(addr) => {
+                write!(f, "Address {:#x} is not cell-aligned.", addr)
+            }
             ForthError::InvalidExecutionToken(xt) => {
                 write!(f, "Invalid execution token {:#x}.", xt)
             }
             ForthError::UnterminatedComment => write!(f, "Comment has no closing parenthesis."),
-            ForthError::NullPointerCheck(xt) => {
-                write!(f, "Null pointer in the code field at {:#x}.", xt)
+            ForthError::NullCodeField(xt) => {
+                write!(f, "Null code field at {:#x}.", xt)
             }
             ForthError::Output(_) => write!(f, "Output error."),
             ForthError::Quit => write!(f, "QUIT was executed."),

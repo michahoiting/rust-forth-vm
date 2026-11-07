@@ -329,7 +329,7 @@ unsafe fn dodoes(regs: &mut Registers) {
 /// # Safety
 ///
 /// W must point to a Code Field, which must hold the Cell of a primitive, or the address of
-/// an action thread that DOES> stored there. Zero gives [`ForthError::NullPointerCheck`].
+/// an action thread that DOES> stored there. Zero gives [`ForthError::NullCodeField`].
 #[inline(always)]
 pub(crate) unsafe fn enter_word(regs: &mut Registers) {
     // Fetch the contents of the CFA Cell (the raw bits of the machine-code pointer)
@@ -337,7 +337,7 @@ pub(crate) unsafe fn enter_word(regs: &mut Registers) {
 
     // A null pointer is undefined behavior, and `!` can write zero here.
     if code_bits == 0 {
-        regs.set_error(ForthError::NullPointerCheck(regs.w as Cell));
+        regs.set_error(ForthError::NullCodeField(regs.w as Cell));
         return;
     }
 
@@ -531,7 +531,7 @@ mod tests {
 
             assert!(matches!(
                 regs.error,
-                Some(ForthError::NullPointerCheck(xt)) if xt == cfa as Cell
+                Some(ForthError::NullCodeField(xt)) if xt == cfa as Cell
             ));
             assert_eq!(regs.data_stack, [7]);
             assert!(regs.return_stack.is_empty());

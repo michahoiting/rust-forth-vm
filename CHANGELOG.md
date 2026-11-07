@@ -26,6 +26,11 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
   `CHARS` and `CELLS`. `,` and defining words align `HERE` first, because `C,` and `ALLOT` can leave it
   unaligned. `C,` and `ALLOT` give an error while a definition is open, and a negative
   `ALLOT` can only give back data of the newest word made by `CREATE`.
+- Specific memory errors: `@`, `!`, `C@` and `C!` give `ForthError::AddressOutOfBounds` for an
+  address outside the dictionary, and `ForthError::UnwrittenAddress` for one at or above
+  `HERE`, including a Cell that ends above it. `@` and `!` give
+  `ForthError::MisalignedAddress` for a Cell that isn't cell-aligned. The checks run in that
+  order. A word with a zero code field gives `ForthError::NullCodeField`.
 - The FORTH-83 data stack words: `DUP`, `?DUP`, `DROP`, `SWAP`, `OVER`, `ROT`, `PICK`,
   `ROLL` and `DEPTH`.
 - Defining words: `:`, `;`, `:NONAME`, `CREATE`, `CONSTANT`, `DOES>`, `IMMEDIATE` and
