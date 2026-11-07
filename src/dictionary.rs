@@ -254,22 +254,38 @@ impl Dictionary {
         addr >= self.start as Cell && addr < self.end as Cell
     }
 
+    /// Checks that `len` bytes at `addr` are in the written part of the arena, and returns
+    /// the offset of `addr` from the start of the arena. The checks run in a fixed order, so
+    /// the error names the first fault.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::AddressOutOfBounds`] if `addr` isn't in the arena, and
+    /// [`ForthError::UnwrittenAddress`] if the bytes reach HERE or past it.
+    fn written_offset(&self, addr: Cell, len: usize) -> Result<usize, ForthError> {
+        if !self.is_in_arena(addr) {
+            return Err(ForthError::AddressOutOfBounds(addr));
+        }
+        // HERE never passes the end of the arena, so this can't overflow.
+        if addr + len > self.here() {
+            return Err(ForthError::UnwrittenAddress(addr));
+        }
+        Ok(addr - self.start as Cell)
+    }
+
     /// Returns the index of the Cell at `addr`, which must be cell-aligned and end at or below
     /// HERE. This keeps the Cell inside the part of the arena that has been written.
     ///
     /// # Errors
     ///
-    /// Returns [`ForthError::InvalidAddress`] for any other address.
+    /// Returns [`ForthError::AddressOutOfBounds`] or [`ForthError::UnwrittenAddress`] from
+    /// [`written_offset`](Self::written_offset), and [`ForthError::MisalignedAddress`] if
+    /// `addr` isn't cell-aligned.
     fn cell_index(&self, addr: Cell) -> Result<usize, ForthError> {
-        let start = self.start as Cell;
-        let here = self.here as Cell;
         let cell_size = mem::size_of::<Cell>();
-        if addr < start || addr >= here {
-            return Err(ForthError::InvalidAddress(addr));
-        }
-        let offset = addr - start;
-        if !offset.is_multiple_of(cell_size) || addr + cell_size > here {
-            return Err(ForthError::InvalidAddress(addr));
+        let offset = self.written_offset(addr, cell_size)?;
+        if !offset.is_multiple_of(cell_size) {
+            return Err(ForthError::MisalignedAddress(addr));
         }
         Ok(offset / cell_size)
     }
@@ -278,13 +294,10 @@ impl Dictionary {
     ///
     /// # Errors
     ///
-    /// Returns [`ForthError::InvalidAddress`] for any other address.
+    /// Returns [`ForthError::AddressOutOfBounds`] or [`ForthError::UnwrittenAddress`] from
+    /// [`written_offset`](Self::written_offset).
     fn byte_offset(&self, addr: Cell) -> Result<usize, ForthError> {
-        let start = self.start as Cell;
-        if addr < start || addr >= self.here() {
-            return Err(ForthError::InvalidAddress(addr));
-        }
-        Ok(addr - start)
+        self.written_offset(addr, 1)
     }
 
     /// Reads the Cell at `addr`. The number from the stack is only used as an offset,
@@ -292,7 +305,7 @@ impl Dictionary {
     ///
     /// # Errors
     ///
-    /// Returns [`ForthError::InvalidAddress`] if [`cell_index`](Self::cell_index) rejects `addr`.
+    /// Returns the error of [`cell_index`](Self::cell_index) if it rejects `addr`.
     pub(crate) fn fetch(&self, addr: Cell) -> Result<Cell, ForthError> {
         let index = self.cell_index(addr)?;
         Ok(unsafe { *self.start.add(index) })
@@ -303,7 +316,7 @@ impl Dictionary {
     ///
     /// # Errors
     ///
-    /// Returns [`ForthError::InvalidAddress`] if [`cell_index`](Self::cell_index) rejects `addr`.
+    /// Returns the error of [`cell_index`](Self::cell_index) if it rejects `addr`.
     pub(crate) fn store(&mut self, addr: Cell, value: Cell) -> Result<(), ForthError> {
         let index = self.cell_index(addr)?;
         unsafe { *self.start.add(index) = value };
@@ -314,8 +327,7 @@ impl Dictionary {
     ///
     /// # Errors
     ///
-    /// Returns [`ForthError::InvalidAddress`] if [`byte_offset`](Self::byte_offset) rejects
-    /// `addr`.
+    /// Returns the error of [`byte_offset`](Self::byte_offset) if it rejects `addr`.
     pub(crate) fn fetch_byte(&self, addr: Cell) -> Result<u8, ForthError> {
         let offset = self.byte_offset(addr)?;
         // SAFETY: `byte_offset` keeps the byte in the arena, and every byte there is initialized.
@@ -327,8 +339,7 @@ impl Dictionary {
     ///
     /// # Errors
     ///
-    /// Returns [`ForthError::InvalidAddress`] if [`byte_offset`](Self::byte_offset) rejects
-    /// `addr`.
+    /// Returns the error of [`byte_offset`](Self::byte_offset) if it rejects `addr`.
     pub(crate) fn store_byte(&mut self, addr: Cell, value: u8) -> Result<(), ForthError> {
         let offset = self.byte_offset(addr)?;
         // SAFETY: `byte_offset` keeps the byte in the arena.
@@ -525,22 +536,26 @@ mod tests {
         dictionary
     }
 
-    fn assert_invalid(dictionary: &Dictionary, addr: Cell) {
+    // The error variants carry no payload besides the address, so Debug output pins the exact
+    // variant and address.
+    fn assert_fetch_rejected(dictionary: &Dictionary, addr: Cell, make: fn(Cell) -> ForthError) {
         let result = dictionary.fetch(addr);
-        assert!(
-            matches!(result, Err(ForthError::InvalidAddress(a)) if a == addr),
-            "got: {:?}",
-            result
-        );
+        assert_eq!(format!("{:?}", result), format!("Err({:?})", make(addr)));
     }
 
-    fn assert_store_invalid(dictionary: &mut Dictionary, addr: Cell) {
+    fn assert_store_rejected(
+        dictionary: &mut Dictionary,
+        addr: Cell,
+        make: fn(Cell) -> ForthError,
+    ) {
         let result = dictionary.store(addr, 9);
-        assert!(
-            matches!(result, Err(ForthError::InvalidAddress(a)) if a == addr),
-            "got: {:?}",
-            result
-        );
+        assert_eq!(format!("{:?}", result), format!("Err({:?})", make(addr)));
+    }
+
+    // Checks that `fetch` and `store` both reject `addr` with the error that `make` builds.
+    fn assert_rejected(dictionary: &mut Dictionary, addr: Cell, make: fn(Cell) -> ForthError) {
+        assert_fetch_rejected(dictionary, addr, make);
+        assert_store_rejected(dictionary, addr, make);
     }
 
     #[test]
@@ -580,14 +595,24 @@ mod tests {
 
             assert!(dictionary.fetch_byte(start).is_ok());
             assert!(dictionary.fetch_byte(here - 1).is_ok());
-            for addr in [start - 1, here, Cell::MAX] {
+            for addr in [start - 1, Cell::MAX, dictionary.end as Cell] {
                 assert!(matches!(
                     dictionary.fetch_byte(addr),
-                    Err(ForthError::InvalidAddress(a)) if a == addr
+                    Err(ForthError::AddressOutOfBounds(a)) if a == addr
                 ));
                 assert!(matches!(
                     dictionary.store_byte(addr, 1),
-                    Err(ForthError::InvalidAddress(a)) if a == addr
+                    Err(ForthError::AddressOutOfBounds(a)) if a == addr
+                ));
+            }
+            for addr in [here, here + 1, dictionary.end as Cell - 1] {
+                assert!(matches!(
+                    dictionary.fetch_byte(addr),
+                    Err(ForthError::UnwrittenAddress(a)) if a == addr
+                ));
+                assert!(matches!(
+                    dictionary.store_byte(addr, 1),
+                    Err(ForthError::UnwrittenAddress(a)) if a == addr
                 ));
             }
         }
@@ -601,8 +626,48 @@ mod tests {
             dictionary.char_comma(2).unwrap();
             assert!(addr < dictionary.here());
 
-            assert_invalid(&dictionary, addr);
-            assert_store_invalid(&mut dictionary, addr);
+            assert_rejected(&mut dictionary, addr, ForthError::UnwrittenAddress);
+        }
+    }
+
+    #[test]
+    fn cell_access_checks_bounds_then_here_then_alignment() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[1, 2]);
+            let start = dictionary.start as Cell;
+            let here = dictionary.here();
+            let end = dictionary.end as Cell;
+
+            assert_eq!(dictionary.fetch(start).unwrap(), 1);
+            assert_eq!(dictionary.fetch(here - CELL_SIZE).unwrap(), 2);
+            assert!(dictionary.store(here - CELL_SIZE, 3).is_ok());
+
+            assert_rejected(&mut dictionary, 0, ForthError::AddressOutOfBounds);
+            assert_rejected(&mut dictionary, start - 1, ForthError::AddressOutOfBounds);
+            assert_rejected(
+                &mut dictionary,
+                start - CELL_SIZE,
+                ForthError::AddressOutOfBounds,
+            );
+            assert_rejected(&mut dictionary, end, ForthError::AddressOutOfBounds);
+            assert_rejected(&mut dictionary, Cell::MAX, ForthError::AddressOutOfBounds);
+
+            assert_rejected(&mut dictionary, here, ForthError::UnwrittenAddress);
+            assert_rejected(&mut dictionary, here - 1, ForthError::UnwrittenAddress);
+            assert_rejected(&mut dictionary, here + 1, ForthError::UnwrittenAddress);
+            assert_rejected(
+                &mut dictionary,
+                end - CELL_SIZE,
+                ForthError::UnwrittenAddress,
+            );
+            assert_rejected(&mut dictionary, end - 1, ForthError::UnwrittenAddress);
+
+            assert_rejected(&mut dictionary, start + 1, ForthError::MisalignedAddress);
+            assert_rejected(
+                &mut dictionary,
+                here - CELL_SIZE + 1,
+                ForthError::UnwrittenAddress,
+            );
         }
     }
 
@@ -856,20 +921,29 @@ mod tests {
         unsafe {
             let dictionary = dictionary_with(&[7]);
             let start = dictionary.start as Cell;
-            assert_invalid(&dictionary, start - 1);
-            assert_invalid(&dictionary, start - CELL_SIZE);
+            assert_fetch_rejected(&dictionary, start - 1, ForthError::AddressOutOfBounds);
+            assert_fetch_rejected(
+                &dictionary,
+                start - CELL_SIZE,
+                ForthError::AddressOutOfBounds,
+            );
         }
     }
 
     #[test]
     fn fetch_rejects_misaligned_addresses_inside_the_written_cells() {
         unsafe {
-            // Every address here is below HERE, so only the alignment check can reject it.
+            // The first Cell is written, so only the alignment check rejects `start + offset`.
+            // A misaligned Cell in the last written Cell ends past HERE, which is checked first.
             let dictionary = dictionary_with(&[1, 2]);
             let start = dictionary.start as Cell;
             for offset in 1..CELL_SIZE {
-                assert_invalid(&dictionary, start + offset);
-                assert_invalid(&dictionary, start + CELL_SIZE + offset);
+                assert_fetch_rejected(&dictionary, start + offset, ForthError::MisalignedAddress);
+                assert_fetch_rejected(
+                    &dictionary,
+                    start + CELL_SIZE + offset,
+                    ForthError::UnwrittenAddress,
+                );
             }
         }
     }
@@ -884,7 +958,7 @@ mod tests {
             assert_eq!(dictionary.fetch(addr).unwrap(), 2);
 
             dictionary.restore(mark);
-            assert_invalid(&dictionary, addr);
+            assert_fetch_rejected(&dictionary, addr, ForthError::UnwrittenAddress);
         }
     }
 
@@ -925,8 +999,12 @@ mod tests {
         unsafe {
             let mut dictionary = dictionary_with(&[7]);
             let start = dictionary.start as Cell;
-            assert_store_invalid(&mut dictionary, start - 1);
-            assert_store_invalid(&mut dictionary, start - CELL_SIZE);
+            assert_store_rejected(&mut dictionary, start - 1, ForthError::AddressOutOfBounds);
+            assert_store_rejected(
+                &mut dictionary,
+                start - CELL_SIZE,
+                ForthError::AddressOutOfBounds,
+            );
         }
     }
 
@@ -935,19 +1013,28 @@ mod tests {
         unsafe {
             let mut dictionary = dictionary_with(&[7]);
             let here = dictionary.here as Cell;
-            assert_store_invalid(&mut dictionary, here);
+            assert_store_rejected(&mut dictionary, here, ForthError::UnwrittenAddress);
         }
     }
 
     #[test]
     fn store_rejects_misaligned_addresses_inside_the_written_cells() {
         unsafe {
-            // Every address here is below HERE, so only the alignment check can reject it.
+            // The first Cell is written, so only the alignment check rejects `start + offset`.
+            // A misaligned Cell in the last written Cell ends past HERE, which is checked first.
             let mut dictionary = dictionary_with(&[1, 2]);
             let start = dictionary.start as Cell;
             for offset in 1..CELL_SIZE {
-                assert_store_invalid(&mut dictionary, start + offset);
-                assert_store_invalid(&mut dictionary, start + CELL_SIZE + offset);
+                assert_store_rejected(
+                    &mut dictionary,
+                    start + offset,
+                    ForthError::MisalignedAddress,
+                );
+                assert_store_rejected(
+                    &mut dictionary,
+                    start + CELL_SIZE + offset,
+                    ForthError::UnwrittenAddress,
+                );
             }
             assert_eq!(dictionary.fetch(start).unwrap(), 1);
             assert_eq!(dictionary.fetch(start + CELL_SIZE).unwrap(), 2);
@@ -964,7 +1051,7 @@ mod tests {
             dictionary.store(addr, 9).unwrap();
 
             dictionary.restore(mark);
-            assert_store_invalid(&mut dictionary, addr);
+            assert_store_rejected(&mut dictionary, addr, ForthError::UnwrittenAddress);
         }
     }
 

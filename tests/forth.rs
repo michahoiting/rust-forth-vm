@@ -492,15 +492,23 @@ fn errors_have_stable_messages() {
             ForthError::StackTooLarge(42),
             "Cannot allocate a stack of 42 Cells.",
         ),
-        (ForthError::InvalidAddress(0x2a), "Invalid address 0x2a."),
+        (
+            ForthError::AddressOutOfBounds(0x2a),
+            "Address 0x2a is outside the dictionary.",
+        ),
+        (
+            ForthError::UnwrittenAddress(0x2a),
+            "Address 0x2a is not written yet.",
+        ),
+        (
+            ForthError::MisalignedAddress(0x2a),
+            "Address 0x2a is not cell-aligned.",
+        ),
         (
             ForthError::InvalidExecutionToken(0x2a),
             "Invalid execution token 0x2a.",
         ),
-        (
-            ForthError::NullPointerCheck(0x2a),
-            "Null pointer in the code field at 0x2a.",
-        ),
+        (ForthError::NullCodeField(0x2a), "Null code field at 0x2a."),
         (
             ForthError::UnterminatedComment,
             "Comment has no closing parenthesis.",
@@ -519,9 +527,9 @@ fn errors_have_stable_messages() {
 fn fetch_rejects_addresses_outside_the_dictionary() {
     unsafe {
         let mut regs = test_vm(io::sink());
-        assert_error!(&mut regs, "0 @", ForthError::InvalidAddress(0));
-        assert_error!(&mut regs, "5 @", ForthError::InvalidAddress(5));
-        assert_error!(&mut regs, "-1 @", ForthError::InvalidAddress(Cell::MAX));
+        assert_error!(&mut regs, "0 @", ForthError::AddressOutOfBounds(0));
+        assert_error!(&mut regs, "5 @", ForthError::AddressOutOfBounds(5));
+        assert_error!(&mut regs, "-1 @", ForthError::AddressOutOfBounds(Cell::MAX));
     }
 }
 
@@ -530,9 +538,156 @@ fn fetch_rejects_misaligned_addresses() {
     unsafe {
         let mut regs = test_vm(io::sink());
         for offset in 1..mem::size_of::<Cell>() {
-            let line = format!("CREATE X 7 , X {} + @", offset);
-            assert_error!(&mut regs, &line, ForthError::InvalidAddress(_));
+            let line = format!("CREATE X 7 , 8 , X {} + @", offset);
+            assert_error!(&mut regs, &line, ForthError::MisalignedAddress(_));
         }
+    }
+}
+
+// Returns HERE as an address.
+unsafe fn here_of(regs: &mut Registers, output: &Capture) -> Cell {
+    let before = output.text().len();
+    outer_interpreter(regs, "HERE .").unwrap();
+    let text = output.text();
+    text[before..].trim().parse::<isize>().unwrap() as Cell
+}
+
+// Writes zeros up to the last byte of the dictionary, so HERE is its end. The dictionary
+// holds `TEST_CELLS` Cells, which gives its start too. Returns the start and the end.
+unsafe fn fill_dictionary(regs: &mut Registers, output: &Capture) -> (Cell, Cell) {
+    for chunk in (0..16).rev().map(|shift| 1usize << shift) {
+        while outer_interpreter(regs, &format!("{chunk} ALLOT")).is_ok() {}
+    }
+    let end = here_of(regs, output);
+    (end - TEST_CELLS * mem::size_of::<Cell>(), end)
+}
+
+#[test]
+fn memory_words_check_the_start_of_the_dictionary() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        let (start, _) = fill_dictionary(&mut regs, &output);
+        let size = mem::size_of::<Cell>();
+
+        outer_interpreter(&mut regs, &format!("{start} @ DROP {start} C@ DROP")).unwrap();
+        for below in [start - 1, start - size] {
+            for word in ["@", "C@"] {
+                let line = format!("{below} {word}");
+                assert_error!(&mut regs, &line, ForthError::AddressOutOfBounds(a) if *a == below);
+            }
+            for word in ["!", "C!"] {
+                let line = format!("1 {below} {word}");
+                assert_error!(&mut regs, &line, ForthError::AddressOutOfBounds(a) if *a == below);
+            }
+        }
+    }
+}
+
+#[test]
+fn memory_words_check_the_end_of_the_dictionary() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        let (_, end) = fill_dictionary(&mut regs, &output);
+        let size = mem::size_of::<Cell>();
+
+        // The last written byte and Cell are fine, and HERE is the end of the arena.
+        let line = format!(
+            "{} @ DROP {} C@ DROP 1 {} ! 1 {} C!",
+            end - size,
+            end - 1,
+            end - size,
+            end - 1
+        );
+        outer_interpreter(&mut regs, &line).unwrap();
+        for past in [end, end + 1, end + size] {
+            for word in ["@", "C@"] {
+                let line = format!("{past} {word}");
+                assert_error!(&mut regs, &line, ForthError::AddressOutOfBounds(a) if *a == past);
+            }
+            for word in ["!", "C!"] {
+                let line = format!("1 {past} {word}");
+                assert_error!(&mut regs, &line, ForthError::AddressOutOfBounds(a) if *a == past);
+            }
+        }
+    }
+}
+
+#[test]
+fn memory_words_check_here() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        outer_interpreter(&mut regs, "ALIGN").unwrap();
+        let here = here_of(&mut regs, &output);
+        let size = mem::size_of::<Cell>();
+
+        // Just below HERE is written, HERE and everything above it isn't. An unaligned address
+        // at HERE or above is unwritten, because that check comes first.
+        let line = format!(
+            "{} @ DROP {} C@ DROP 1 {} ! 1 {} C!",
+            here - size,
+            here - 1,
+            here - size,
+            here - 1
+        );
+        outer_interpreter(&mut regs, &line).unwrap();
+        for addr in [here, here + 1, here + size, here + size + 1] {
+            for word in ["@", "C@"] {
+                let line = format!("{addr} {word}");
+                assert_error!(&mut regs, &line, ForthError::UnwrittenAddress(a) if *a == addr);
+            }
+            for word in ["!", "C!"] {
+                let line = format!("1 {addr} {word}");
+                assert_error!(&mut regs, &line, ForthError::UnwrittenAddress(a) if *a == addr);
+            }
+        }
+    }
+}
+
+#[test]
+fn a_cell_that_crosses_here_is_unwritten() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        outer_interpreter(&mut regs, "ALIGN 1 C,").unwrap();
+        let here = here_of(&mut regs, &output);
+        let size = mem::size_of::<Cell>();
+
+        // This Cell starts at the byte that C, wrote, and ends past HERE.
+        let addr = here - 1;
+        let line = format!("{addr} @");
+        assert_error!(&mut regs, &line, ForthError::UnwrittenAddress(a) if *a == addr);
+        // A byte at that address is written.
+        outer_interpreter(&mut regs, &format!("{addr} C@ DROP")).unwrap();
+        let line = format!("1 {addr} !");
+        assert_error!(&mut regs, &line, ForthError::UnwrittenAddress(a) if *a == addr);
+
+        // So is an unaligned Cell that starts in the last written Cell.
+        outer_interpreter(&mut regs, "ALIGN 0 ,").unwrap();
+        let last = here_of(&mut regs, &output) - size;
+        let line = format!("{} @", last + 1);
+        assert_error!(&mut regs, &line, ForthError::UnwrittenAddress(a) if *a == last + 1);
+    }
+}
+
+#[test]
+fn only_a_cell_in_the_written_dictionary_can_be_misaligned() {
+    unsafe {
+        let output = Capture::default();
+        let mut regs = test_vm(output.clone());
+        outer_interpreter(&mut regs, "ALIGN 1 , 2 ,").unwrap();
+        let first = here_of(&mut regs, &output) - 2 * mem::size_of::<Cell>();
+
+        let line = format!("{} @", first + 1);
+        assert_error!(&mut regs, &line, ForthError::MisalignedAddress(a) if *a == first + 1);
+        let line = format!("1 {} !", first + 1);
+        assert_error!(&mut regs, &line, ForthError::MisalignedAddress(a) if *a == first + 1);
+
+        // Bytes have no alignment.
+        let line = format!("{} C@ DROP 1 {} C!", first + 1, first + 1);
+        outer_interpreter(&mut regs, &line).unwrap();
     }
 }
 
@@ -546,7 +701,7 @@ fn fetch_reads_aligned_cells_behind_the_first() {
 fn fetch_rejects_here() {
     unsafe {
         let mut regs = test_vm(io::sink());
-        assert_error!(&mut regs, "CREATE X X @", ForthError::InvalidAddress(_));
+        assert_error!(&mut regs, "CREATE X X @", ForthError::UnwrittenAddress(_));
     }
 }
 
@@ -559,7 +714,7 @@ fn failed_definition_invalidates_its_addresses() {
 
         // The definition wrote behind the data of X, and is gone again.
         let line = format!("X {} + @", mem::size_of::<Cell>());
-        assert_error!(&mut regs, &line, ForthError::InvalidAddress(_));
+        assert_error!(&mut regs, &line, ForthError::UnwrittenAddress(_));
     }
 }
 
@@ -580,7 +735,7 @@ fn invalid_address_leaves_a_usable_vm() {
     unsafe {
         let output = Capture::default();
         let mut regs = test_vm(output.clone());
-        assert_error!(&mut regs, "5 @", ForthError::InvalidAddress(5));
+        assert_error!(&mut regs, "5 @", ForthError::AddressOutOfBounds(5));
         outer_interpreter(&mut regs, "1 2 + .").unwrap();
         assert_eq!(output.text(), "3 ");
     }
@@ -608,9 +763,13 @@ fn store_changes_a_does_child() {
 fn store_rejects_addresses_outside_the_dictionary() {
     unsafe {
         let mut regs = test_vm(io::sink());
-        assert_error!(&mut regs, "1 0 !", ForthError::InvalidAddress(0));
-        assert_error!(&mut regs, "1 5 !", ForthError::InvalidAddress(5));
-        assert_error!(&mut regs, "1 -1 !", ForthError::InvalidAddress(Cell::MAX));
+        assert_error!(&mut regs, "1 0 !", ForthError::AddressOutOfBounds(0));
+        assert_error!(&mut regs, "1 5 !", ForthError::AddressOutOfBounds(5));
+        assert_error!(
+            &mut regs,
+            "1 -1 !",
+            ForthError::AddressOutOfBounds(Cell::MAX)
+        );
     }
 }
 
@@ -619,8 +778,8 @@ fn store_rejects_misaligned_addresses() {
     unsafe {
         let mut regs = test_vm(io::sink());
         for offset in 1..mem::size_of::<Cell>() {
-            let line = format!("CREATE X 7 , 9 X {} + !", offset);
-            assert_error!(&mut regs, &line, ForthError::InvalidAddress(_));
+            let line = format!("CREATE X 7 , 8 , 9 X {} + !", offset);
+            assert_error!(&mut regs, &line, ForthError::MisalignedAddress(_));
         }
     }
 }
@@ -629,7 +788,7 @@ fn store_rejects_misaligned_addresses() {
 fn store_rejects_here() {
     unsafe {
         let mut regs = test_vm(io::sink());
-        assert_error!(&mut regs, "CREATE X 5 X !", ForthError::InvalidAddress(_));
+        assert_error!(&mut regs, "CREATE X 5 X !", ForthError::UnwrittenAddress(_));
     }
 }
 
@@ -654,7 +813,7 @@ fn failed_definition_invalidates_its_addresses_for_store() {
 
         // The definition wrote behind the data of X, and is gone again.
         let line = format!("9 X {} + !", mem::size_of::<Cell>());
-        assert_error!(&mut regs, &line, ForthError::InvalidAddress(_));
+        assert_error!(&mut regs, &line, ForthError::UnwrittenAddress(_));
     }
 }
 
@@ -663,7 +822,7 @@ fn invalid_store_leaves_a_usable_vm() {
     unsafe {
         let output = Capture::default();
         let mut regs = test_vm(output.clone());
-        assert_error!(&mut regs, "1 5 !", ForthError::InvalidAddress(5));
+        assert_error!(&mut regs, "1 5 !", ForthError::AddressOutOfBounds(5));
         outer_interpreter(&mut regs, "1 2 + .").unwrap();
         assert_eq!(output.text(), "3 ");
     }
@@ -1615,10 +1774,10 @@ fn c_fetch_and_c_store_reject_addresses_outside_the_written_dictionary() {
     unsafe {
         let output = Capture::default();
         let mut regs = test_vm(output.clone());
-        assert_error!(&mut regs, "1 C@", ForthError::InvalidAddress(1));
-        assert_error!(&mut regs, "HERE C@", ForthError::InvalidAddress(_));
-        assert_error!(&mut regs, "1 1 C!", ForthError::InvalidAddress(1));
-        assert_error!(&mut regs, "1 HERE C!", ForthError::InvalidAddress(_));
+        assert_error!(&mut regs, "1 C@", ForthError::AddressOutOfBounds(1));
+        assert_error!(&mut regs, "HERE C@", ForthError::UnwrittenAddress(_));
+        assert_error!(&mut regs, "1 1 C!", ForthError::AddressOutOfBounds(1));
+        assert_error!(&mut regs, "1 HERE C!", ForthError::UnwrittenAddress(_));
         assert_error!(&mut regs, "C@", ForthError::DataStackUnderflow);
         assert_error!(&mut regs, "1 C!", ForthError::DataStackUnderflow);
         outer_interpreter(&mut regs, "1 2 + .").unwrap();
@@ -1800,12 +1959,12 @@ fn fetch_and_store_reject_a_cell_that_ends_past_here() {
         assert_error!(
             &mut regs,
             "ALIGN HERE 1 C, @",
-            ForthError::InvalidAddress(_)
+            ForthError::UnwrittenAddress(_)
         );
         assert_error!(
             &mut regs,
             "ALIGN HERE 1 C, 2 SWAP !",
-            ForthError::InvalidAddress(_)
+            ForthError::UnwrittenAddress(_)
         );
         outer_interpreter(&mut regs, "1 2 + .").unwrap();
         assert_eq!(output.text(), "3 ");
@@ -2016,7 +2175,7 @@ fn does_works_on_a_word_in_the_last_cells_of_the_dictionary() {
         assert_eq!(output.text(), "1 ");
 
         // The data of X would start at HERE, which is past the end of the dictionary.
-        assert_error!(&mut regs, "X @", ForthError::InvalidAddress(_));
+        assert_error!(&mut regs, "X @", ForthError::AddressOutOfBounds(_));
     }
 }
 
@@ -2026,8 +2185,8 @@ fn zero_code_field_is_an_error() {
         let output = Capture::default();
         let mut regs = test_vm(output.clone());
         outer_interpreter(&mut regs, "CREATE X 0 ' X !").unwrap();
-        assert_error!(&mut regs, "X", ForthError::NullPointerCheck(_));
-        assert_error!(&mut regs, "' X EXECUTE", ForthError::NullPointerCheck(_));
+        assert_error!(&mut regs, "X", ForthError::NullCodeField(_));
+        assert_error!(&mut regs, "' X EXECUTE", ForthError::NullCodeField(_));
         outer_interpreter(&mut regs, "1 2 + .").unwrap();
         assert_eq!(output.text(), "3 ");
     }

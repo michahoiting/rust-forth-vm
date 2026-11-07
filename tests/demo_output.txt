@@ -312,7 +312,7 @@ Input:
 Output: Forth Error: Data stack underflow.
 Input:
     1 5 !
-Output: Forth Error: Invalid address 0x5.
+Output: Forth Error: Address 0x5 is outside the dictionary.
 Input:
     DROP
 Output: Forth Error: Data stack underflow.
