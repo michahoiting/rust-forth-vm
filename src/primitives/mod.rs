@@ -22,6 +22,78 @@ pub(crate) unsafe fn install(vm: &mut Vm) -> Result<(), ForthError> {
     vm.dictionary
         .add_primitive_word("+", code_cell(core::plus), 0)?;
     vm.dictionary
+        .add_primitive_word("-", code_cell(core::minus), 0)?;
+    vm.dictionary
+        .add_primitive_word("*", code_cell(core::multiply), 0)?;
+    vm.dictionary
+        .add_primitive_word("/", code_cell(core::divide), 0)?;
+    vm.dictionary
+        .add_primitive_word("MOD", code_cell(core::modulo), 0)?;
+    vm.dictionary
+        .add_primitive_word("/MOD", code_cell(core::divide_mod), 0)?;
+    vm.dictionary
+        .add_primitive_word("1+", code_cell(core::one_plus), 0)?;
+    vm.dictionary
+        .add_primitive_word("1-", code_cell(core::one_minus), 0)?;
+    vm.dictionary
+        .add_primitive_word("2*", code_cell(core::two_times), 0)?;
+    vm.dictionary
+        .add_primitive_word("2/", code_cell(core::two_divide), 0)?;
+    vm.dictionary
+        .add_primitive_word("NEGATE", code_cell(core::negate), 0)?;
+    vm.dictionary
+        .add_primitive_word("ABS", code_cell(core::absolute), 0)?;
+    vm.dictionary
+        .add_primitive_word("MIN", code_cell(core::minimum), 0)?;
+    vm.dictionary
+        .add_primitive_word("MAX", code_cell(core::maximum), 0)?;
+    vm.dictionary
+        .add_primitive_word("=", code_cell(core::equal), 0)?;
+    vm.dictionary
+        .add_primitive_word("<", code_cell(core::less_than), 0)?;
+    vm.dictionary
+        .add_primitive_word(">", code_cell(core::greater_than), 0)?;
+    vm.dictionary
+        .add_primitive_word("U<", code_cell(core::unsigned_less_than), 0)?;
+    vm.dictionary
+        .add_primitive_word("0=", code_cell(core::zero_equal), 0)?;
+    vm.dictionary
+        .add_primitive_word("0<", code_cell(core::zero_less_than), 0)?;
+    vm.dictionary
+        .add_primitive_word("AND", code_cell(core::and), 0)?;
+    vm.dictionary
+        .add_primitive_word("OR", code_cell(core::or), 0)?;
+    vm.dictionary
+        .add_primitive_word("XOR", code_cell(core::xor), 0)?;
+    vm.dictionary
+        .add_primitive_word("INVERT", code_cell(core::invert), 0)?;
+    vm.dictionary
+        .add_primitive_word("LSHIFT", code_cell(core::left_shift), 0)?;
+    vm.dictionary
+        .add_primitive_word("RSHIFT", code_cell(core::right_shift), 0)?;
+    vm.dictionary
+        .add_primitive_word("+!", code_cell(core::plus_store), 0)?;
+    vm.dictionary
+        .add_primitive_word("CELL+", code_cell(core::cell_plus), 0)?;
+    vm.dictionary
+        .add_primitive_word("2!", code_cell(core::two_store), 0)?;
+    vm.dictionary
+        .add_primitive_word("2@", code_cell(core::two_fetch), 0)?;
+    vm.dictionary
+        .add_primitive_word("2DROP", code_cell(core::two_drop), 0)?;
+    vm.dictionary
+        .add_primitive_word("2DUP", code_cell(core::two_dup), 0)?;
+    vm.dictionary
+        .add_primitive_word("2OVER", code_cell(core::two_over), 0)?;
+    vm.dictionary
+        .add_primitive_word("2SWAP", code_cell(core::two_swap), 0)?;
+    vm.dictionary
+        .add_primitive_word("FILL", code_cell(core::fill), 0)?;
+    vm.dictionary
+        .add_primitive_word("MOVE", code_cell(core::move_bytes), 0)?;
+    vm.dictionary
+        .add_primitive_word("BL", code_cell(core::blank), 0)?;
+    vm.dictionary
         .add_primitive_word(".", code_cell(core::dot_print), 0)?;
     vm.dictionary
         .add_primitive_word("@", code_cell(core::fetch), 0)?;

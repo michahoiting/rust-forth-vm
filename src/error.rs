@@ -47,6 +47,8 @@ pub enum ForthError {
     ReturnStackOverflow,
     /// A write did not fit in the dictionary.
     DictionaryOverflow,
+    /// `/`, `MOD` or `/MOD` was given a zero divisor.
+    DivisionByZero,
     /// A dictionary of this many Cells could not be allocated.
     DictionaryTooLarge(usize),
     /// A stack of this many Cells could not be allocated.
@@ -111,6 +113,7 @@ impl fmt::Display for ForthError {
             ForthError::DataStackOverflow => write!(f, "Data stack overflow."),
             ForthError::ReturnStackOverflow => write!(f, "Return stack overflow."),
             ForthError::DictionaryOverflow => write!(f, "Dictionary overflow."),
+            ForthError::DivisionByZero => write!(f, "Division by zero."),
             ForthError::DictionaryTooLarge(cells) => {
                 write!(f, "Cannot allocate a dictionary of {} Cells.", cells)
             }

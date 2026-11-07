@@ -220,7 +220,7 @@ mod tests {
     use crate::vm::{enter_word, PrimitiveFn};
     use crate::{boot, outer_interpreter, VmConfig};
 
-    const TEST_CELLS: usize = 1024;
+    const TEST_CELLS: usize = 64 * 1024;
 
     #[test]
     fn c_comma_presses_the_low_byte_and_pops_it() {

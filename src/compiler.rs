@@ -122,7 +122,7 @@ mod tests {
     use super::*;
     use crate::dictionary::{is_hidden, is_pending, F_HIDDEN};
 
-    const TEST_CELLS: usize = 1024;
+    const TEST_CELLS: usize = 64 * 1024;
 
     #[test]
     fn begin_definition_sets_pending_and_not_hidden() {

@@ -168,7 +168,8 @@ mod tests {
     use crate::vm::run;
     use crate::{boot, VmConfig};
 
-    const TEST_CELLS: usize = 1024;
+    const TEST_CELLS: usize = 64 * 1024;
+    const FILL_TEST_CELLS: usize = 1024;
 
     // Asserts that evaluating `input` fails with an error matching the pattern.
     macro_rules! assert_error {
@@ -192,8 +193,8 @@ mod tests {
     #[test]
     fn dictionary_overflow_is_reported() {
         unsafe {
-            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            let cells = "1 , ".repeat(TEST_CELLS);
+            let mut vm = boot(io::sink(), VmConfig::new(FILL_TEST_CELLS)).unwrap();
+            let cells = "1 , ".repeat(FILL_TEST_CELLS);
             assert_error!(&mut vm, &cells, ForthError::DictionaryOverflow);
             assert_error!(&mut vm, "1 ,", ForthError::DictionaryOverflow);
             assert_error!(&mut vm, "CREATE X", ForthError::DictionaryOverflow);
