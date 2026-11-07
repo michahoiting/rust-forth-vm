@@ -218,7 +218,7 @@ fn dot_writes_a_signed_number() {
 fn information_words_write_their_text() {
     assert_eq!(output_of(&["HELP"]), "Type BYE or press Ctrl-D to leave.\n");
     assert_eq!(output_of(&["COPYRIGHT"]), format!("{}\n", COPYRIGHT));
-    assert_eq!(output_of(&["LICENCE"]), include_str!("../LICENSE"));
+    assert_eq!(output_of(&["LICENSE"]), include_str!("../LICENSE"));
 }
 
 #[test]
@@ -231,7 +231,7 @@ fn information_words_work_from_a_definition() {
 
 #[test]
 fn information_words_report_output_errors() {
-    for word in ["HELP", "COPYRIGHT", "LICENCE"] {
+    for word in ["HELP", "COPYRIGHT", "LICENSE"] {
         unsafe {
             let mut regs = test_vm(FailingWriter);
             assert_error!(&mut regs, word, ForthError::Output(_));

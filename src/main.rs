@@ -32,7 +32,7 @@ const VERSION: &str = concat!(
 );
 
 /// The last line that the interactive prompt prints when it starts.
-const MORE_INFORMATION: &str = r#"Type "HELP", "COPYRIGHT" or "LICENCE" for more information."#;
+const MORE_INFORMATION: &str = r#"Type "HELP", "COPYRIGHT" or "LICENSE" for more information."#;
 
 /// The demo sections, each with its title and one block of Forth source. Each section runs in a
 /// new VM, so it must define everything it uses.
@@ -266,7 +266,7 @@ CREATE SCRATCH 16 ALLOT
         r"
 HELP                          \ prints how to leave the prompt
 COPYRIGHT                     \ prints the copyright notice
-LICENCE                       \ prints the licence
+LICENSE                       \ prints the license
 ",
     ),
 ];

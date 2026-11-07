@@ -44,9 +44,9 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 - A `--version` option, which prints the version, the build date, and the git tag and
   hash. `build.rs` provides the build information. The interactive prompt starts with
   the same line, the copyright notice, and the words that give more information.
-- `HELP`, `COPYRIGHT` and `LICENCE`, which print how to leave the program, the copyright
-  notice, and the licence. The library exports the notice as `COPYRIGHT`.
-- The MIT licence, and a minimum supported Rust version.
+- `HELP`, `COPYRIGHT` and `LICENSE`, which print how to leave the program, the copyright
+  notice, and the license. The library exports the notice as `COPYRIGHT`.
+- The MIT license, and a minimum supported Rust version.
 - This changelog, a contributing guide, a versioning policy, and getting-started steps in
   the README.
 - Git hooks and a GitHub ruleset that protect `main`.

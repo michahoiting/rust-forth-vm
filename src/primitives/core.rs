@@ -11,13 +11,13 @@ use crate::error::ForthError;
 use crate::vm::Registers;
 
 /// The copyright notice, which `COPYRIGHT` prints.
-pub const COPYRIGHT: &str = "Copyright (c) 2026 M.W.R. Hoiting.\nAll Rights Reserved.";
+pub const COPYRIGHT: &str = "Copyright (c) 2026 M.W.R. Hoiting.";
 
 /// What `HELP` prints.
 const HELP: &str = "Type BYE or press Ctrl-D to leave.\n";
 
-/// The project's licence, which `LICENCE` prints.
-const LICENCE: &str = include_str!("../../LICENSE");
+/// The project's license, which `LICENSE` prints.
+const LICENSE: &str = include_str!("../../LICENSE");
 
 /// Writes `text` to the output.
 fn write_text(regs: &mut Registers, text: &str) {
@@ -36,9 +36,9 @@ pub(super) unsafe fn copyright(regs: &mut Registers) {
     write_text(regs, "\n");
 }
 
-/// `LICENCE ( -- )`: Writes the project's licence to the output.
-pub(super) unsafe fn licence(regs: &mut Registers) {
-    write_text(regs, LICENCE);
+/// `LICENSE ( -- )`: Writes the project's license to the output.
+pub(super) unsafe fn license(regs: &mut Registers) {
+    write_text(regs, LICENSE);
 }
 
 /// `@ ( addr -- x )`: Pops a dictionary address from the stack and replaces it with the
@@ -273,17 +273,14 @@ mod tests {
     #[test]
     fn copyright_writes_the_notice_on_a_line() {
         unsafe {
-            assert_eq!(
-                output_of(copyright),
-                "Copyright (c) 2026 M.W.R. Hoiting.\nAll Rights Reserved.\n"
-            );
+            assert_eq!(output_of(copyright), "Copyright (c) 2026 M.W.R. Hoiting.\n");
         }
     }
 
     #[test]
-    fn licence_writes_the_licence_file() {
+    fn license_writes_the_license_file() {
         unsafe {
-            assert_eq!(output_of(licence), include_str!("../../LICENSE"));
+            assert_eq!(output_of(license), include_str!("../../LICENSE"));
         }
     }
 

@@ -343,8 +343,7 @@ fn the_interactive_prompt_starts_with_the_version_and_the_notice() {
     let version = stdout_of(&["--version"], "");
     let expected = format!(
         "{}Copyright (c) 2026 M.W.R. Hoiting.\n\
-         All Rights Reserved.\n\
-         Type \"HELP\", \"COPYRIGHT\" or \"LICENCE\" for more information.\n\n\n",
+         Type \"HELP\", \"COPYRIGHT\" or \"LICENSE\" for more information.\n\n\n",
         version
     );
     assert_eq!(stdout_of(&[], ""), expected);

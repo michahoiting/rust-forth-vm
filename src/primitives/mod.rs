@@ -66,7 +66,7 @@ pub(crate) unsafe fn install(regs: &mut Registers) -> Result<(), ForthError> {
     regs.dictionary
         .add_primitive_word("COPYRIGHT", code_cell(core::copyright), 0)?;
     regs.dictionary
-        .add_primitive_word("LICENCE", code_cell(core::licence), 0)?;
+        .add_primitive_word("LICENSE", code_cell(core::license), 0)?;
     regs.dictionary
         .add_primitive_word(",", code_cell(compiler::comma), 0)?;
     regs.dictionary

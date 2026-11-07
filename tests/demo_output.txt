@@ -246,10 +246,9 @@ Output: 72 105 0 5 99 7 7 11 22 ok
 Input:
     HELP                          \ prints how to leave the prompt
     COPYRIGHT                     \ prints the copyright notice
-    LICENCE                       \ prints the licence
+    LICENSE                       \ prints the license
 Output: Type BYE or press Ctrl-D to leave.
 Copyright (c) 2026 M.W.R. Hoiting.
-All Rights Reserved.
 MIT License
 
 Copyright (c) 2026 M.W.R. Hoiting
