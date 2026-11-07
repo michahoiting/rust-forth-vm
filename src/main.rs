@@ -132,7 +132,7 @@ COUNTER @ .                   \ prints 50
 :NONAME 3 + ; CONSTANT ADD3-XT
 4 ADD3-XT EXECUTE .           \ prints 7
 
-\ Pass behaviour to a word, as a callback
+\ Pass behavior to a word, as a callback
 : TWICE DUP ROT SWAP EXECUTE SWAP EXECUTE ;
 5 :NONAME DUP + ; TWICE .     \ prints 20
 1 ADD3-XT TWICE .             \ prints 7

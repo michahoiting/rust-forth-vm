@@ -1,6 +1,6 @@
 // Copyright (c) 2026 M.W.R. Hoiting
 
-//! Tests of Forth behaviour, using only the public API. Results are checked
+//! Tests of Forth behavior, using only the public API. Results are checked
 //! through `.` and the output writer.
 
 use std::cell::RefCell;
@@ -1032,7 +1032,7 @@ fn xt_works_as_a_callback() {
 }
 
 #[test]
-fn replacing_an_xt_changes_behaviour_at_runtime() {
+fn replacing_an_xt_changes_behavior_at_runtime() {
     let lines = [
         "VARIABLE V",
         ": RUN V @ EXECUTE ;",

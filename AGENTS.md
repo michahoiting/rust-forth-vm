@@ -71,11 +71,12 @@ main → lib → interpreter, primitives → vm → compiler → dictionary → 
 - Doc comments on `unsafe fn` have a `# Safety` section when the caller has something to uphold. The contract shared by primitives is on `PrimitiveFn`.
 - Doc comments on primitives start with the word and its stack effect in one code span, such as `` `@ ( addr -- x )`: ``. Outside a code span, rustdoc would change `--` and `*`.
 - Public API changes update the doc examples, which run as doctests.
-- Docs describe behaviour, and link to the README for the word list and limitations instead of copying them.
+- Docs describe behavior, and link to the README for the word list and limitations instead of copying them.
 - Breaking changes are fine until the project owner says otherwise.
 - Everything is part of the unreleased `0.1.0` until the project owner releases it. Until then, all changelog entries go under `### Added`, including fixes and changes, and nothing is marked as breaking. After the first release, this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), and breaking changes start with `**Breaking:**`.
 - Every user-visible change adds an entry under `[Unreleased]` in `CHANGELOG.md`.
 - Don't bump the version or create tags unless asked. Only the project owner decides when to release.
+- Use American English in code, docs, issues and PRs, such as `license` and `behavior`.
 - Stay within the requested scope. Report anything else you find instead of fixing it in passing.
 
 ## New Forth words
@@ -96,7 +97,7 @@ Every new word or feature includes:
 3. Create or use a GitHub issue, stating the problem, the acceptance criteria, and the files it expects to touch. Before picking an issue, check `gh pr list` and the `solo` label. A `solo` issue changes code throughout the project, so start it only with no other PR open, and start nothing else until it merges.
 4. Work on a branch, never directly on `main`.
 5. Update `CHANGELOG.md`, and run `make ci`. A test compares the demo with `tests/demo_output.txt`. If a demo change is intended, run `make demo-expected`, and check that the diff of that file shows only the intended changes. After a merge conflict in that file, run it again.
-6. For behaviour changes, temporarily break the code to confirm the tests catch it. `make mutants` skips every `unsafe fn`, which includes all primitives, so it doesn't replace this step. Use `--no-fail-fast` and check the exit code, because a crash in a test binary prints no `FAILED` lines.
+6. For behavior changes, temporarily break the code to confirm the tests catch it. `make mutants` skips every `unsafe fn`, which includes all primitives, so it doesn't replace this step. Use `--no-fail-fast` and check the exit code, because a crash in a test binary prints no `FAILED` lines.
 7. Open a PR that closes the issue. The project owner reviews and merges, so never merge or arm auto-merge. Don't wait for CI: start the next issue in a new worktree. Check back with `gh pr checks <number>` and `gh pr view <number> --comments`, and fix failures or review comments on the same branch.
 8. After the merge, sync `main`, and delete the branch once asked. The PR head can differ from the last local commit, because of review suggestions.
 

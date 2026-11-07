@@ -76,7 +76,7 @@ After the first release, versions follow
 version number covers is:
 
 - The public items of the Rust library.
-- The Forth words and their documented behaviour.
+- The Forth words and their documented behavior.
 - The messages of `ForthError`.
 
 Demo output and private items aren't part of it.

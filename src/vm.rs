@@ -209,7 +209,7 @@ pub(crate) unsafe fn enter_word(regs: &mut Registers) {
     // Fetch the contents of the CFA Cell (the raw bits of the machine-code pointer)
     let code_bits = *regs.w;
 
-    // A null pointer is undefined behaviour, and `!` can write zero here.
+    // A null pointer is undefined behavior, and `!` can write zero here.
     if code_bits == 0 {
         regs.set_error(ForthError::NullPointerCheck(regs.w as Cell));
         return;
