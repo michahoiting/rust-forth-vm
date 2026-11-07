@@ -14,7 +14,8 @@ use rust_forth_vm::{
     DEFAULT_RETURN_STACK_CELLS,
 };
 
-const TEST_CELLS: usize = 1024;
+const TEST_CELLS: usize = 64 * 1024;
+const FILL_TEST_CELLS: usize = 1024;
 
 // A writer whose contents stay readable after it is moved into the VM.
 #[derive(Clone, Default)]
@@ -96,6 +97,246 @@ fn arithmetic_and_literals() {
     assert_eq!(output_of(&["-5 3 + ."]), "-2 ");
     // The full unsigned range is accepted, and `.` prints signed.
     assert_eq!(output_of(&[&format!("{} .", Cell::MAX)]), "-1 ");
+}
+
+#[test]
+fn single_cell_arithmetic_words_work_interpreted_and_compiled() {
+    let interpreted = [
+        "9 4 - .",
+        "9 4 * .",
+        "-7 3 / .",
+        "-7 3 MOD .",
+        "-7 3 /MOD . .",
+        "41 1+ .",
+        "41 1- .",
+        "21 2* .",
+        "-3 2/ .",
+        "42 NEGATE .",
+        "-42 ABS .",
+        "-3 2 MIN .",
+        "-3 2 MAX .",
+    ];
+    assert_eq!(
+        output_of(&interpreted),
+        "5 36 -3 2 -3 2 42 40 42 -2 -42 42 -3 2 "
+    );
+
+    let definitions = [
+        ": SUB - ;",
+        ": MUL * ;",
+        ": DIV / ;",
+        ": REM MOD ;",
+        ": DIVREM /MOD ;",
+        ": INC 1+ ;",
+        ": DEC 1- ;",
+        ": DOUBLE 2* ;",
+        ": HALF 2/ ;",
+        ": NEG NEGATE ;",
+        ": MAG ABS ;",
+        ": LESSER MIN ;",
+        ": GREATER MAX ;",
+    ];
+    let calls = [
+        "9 4 SUB .",
+        "9 4 MUL .",
+        "-7 3 DIV .",
+        "-7 3 REM .",
+        "-7 3 DIVREM . .",
+        "41 INC .",
+        "41 DEC .",
+        "21 DOUBLE .",
+        "-3 HALF .",
+        "42 NEG .",
+        "-42 MAG .",
+        "-3 2 LESSER .",
+        "-3 2 GREATER .",
+    ];
+    let mut lines = definitions.to_vec();
+    lines.extend(calls);
+    assert_eq!(output_of(&lines), "5 36 -3 2 -3 2 42 40 42 -2 -42 42 -3 2 ");
+}
+
+#[test]
+fn comparisons_and_logic_words_return_forth_flags() {
+    assert_eq!(
+        output_of(&[
+            "4 4 = . 4 5 = .",
+            "-3 2 < . 3 2 < .",
+            "3 2 > . 2 3 > .",
+            "-1 0 U< . 0 -1 U< .",
+            "0 0= . 1 0= .",
+            "-1 0< . 0 0< .",
+            "12 10 AND . 12 10 OR . 12 10 XOR .",
+            "0 INVERT .",
+            "3 2 LSHIFT . 12 2 RSHIFT .",
+        ]),
+        "-1 0 -1 0 -1 0 0 -1 -1 0 -1 0 8 14 6 -1 12 3 "
+    );
+    assert_eq!(
+        output_of(&[
+            ": SAME = ; : BELOW < ; : ABOVE > ; : UBELOW U< ;",
+            ": ZERO? 0= ; : NEG? 0< ; : BOTH AND ; : EITHER OR ;",
+            ": DIFFERENT XOR ; : FLIP INVERT ; : SHL LSHIFT ; : SHR RSHIFT ;",
+            "4 4 SAME . -3 2 BELOW . 3 2 ABOVE . -1 0 UBELOW .",
+            "0 ZERO? . -1 NEG? . 12 10 BOTH . 12 10 EITHER .",
+            "12 10 DIFFERENT . 0 FLIP . 3 2 SHL . 12 2 SHR .",
+        ]),
+        "-1 -1 -1 0 -1 -1 8 14 6 -1 12 3 "
+    );
+}
+
+#[test]
+fn pairs_and_memory_words_work_interpreted_and_compiled() {
+    let cell_size = mem::size_of::<Cell>();
+    assert_eq!(
+        output_of(&[
+            "1 2 3 4 2OVER . . . . . .",
+            "1 2 3 4 2SWAP . . . .",
+            "1 2 2DUP . . . .",
+            "1 2 2DROP DEPTH .",
+            "CREATE PAIR 2 CELLS ALLOT",
+            "11 22 PAIR 2! PAIR 2@ . .",
+            "5 PAIR +! PAIR @ .",
+            "PAIR CELL+ @ . BL .",
+            "CREATE BYTES 8 ALLOT",
+            "BYTES 8 65 FILL BYTES C@ . BYTES CHAR+ C@ .",
+            "BYTES BYTES CHAR+ 7 MOVE BYTES C@ . BYTES CHAR+ C@ .",
+        ]),
+        "2 1 4 3 2 1 2 1 4 3 2 1 2 1 0 22 11 16 22 32 65 65 65 65 "
+    );
+
+    let compiled = [
+        ": ADD-TO +! ;",
+        ": NEXT-CELL CELL+ ;",
+        ": STORE-PAIR 2! ;",
+        ": FETCH-PAIR 2@ ;",
+        ": DROP-PAIR 2DROP ;",
+        ": DUP-PAIR 2DUP ;",
+        ": OVER-PAIR 2OVER ;",
+        ": SWAP-PAIR 2SWAP ;",
+        ": FILL-BYTES FILL ;",
+        ": MOVE-BYTES MOVE ;",
+        ": SPACE BL ;",
+        "CREATE DATA 2 CELLS ALLOT",
+        "5 6 DATA STORE-PAIR DATA FETCH-PAIR . .",
+        "3 DATA ADD-TO DATA @ . DATA NEXT-CELL DATA - .",
+        "1 2 3 4 OVER-PAIR . . SWAP-PAIR . . . .",
+        "1 2 DUP-PAIR . . . . 2 3 DROP-PAIR DEPTH .",
+        "CREATE BYTES 4 ALLOT BYTES 4 66 FILL",
+        "BYTES C@ . BYTES BYTES CHAR+ 3 MOVE BYTES CHAR+ C@ .",
+        "BYTES 4 321 FILL BYTES C@ .",
+        "SPACE .",
+    ];
+    assert_eq!(
+        output_of(&compiled),
+        format!("6 5 8 {cell_size} 2 1 2 1 4 3 2 1 2 1 0 66 66 65 32 ")
+    );
+}
+
+#[test]
+fn division_by_zero_is_reported_without_panicking_and_vm_recovers() {
+    unsafe {
+        let output = Capture::default();
+        let mut vm = test_vm(output.clone());
+        for expression in ["8 0 /", "8 0 MOD", "8 0 /MOD"] {
+            assert_error!(&mut vm, expression, ForthError::DivisionByZero);
+            outer_interpreter(&mut vm, "6 2 / .").unwrap();
+        }
+        assert_eq!(output.text(), "3 3 3 ");
+    }
+}
+
+#[test]
+fn new_words_report_api_underflow_and_leave_the_vm_usable() {
+    unsafe {
+        let output = Capture::default();
+        let mut vm = test_vm(output.clone());
+        for word in [
+            "1+", "1-", "2*", "2/", "NEGATE", "ABS", "0=", "0<", "INVERT", "CELL+", "2@",
+        ] {
+            let error = outer_interpreter(&mut vm, word).unwrap_err();
+            assert!(
+                matches!(&error, ForthError::DataStackUnderflow),
+                "{word}: {error}"
+            );
+        }
+        for word in [
+            "-", "*", "/", "MOD", "/MOD", "MIN", "MAX", "=", "<", ">", "U<", "AND", "OR", "XOR",
+            "LSHIFT", "RSHIFT", "+!",
+        ] {
+            let source = format!("1 {word}");
+            let error = outer_interpreter(&mut vm, &source).unwrap_err();
+            assert!(
+                matches!(&error, ForthError::DataStackUnderflow),
+                "{word}: {error}"
+            );
+        }
+        for word in ["2!", "FILL", "MOVE"] {
+            let source = format!("1 2 {word}");
+            let error = outer_interpreter(&mut vm, &source).unwrap_err();
+            assert!(
+                matches!(&error, ForthError::DataStackUnderflow),
+                "{word}: {error}"
+            );
+        }
+        for word in ["2DROP", "2DUP"] {
+            let source = format!("1 {word}");
+            let error = outer_interpreter(&mut vm, &source).unwrap_err();
+            assert!(
+                matches!(&error, ForthError::DataStackUnderflow),
+                "{word}: {error}"
+            );
+        }
+        for word in ["2OVER", "2SWAP"] {
+            let source = format!("1 2 3 {word}");
+            let error = outer_interpreter(&mut vm, &source).unwrap_err();
+            assert!(
+                matches!(&error, ForthError::DataStackUnderflow),
+                "{word}: {error}"
+            );
+        }
+        outer_interpreter(&mut vm, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn bulk_memory_words_allow_empty_ranges_and_leave_data_unchanged_on_errors() {
+    unsafe {
+        let output = Capture::default();
+        let mut vm = test_vm(output.clone());
+        outer_interpreter(&mut vm, "CREATE BYTES 4 ALLOT BYTES 4 65 FILL").unwrap();
+        let here = here_of(&mut vm, &output);
+        output.0.borrow_mut().clear();
+        outer_interpreter(&mut vm, &format!("{here} 0 1 FILL")).unwrap();
+        outer_interpreter(&mut vm, &format!("{here} {here} 0 MOVE")).unwrap();
+        outer_interpreter(&mut vm, "BYTES BYTES 4 MOVE").unwrap();
+
+        assert_error!(
+            &mut vm,
+            "BYTES HERE 2 90 FILL",
+            ForthError::UnwrittenAddress(_)
+        );
+        assert_error!(
+            &mut vm,
+            &format!("BYTES HERE {} MOVE", Cell::MAX),
+            ForthError::UnwrittenAddress(_)
+        );
+        outer_interpreter(&mut vm, "BYTES C@ . BYTES CHAR+ C@ .").unwrap();
+        assert_eq!(output.text(), "65 65 ");
+    }
+}
+
+#[test]
+fn two_store_checks_the_full_range_before_writing() {
+    unsafe {
+        let output = Capture::default();
+        let mut vm = test_vm(output.clone());
+        outer_interpreter(&mut vm, "CREATE ONE 7 ,").unwrap();
+        assert_error!(&mut vm, "1 2 ONE 2!", ForthError::UnwrittenAddress(_));
+        outer_interpreter(&mut vm, "ONE @ .").unwrap();
+        assert_eq!(output.text(), "7 ");
+    }
 }
 
 #[test]
@@ -447,6 +688,7 @@ fn errors_have_stable_messages() {
         (ForthError::DataStackOverflow, "Data stack overflow."),
         (ForthError::ReturnStackOverflow, "Return stack overflow."),
         (ForthError::DictionaryOverflow, "Dictionary overflow."),
+        (ForthError::DivisionByZero, "Division by zero."),
         (ForthError::MissingName("CREATE"), "CREATE needs a name."),
         (
             ForthError::DoesOutsideDefinition,
@@ -823,8 +1065,8 @@ fn invalid_store_leaves_a_usable_vm() {
 #[test]
 fn larger_dictionary_holds_more_cells() {
     unsafe {
-        let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS * 4)).unwrap();
-        let cells = "1 , ".repeat(TEST_CELLS * 2);
+        let mut vm = boot(io::sink(), VmConfig::new(FILL_TEST_CELLS * 4)).unwrap();
+        let cells = "1 , ".repeat(FILL_TEST_CELLS * 2);
         outer_interpreter(&mut vm, &cells).unwrap();
     }
 }

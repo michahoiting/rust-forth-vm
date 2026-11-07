@@ -25,8 +25,12 @@ use rust_forth_vm::{boot, outer_interpreter, ForthError, Vm, VmConfig, COPYRIGHT
 #[cfg(feature = "readline")]
 use line_editor::LineEditor;
 
-/// The size of the demo's Forth dictionary.
+/// The size of the interactive Forth dictionary.
 const DICTIONARY_CELLS: usize = 64 * 1024;
+/// The smaller dictionary used by the self-contained demo sections.
+const DEMO_DICTIONARY_CELLS: usize = 1024;
+/// The demo sections need only a small data stack.
+const DEMO_DATA_STACK_CELLS: usize = 64;
 
 /// The usage line, printed for arguments the program doesn't know.
 const USAGE: &str = "Usage: forth-vm [--interactive | --demo | --version]";
@@ -45,7 +49,7 @@ const MORE_INFORMATION: &str = r#"Type "HELP", "COPYRIGHT" or "LICENSE" for more
 
 /// The demo sections, each with its title and one block of Forth source. Each section runs in a
 /// new VM, so it must define everything it uses.
-const SECTIONS: [(&str, &str); 14] = [
+const SECTIONS: [(&str, &str); 17] = [
     (
         "Evaluating Text Operations",
         r"
@@ -121,11 +125,45 @@ OTHER @ . COUNTER @ .              \ prints 7 45
 1 2 3 DEPTH . . . .           \ prints 3 3 2 1
 : DOUBLE DUP + ;              \ reuse a value without naming it
 21 DOUBLE .                   \ prints 42
-: +! SWAP OVER @ + SWAP ! ;   \ add to a variable
 VARIABLE COUNTER
 45 COUNTER !
 5 COUNTER +!
 COUNTER @ .                   \ prints 50
+",
+    ),
+    (
+        "Single-Cell Arithmetic",
+        r"
+9 4 - . 9 4 * .                \ prints 5 36
+-7 3 / . -7 3 MOD .           \ prints -3 2: division rounds down
+-7 3 /MOD . .                  \ prints -3 2: remainder, then quotient on the stack
+41 1+ . 41 1- . 21 2* . -3 2/ .  \ prints 42 40 42 -2
+-42 NEGATE . -42 ABS .         \ prints 42 42
+-3 2 MIN . -3 2 MAX .          \ prints -3 2
+",
+    ),
+    (
+        "Comparison and Logic",
+        r"
+4 4 = . 2 3 < . 3 2 > . -1 0 U< .  \ prints -1 -1 -1 0
+0 0= . -1 0< .                     \ prints -1 -1
+12 10 AND . 12 10 OR . 12 10 XOR . \ prints 8 14 6
+0 INVERT . 3 2 LSHIFT . 12 2 RSHIFT . \ prints -1 12 3
+",
+    ),
+    (
+        "Pairs and Memory",
+        r"
+1 2 3 4 2OVER . . . . . .          \ prints 2 1 4 3 2 1
+1 2 3 4 2SWAP . . . .               \ prints 2 1 4 3
+CREATE PAIR 2 CELLS ALLOT
+11 22 PAIR 2! PAIR 2@ . .           \ prints 22 11
+5 PAIR +! PAIR @ .                  \ prints 16
+PAIR CELL+ PAIR - .                 \ prints the size of one Cell
+CREATE BYTES 4 ALLOT
+BYTES 4 65 FILL
+BYTES BYTES CHAR+ 3 MOVE
+BYTES C@ . BYTES CHAR+ C@ . BL .   \ prints 65 65 32
 ",
     ),
     (
@@ -312,7 +350,7 @@ const RESTART_TESTS: [&str; 8] = [
 
 /// The error handling tests. An error discards the rest of its text, so each one is a separate
 /// block.
-const ERROR_TESTS: [&str; 11] = [
+const ERROR_TESTS: [&str; 12] = [
     ": BROKEN 1 NO-SUCH-WORD ;",
     "BROKEN",
     "+",
@@ -324,6 +362,7 @@ const ERROR_TESTS: [&str; 11] = [
     ": W 5 , ; IMMEDIATE",
     ": X W ;",
     "' DUP COMPILE,",
+    "1 0 /",
 ];
 
 /// The sections with several blocks of source, which run after [`SECTIONS`]. Each one has its
@@ -352,9 +391,8 @@ fn section(number: usize) -> (&'static str, &'static [&'static str]) {
 /// # Safety
 ///
 /// The result has the same requirements as the result of [`boot`].
-unsafe fn new_vm() -> Vm {
-    boot(io::stdout(), VmConfig::new(DICTIONARY_CELLS))
-        .expect("the dictionary must be able to hold the primitives")
+unsafe fn new_vm(config: VmConfig) -> Vm {
+    boot(io::stdout(), config).expect("the dictionary must be able to hold the primitives")
 }
 
 /// Evaluates some Forth source and ends the output line with the result. That's `ok` if all of
@@ -396,7 +434,10 @@ fn run_section(number: usize) -> Result<(), ExitCode> {
     println!("--- TEST RUN {}: {} ---", number, title);
     // SAFETY: `vm` comes from `boot`, through `new_vm`.
     unsafe {
-        let mut vm = new_vm();
+        let mut vm = new_vm(VmConfig {
+            data_stack_cells: DEMO_DATA_STACK_CELLS,
+            ..VmConfig::new(DEMO_DICTIONARY_CELLS)
+        });
         for source in blocks {
             evaluate(&mut vm, source)?;
         }
@@ -495,7 +536,7 @@ fn demo_menu(mut input: impl BufRead) -> ExitCode {
 fn interactive(mut read_line: impl FnMut(&Vm) -> Result<String, ExitCode>) -> ExitCode {
     // SAFETY: `vm` comes from `boot`, through `new_vm`.
     unsafe {
-        let mut vm = new_vm();
+        let mut vm = new_vm(VmConfig::new(DICTIONARY_CELLS));
         loop {
             match read_line(&vm) {
                 Ok(line) => {

@@ -93,7 +93,7 @@ mod tests {
     use crate::dictionary::cfa_of;
     use crate::{boot, VmConfig};
 
-    const TEST_CELLS: usize = 1024;
+    const TEST_CELLS: usize = 64 * 1024;
 
     unsafe fn xt_of(vm: &Vm, name: &str) -> Cell {
         cfa_of(vm.dictionary.find_word(name).unwrap()) as Cell

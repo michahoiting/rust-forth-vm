@@ -390,7 +390,7 @@ mod tests {
     use crate::dictionary::cfa_of;
     use crate::{boot, outer_interpreter, VmConfig};
 
-    const TEST_CELLS: usize = 1024;
+    const TEST_CELLS: usize = 64 * 1024;
 
     // Boots a VM with these stack limits, and a dictionary large enough for every test.
     unsafe fn limited_vm(data_stack_cells: usize, return_stack_cells: usize) -> Vm {

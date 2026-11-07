@@ -62,7 +62,7 @@ mod tests {
     use crate::dictionary::pfa_of;
     use crate::{boot, outer_interpreter, VmConfig};
 
-    const TEST_CELLS: usize = 1024;
+    const TEST_CELLS: usize = 64 * 1024;
 
     #[test]
     fn paren_comment_skips_to_the_closing_parenthesis() {

@@ -12,6 +12,8 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 
 ### Added
 
+- Single-cell arithmetic, comparison, logic and memory words, including floored division,
+  double-cell stack/memory operations, and overlap-safe `MOVE`.
 - An advisory incremental mutation check on pull requests, with elapsed time and results.
 - Performance measurement: `make perf` runs Forth workloads for each part of the VM, counts
   their instructions, and stores the results in a SQLite database under `target/perf`.

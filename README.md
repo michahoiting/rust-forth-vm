@@ -122,9 +122,8 @@ COUNTER @ .                       \ 43
 : DOUBLE DUP + ;
 21 DOUBLE .                       \ 42
 
-: +! SWAP OVER @ + SWAP ! ;
 5 COUNTER +!
-COUNTER @ .                       \ 48
+COUNTER @ .                   \ 48
 
 :NONAME 1 2 + ; EXECUTE .         \ 3
 
@@ -146,6 +145,42 @@ it.
 | Word     | Stack effect | Description                                       |
 |----------|--------------|---------------------------------------------------|
 | `+`      | `( a b -- n )` | Adds two Cells, wrapping on overflow            |
+| `-`      | `( a b -- n )` | Subtracts two Cells, wrapping on overflow       |
+| `*`      | `( a b -- n )` | Multiplies two Cells, wrapping on overflow      |
+| `/`      | `( n1 n2 -- n3 )` | Divides signed numbers, rounding down         |
+| `MOD`    | `( n1 n2 -- n3 )` | Gives the floored remainder of signed division |
+| `/MOD`   | `( n1 n2 -- n3 n4 )` | Gives the remainder `n3` and quotient `n4`    |
+| `1+`     | `( n1 -- n2 )` | Adds one, wrapping on overflow                  |
+| `1-`     | `( n1 -- n2 )` | Subtracts one, wrapping on overflow             |
+| `2*`     | `( n1 -- n2 )` | Doubles a signed number, wrapping on overflow   |
+| `2/`     | `( n1 -- n2 )` | Divides a signed number by two, rounding down   |
+| `NEGATE` | `( n1 -- n2 )` | Negates a signed number, wrapping on overflow   |
+| `ABS`    | `( n1 -- n2 )` | Gives the absolute value, wrapping on overflow  |
+| `MIN`    | `( n1 n2 -- n3 )` | Gives the lesser signed number               |
+| `MAX`    | `( n1 n2 -- n3 )` | Gives the greater signed number              |
+| `=`      | `( n1 n2 -- flag )` | Gives true if two Cells are equal             |
+| `<`      | `( n1 n2 -- flag )` | Gives true if `n1` is less than `n2` signed    |
+| `>`      | `( n1 n2 -- flag )` | Gives true if `n1` is greater than `n2` signed |
+| `U<`     | `( u1 u2 -- flag )` | Gives true if `u1` is less than `u2` unsigned  |
+| `0=`     | `( n -- flag )` | Gives true if `n` is zero                      |
+| `0<`     | `( n -- flag )` | Gives true if `n` is negative                  |
+| `AND`    | `( x1 x2 -- x3 )` | Gives the bitwise AND of two Cells            |
+| `OR`     | `( x1 x2 -- x3 )` | Gives the bitwise OR of two Cells             |
+| `XOR`    | `( x1 x2 -- x3 )` | Gives the bitwise exclusive OR of two Cells   |
+| `INVERT` | `( x1 -- x2 )` | Inverts every bit in a Cell                    |
+| `LSHIFT` | `( x1 u -- x2 )` | Shifts left logically; large shifts give zero  |
+| `RSHIFT` | `( x1 u -- x2 )` | Shifts right logically; large shifts give zero |
+| `+!`     | `( n addr -- )` | Adds `n` to the Cell at `addr`, wrapping        |
+| `CELL+`  | `( addr1 -- addr2 )` | Advances an address by one Cell               |
+| `2!`     | `( x1 x2 addr -- )` | Stores two adjacent Cells                    |
+| `2@`     | `( addr -- x1 x2 )` | Fetches two adjacent Cells                    |
+| `2DROP`  | `( x1 x2 -- )` | Removes the top two Cells                       |
+| `2DUP`   | `( x1 x2 -- x1 x2 x1 x2 )` | Copies the top two Cells             |
+| `2OVER`  | `( x1 x2 x3 x4 -- x1 x2 x3 x4 x1 x2 )` | Copies the third and fourth Cells |
+| `2SWAP`  | `( x1 x2 x3 x4 -- x3 x4 x1 x2 )` | Exchanges the top two pairs of Cells |
+| `FILL`   | `( c-addr u char -- )` | Fills `u` bytes with the low byte of `char` |
+| `MOVE`   | `( addr1 addr2 u -- )` | Moves `u` bytes, allowing overlapping ranges |
+| `BL`     | `( -- char )` | Pushes the value of the space character         |
 | `.`      | `( n -- )`   | Prints a Cell as a signed number                  |
 | `@`      | `( addr -- x )` | Fetches the Cell at a dictionary address below `HERE` |
 | `!`      | `( x addr -- )` | Stores a Cell at a dictionary address below `HERE` |
@@ -193,8 +228,10 @@ it.
 | `COPYRIGHT` | `( -- )`  | Prints the copyright notice                       |
 | `LICENSE` | `( -- )`    | Prints the project's license                      |
 
-Word names are case-sensitive, and can be up to 255 bytes long. Numbers are decimal,
-and may be negative.
+Division by zero gives `ForthError::DivisionByZero`. `FILL` and `MOVE` validate their
+complete ranges before writing; an invalid range leaves memory unchanged. Comparison words
+return all bits set for true, and zero for false. Word names are case-sensitive, and can be up
+to 255 bytes long. Numbers are decimal, and may be negative.
 
 ## How it works
 
@@ -259,7 +296,8 @@ stacks, and rolls back any unfinished colon definition.
   stacks like any other error.
 - The interactive prompt evaluates each line by itself, so a `(` comment must end on
   the line where it starts.
-- `!` and `C!` can overwrite word headers and compiled code, which can crash the process.
+- `!`, `C!`, `+!`, `2!`, `FILL` and `MOVE` can overwrite word headers and compiled code, which
+  can crash the process.
 - A negative `ALLOT` can only give back data of the newest word, and only if `CREATE` made
   it.
 

@@ -10,6 +10,7 @@
 //! offsets from there.
 
 use std::mem;
+use std::ops::Range;
 use std::ptr;
 
 use crate::cell::Cell;
@@ -276,14 +277,107 @@ impl Dictionary {
     /// Returns [`ForthError::AddressOutOfBounds`] if `addr` isn't in the arena, and
     /// [`ForthError::UnwrittenAddress`] if the bytes reach HERE or past it.
     fn written_offset(&self, addr: Cell, len: usize) -> Result<usize, ForthError> {
-        if !self.is_in_arena(addr) {
+        let end = self.end as Cell;
+        if !self.is_in_arena(addr) && !(len == 0 && addr == end && addr == self.here()) {
             return Err(ForthError::AddressOutOfBounds(addr));
         }
-        // HERE never passes the end of the arena, so this can't overflow.
-        if addr + len > self.here() {
+        if addr.checked_add(len).is_none_or(|end| end > self.here()) {
             return Err(ForthError::UnwrittenAddress(addr));
         }
         Ok(addr - self.start as Cell)
+    }
+
+    /// Checks that `len` bytes at `addr` are written and returns their range in the arena.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::AddressOutOfBounds`] if `addr` isn't in the arena, and
+    /// [`ForthError::UnwrittenAddress`] if the range reaches HERE or past it. An empty range
+    /// at the end of the arena is valid.
+    fn written_range(&self, addr: Cell, len: usize) -> Result<Range<usize>, ForthError> {
+        let offset = self.written_offset(addr, len)?;
+        Ok(offset..offset + len)
+    }
+
+    /// Reads two adjacent Cells at `addr`, which must be aligned.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same address errors as [`fetch`](Self::fetch), and
+    /// [`ForthError::MisalignedAddress`] if `addr` isn't cell-aligned.
+    pub(crate) fn fetch_two(&self, addr: Cell) -> Result<(Cell, Cell), ForthError> {
+        let cell_size = mem::size_of::<Cell>();
+        let offset = self.written_offset(addr, 2 * cell_size)?;
+        if !offset.is_multiple_of(cell_size) {
+            return Err(ForthError::MisalignedAddress(addr));
+        }
+        let index = offset / cell_size;
+        // SAFETY: the range check covers both Cells, and their alignment was checked.
+        unsafe { Ok((*self.start.add(index), *self.start.add(index + 1))) }
+    }
+
+    /// Writes two adjacent Cells at `addr`, checking both before either write.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same address errors as [`store`](Self::store), and
+    /// [`ForthError::MisalignedAddress`] if `addr` isn't cell-aligned. Nothing is written.
+    pub(crate) fn store_two(
+        &mut self,
+        addr: Cell,
+        first: Cell,
+        second: Cell,
+    ) -> Result<(), ForthError> {
+        let cell_size = mem::size_of::<Cell>();
+        let offset = self.written_offset(addr, 2 * cell_size)?;
+        if !offset.is_multiple_of(cell_size) {
+            return Err(ForthError::MisalignedAddress(addr));
+        }
+        let index = offset / cell_size;
+        // SAFETY: the range check covers both Cells, and their alignment was checked.
+        unsafe {
+            *self.start.add(index) = first;
+            *self.start.add(index + 1) = second;
+        }
+        Ok(())
+    }
+
+    /// Fills `len` bytes at `addr`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::AddressOutOfBounds`] or [`ForthError::UnwrittenAddress`] if the
+    /// range isn't written. No bytes are changed on error.
+    pub(crate) fn fill(&mut self, addr: Cell, len: usize, byte: u8) -> Result<(), ForthError> {
+        let range = self.written_range(addr, len)?;
+        // SAFETY: the range is inside the written part of the arena.
+        unsafe { ptr::write_bytes((self.start as *mut u8).add(range.start), byte, len) };
+        Ok(())
+    }
+
+    /// Moves `len` bytes from `source` to `destination`, allowing overlap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::AddressOutOfBounds`] or [`ForthError::UnwrittenAddress`] if either
+    /// range isn't written. No bytes are changed on error.
+    pub(crate) fn move_bytes(
+        &mut self,
+        source: Cell,
+        destination: Cell,
+        len: usize,
+    ) -> Result<(), ForthError> {
+        let source_range = self.written_range(source, len)?;
+        let destination_range = self.written_range(destination, len)?;
+        // SAFETY: both ranges are inside the same arena. `ptr::copy` supports overlap.
+        unsafe {
+            ptr::copy(
+                (self.start as *const u8).add(source_range.start),
+                (self.start as *mut u8).add(destination_range.start),
+                len,
+            )
+        };
+        Ok(())
     }
 
     /// Returns the index of the Cell at `addr`, which must be cell-aligned and end at or below
@@ -539,7 +633,7 @@ mod tests {
     use crate::{boot, outer_interpreter, VmConfig};
 
     const CELL_SIZE: usize = mem::size_of::<Cell>();
-    const TEST_CELLS: usize = 1024;
+    const TEST_CELLS: usize = 64 * 1024;
 
     // Creates a dictionary holding these Cells, starting at its first Cell.
     unsafe fn dictionary_with(values: &[Cell]) -> Dictionary {
@@ -1005,6 +1099,153 @@ mod tests {
             assert_eq!(dictionary.fetch(start).unwrap(), 1);
             assert_eq!(dictionary.fetch(start + CELL_SIZE).unwrap(), 9);
             assert_eq!(dictionary.fetch(start + 2 * CELL_SIZE).unwrap(), 3);
+        }
+    }
+
+    #[test]
+    fn written_ranges_accept_empty_ranges_at_here_and_the_arena_end() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[1]);
+            let start = dictionary.start as Cell;
+            let here = dictionary.here();
+
+            assert_eq!(dictionary.written_range(start, 0).unwrap(), 0..0);
+            assert_eq!(
+                dictionary.written_range(here, 0).unwrap(),
+                CELL_SIZE..CELL_SIZE
+            );
+            dictionary
+                .allot((TEST_CELLS * CELL_SIZE - CELL_SIZE) as isize)
+                .unwrap();
+            let end = dictionary.end as Cell;
+            assert_eq!(
+                dictionary.written_range(end, 0).unwrap(),
+                TEST_CELLS * CELL_SIZE..TEST_CELLS * CELL_SIZE
+            );
+            assert!(matches!(
+                dictionary.written_range(end, 1),
+                Err(ForthError::AddressOutOfBounds(addr)) if addr == end
+            ));
+        }
+    }
+
+    #[test]
+    fn written_ranges_reject_overflow_and_ranges_past_here() {
+        unsafe {
+            let dictionary = dictionary_with(&[1, 2]);
+            let start = dictionary.start as Cell;
+            let here = dictionary.here();
+
+            assert!(matches!(
+                dictionary.written_range(start, Cell::MAX),
+                Err(ForthError::UnwrittenAddress(addr)) if addr == start
+            ));
+            assert!(matches!(
+                dictionary.written_range(here - 1, 2),
+                Err(ForthError::UnwrittenAddress(addr)) if addr == here - 1
+            ));
+            assert!(matches!(
+                dictionary.written_range(1, 0),
+                Err(ForthError::AddressOutOfBounds(1))
+            ));
+        }
+    }
+
+    #[test]
+    fn store_two_checks_both_cells_before_writing() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[1, 2, 3]);
+            let start = dictionary.start as Cell;
+            let here = dictionary.here();
+
+            assert!(matches!(
+                dictionary.store_two(here - CELL_SIZE, 7, 8),
+                Err(ForthError::UnwrittenAddress(addr)) if addr == here - CELL_SIZE
+            ));
+            assert_eq!(dictionary.fetch(start).unwrap(), 1);
+            assert_eq!(dictionary.fetch(start + CELL_SIZE).unwrap(), 2);
+            assert_eq!(dictionary.fetch(start + 2 * CELL_SIZE).unwrap(), 3);
+
+            dictionary.store_two(start, 7, 8).unwrap();
+            assert_eq!(dictionary.fetch_two(start).unwrap(), (7, 8));
+            assert!(matches!(
+                dictionary.fetch_two(start + 1),
+                Err(ForthError::MisalignedAddress(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn two_cell_access_needs_both_whole_cells_to_be_written() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[1]);
+            for _ in 0..CELL_SIZE / 2 {
+                dictionary.char_comma(0).unwrap();
+            }
+            let start = dictionary.start as Cell;
+
+            assert!(matches!(
+                dictionary.fetch_two(start),
+                Err(ForthError::UnwrittenAddress(addr)) if addr == start
+            ));
+            assert!(matches!(
+                dictionary.store_two(start, 7, 8),
+                Err(ForthError::UnwrittenAddress(addr)) if addr == start
+            ));
+            assert_eq!(dictionary.fetch(start).unwrap(), 1);
+        }
+    }
+
+    #[test]
+    fn fill_and_move_allow_empty_ranges_and_overlapping_moves() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[]);
+            let start = dictionary.start as Cell;
+            for offset in 0..8 {
+                dictionary.char_comma((offset + 1) as u8).unwrap();
+            }
+            let here = dictionary.here();
+
+            dictionary.fill(here, 0, 0xAA).unwrap();
+            dictionary.move_bytes(here, here, 0).unwrap();
+            dictionary.move_bytes(start, start + 1, 7).unwrap();
+            let bytes: Vec<u8> = (0..8)
+                .map(|offset| dictionary.fetch_byte(start + offset).unwrap())
+                .collect();
+            assert_eq!(bytes, [1, 1, 2, 3, 4, 5, 6, 7]);
+
+            dictionary.move_bytes(start + 1, start, 7).unwrap();
+            let bytes: Vec<u8> = (0..8)
+                .map(|offset| dictionary.fetch_byte(start + offset).unwrap())
+                .collect();
+            assert_eq!(bytes, [1, 2, 3, 4, 5, 6, 7, 7]);
+            dictionary.fill(start + 1, 3, 0xAB).unwrap();
+            assert_eq!(
+                (0..8)
+                    .map(|offset| dictionary.fetch_byte(start + offset).unwrap())
+                    .collect::<Vec<_>>(),
+                [1, 0xAB, 0xAB, 0xAB, 5, 6, 7, 7]
+            );
+        }
+    }
+
+    #[test]
+    fn fill_and_move_reject_invalid_ranges_without_writing() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let start = dictionary.start as Cell;
+            dictionary.comma(0x0403_0201).unwrap();
+            let here = dictionary.here();
+
+            assert!(matches!(
+                dictionary.fill(start, Cell::MAX, 0xFF),
+                Err(ForthError::UnwrittenAddress(addr)) if addr == start
+            ));
+            assert!(matches!(
+                dictionary.move_bytes(start, here - 1, 2),
+                Err(ForthError::UnwrittenAddress(addr)) if addr == here - 1
+            ));
+            assert_eq!(dictionary.fetch(start).unwrap(), 0x0403_0201);
         }
     }
 

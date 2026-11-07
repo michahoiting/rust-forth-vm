@@ -10,15 +10,18 @@ Demo sections:
    5. Defining Words with DOES>
    6. Variables with ! and @
    7. Stack Words
-   8. Execution Tokens
-   9. Immediate Words
-  10. Comments
-  11. Reaching a Word's Parameter Field
-  12. Bytes and Reserved Memory
-  13. Compiling Calls from an Immediate Word
-  14. Program Information
-  15. Returning to the Interpreter with QUIT and ABORT
-  16. Error Handling
+   8. Single-Cell Arithmetic
+   9. Comparison and Logic
+  10. Pairs and Memory
+  11. Execution Tokens
+  12. Immediate Words
+  13. Comments
+  14. Reaching a Word's Parameter Field
+  15. Bytes and Reserved Memory
+  16. Compiling Calls from an Immediate Word
+  17. Program Information
+  18. Returning to the Interpreter with QUIT and ABORT
+  19. Error Handling
 Enter a section number, Q to quit [0]: --- TEST RUN 1: Evaluating Text Operations ---
 Input:
     40 2 +            \ leaves 42 on the stack
@@ -93,7 +96,6 @@ Input:
     1 2 3 DEPTH . . . .           \ prints 3 3 2 1
     : DOUBLE DUP + ;              \ reuse a value without naming it
     21 DOUBLE .                   \ prints 42
-    : +! SWAP OVER @ + SWAP ! ;   \ add to a variable
     VARIABLE COUNTER
     45 COUNTER !
     5 COUNTER +!
@@ -101,7 +103,42 @@ Input:
 Output: 1 1 2 3 4 3 1 3 2 5 5 0 10 30 20 10 1 3 2 3 3 2 1 42 50 ok
 -------------------------------------
 
---- TEST RUN 8: Execution Tokens ---
+--- TEST RUN 8: Single-Cell Arithmetic ---
+Input:
+    9 4 - . 9 4 * .                \ prints 5 36
+    -7 3 / . -7 3 MOD .           \ prints -3 2: division rounds down
+    -7 3 /MOD . .                  \ prints -3 2: remainder, then quotient on the stack
+    41 1+ . 41 1- . 21 2* . -3 2/ .  \ prints 42 40 42 -2
+    -42 NEGATE . -42 ABS .         \ prints 42 42
+    -3 2 MIN . -3 2 MAX .          \ prints -3 2
+Output: 5 36 -3 2 -3 2 42 40 42 -2 42 42 -3 2 ok
+-------------------------------------
+
+--- TEST RUN 9: Comparison and Logic ---
+Input:
+    4 4 = . 2 3 < . 3 2 > . -1 0 U< .  \ prints -1 -1 -1 0
+    0 0= . -1 0< .                     \ prints -1 -1
+    12 10 AND . 12 10 OR . 12 10 XOR . \ prints 8 14 6
+    0 INVERT . 3 2 LSHIFT . 12 2 RSHIFT . \ prints -1 12 3
+Output: -1 -1 -1 0 -1 -1 8 14 6 -1 12 3 ok
+-------------------------------------
+
+--- TEST RUN 10: Pairs and Memory ---
+Input:
+    1 2 3 4 2OVER . . . . . .          \ prints 2 1 4 3 2 1
+    1 2 3 4 2SWAP . . . .               \ prints 2 1 4 3
+    CREATE PAIR 2 CELLS ALLOT
+    11 22 PAIR 2! PAIR 2@ . .           \ prints 22 11
+    5 PAIR +! PAIR @ .                  \ prints 16
+    PAIR CELL+ PAIR - .                 \ prints the size of one Cell
+    CREATE BYTES 4 ALLOT
+    BYTES 4 65 FILL
+    BYTES BYTES CHAR+ 3 MOVE
+    BYTES C@ . BYTES CHAR+ C@ . BL .   \ prints 65 65 32
+Output: 2 1 4 3 2 1 2 1 4 3 22 11 16 8 65 65 32 ok
+-------------------------------------
+
+--- TEST RUN 11: Execution Tokens ---
 Input:
     \ Run an unnamed definition straight away
     :NONAME 1 2 + ; EXECUTE .     \ prints 3
@@ -128,7 +165,7 @@ Input:
 Output: 3 10 7 20 7 42 7 ok
 -------------------------------------
 
---- TEST RUN 9: Immediate Words ---
+--- TEST RUN 12: Immediate Words ---
 Input:
     \ An immediate word runs during compilation
     : ANNOUNCE 99 . ; IMMEDIATE
@@ -152,7 +189,7 @@ Input:
 Output: 99 1 99 1 3 99 ok
 -------------------------------------
 
---- TEST RUN 10: Comments ---
+--- TEST RUN 13: Comments ---
 Input:
     \ A whole line can be a comment
     1 2 + . ( a comment can sit in the middle of a line ) 4 .  \ prints 3 4
@@ -175,7 +212,7 @@ Input:
 Output: 3 4 5 7 3 3 ok
 -------------------------------------
 
---- TEST RUN 11: Reaching a Word's Parameter Field ---
+--- TEST RUN 14: Reaching a Word's Parameter Field ---
 Input:
     \ Some words to look into
     : ADD3 3 + ;
@@ -205,7 +242,7 @@ Input:
 Output: 6 50 4 3 6 10 4 ok
 -------------------------------------
 
---- TEST RUN 12: Bytes and Reserved Memory ---
+--- TEST RUN 15: Bytes and Reserved Memory ---
 Input:
     \ ALLOT reserves bytes after a word, and C! and C@ reach each one of them
     CREATE LETTERS 3 CHARS ALLOT
@@ -243,7 +280,7 @@ Input:
 Output: 72 105 0 5 99 7 7 11 22 ok
 -------------------------------------
 
---- TEST RUN 13: Compiling Calls from an Immediate Word ---
+--- TEST RUN 16: Compiling Calls from an Immediate Word ---
 Input:
     \ COMPILE, appends a call to the word with the given execution token, to the open definition
     : ADD1 1 + ;
@@ -260,7 +297,7 @@ Input:
 Output: 7 9 5 ok
 -------------------------------------
 
---- TEST RUN 14: Program Information ---
+--- TEST RUN 17: Program Information ---
 Input:
     HELP                          \ prints how to leave the prompt
     COPYRIGHT                     \ prints the copyright notice
@@ -291,7 +328,7 @@ SOFTWARE.
 ok
 -------------------------------------
 
---- TEST RUN 15: Returning to the Interpreter with QUIT and ABORT ---
+--- TEST RUN 18: Returning to the Interpreter with QUIT and ABORT ---
 Input:
     7 1 . QUIT 2 .                  \ prints 1, and leaves 7 on the stack
 Output: 1 
@@ -318,7 +355,7 @@ Input:
 Output: 0 ok
 -------------------------------------
 
---- TEST RUN 16: Error Handling ---
+--- TEST RUN 19: Error Handling ---
 Input:
     : BROKEN 1 NO-SUCH-WORD ;
 Output: Forth Error: Word or numeric literal 'NO-SUCH-WORD' not recognized.
@@ -352,6 +389,9 @@ Output: Forth Error: , can't be used while a definition is open.
 Input:
     ' DUP COMPILE,
 Output: Forth Error: COMPILE, can only be used while compiling.
+Input:
+    1 0 /
+Output: Forth Error: Division by zero.
 -------------------------------------
 
 Demo sections:
@@ -363,13 +403,16 @@ Demo sections:
    5. Defining Words with DOES>
    6. Variables with ! and @
    7. Stack Words
-   8. Execution Tokens
-   9. Immediate Words
-  10. Comments
-  11. Reaching a Word's Parameter Field
-  12. Bytes and Reserved Memory
-  13. Compiling Calls from an Immediate Word
-  14. Program Information
-  15. Returning to the Interpreter with QUIT and ABORT
-  16. Error Handling
+   8. Single-Cell Arithmetic
+   9. Comparison and Logic
+  10. Pairs and Memory
+  11. Execution Tokens
+  12. Immediate Words
+  13. Comments
+  14. Reaching a Word's Parameter Field
+  15. Bytes and Reserved Memory
+  16. Compiling Calls from an Immediate Word
+  17. Program Information
+  18. Returning to the Interpreter with QUIT and ABORT
+  19. Error Handling
 Enter a section number, Q to quit [0]: 
