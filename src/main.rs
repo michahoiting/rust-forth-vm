@@ -14,7 +14,7 @@ use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
 use std::slice;
 
-use rust_forth_vm::{boot, outer_interpreter, ForthError, Registers, COPYRIGHT};
+use rust_forth_vm::{boot, outer_interpreter, ForthError, Registers};
 
 /// The size of the demo's Forth dictionary.
 const DICTIONARY_CELLS: usize = 1024;
@@ -22,7 +22,7 @@ const DICTIONARY_CELLS: usize = 1024;
 /// The usage line, printed for arguments the program doesn't know.
 const USAGE: &str = "Usage: forth-vm [--interactive | --demo | --version]";
 
-/// The first line of `--version`. `build.rs` provides the build date and the git state.
+/// What `--version` prints. `build.rs` provides the build date and the git state.
 const VERSION: &str = concat!(
     "Rust Forth VM ",
     env!("CARGO_PKG_VERSION"),
@@ -485,7 +485,7 @@ fn main() -> ExitCode {
         (Some(argument), None) if argument == "--interactive" => false,
         (Some(argument), None) if argument == "--demo" => true,
         (Some(argument), None) if argument == "--version" => {
-            println!("{}\n{}", VERSION, COPYRIGHT);
+            println!("{}", VERSION);
             return ExitCode::SUCCESS;
         }
         _ => {

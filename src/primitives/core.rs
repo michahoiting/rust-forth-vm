@@ -11,7 +11,7 @@ use crate::error::ForthError;
 use crate::vm::Registers;
 
 /// The copyright notice, which `COPYRIGHT` prints.
-pub const COPYRIGHT: &str = "Copyright (c) 2026 M.W.R. Hoiting";
+const COPYRIGHT: &str = "Copyright (c) 2026 M.W.R. Hoiting";
 
 /// What `HELP` prints.
 const HELP: &str = "Type BYE or press Ctrl-D to leave.\n";

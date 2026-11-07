@@ -45,7 +45,6 @@ and `--version`.
 
 ```text
 Rust Forth VM 0.1.0 (Built 2026-11-06, Git v0.1.0 5d28858)
-Copyright (c) 2026 M.W.R. Hoiting
 ```
 
 `(dirty)` follows the hash unless the build is a clean release, which means `HEAD` has a
