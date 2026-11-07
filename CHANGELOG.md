@@ -36,6 +36,9 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 - Defining words: `:`, `;`, `:NONAME`, `CREATE`, `CONSTANT`, `DOES>`, `IMMEDIATE` and
   `EXIT`.
 - `EXECUTE`, which runs a word from its execution token.
+  It and `>BODY` refuse `LIT`, which can't run outside a compiled thread, with
+  `ForthError::InvalidExecutionToken`. The flag `F_COMPILE_ONLY` marks it, and every future
+  word with an inline operand.
 - `QUIT`, which clears the return stack, discards the rest of the input, and returns to
   interpreting. It's reported as `ForthError::Quit`, and keeps the data stack.
 - `ABORT`, which clears the data stack and does the same as `QUIT`. It's reported as

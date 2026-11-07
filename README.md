@@ -220,7 +220,9 @@ token. What it holds depends on how the word was defined:
 
 An execution token (xt) identifies a word, and is that word's CFA. `'`, `[']` and
 `:NONAME` give one, and `EXECUTE` runs it. `EXECUTE` and `>BODY` reject anything that
-isn't the xt of a finished word.
+isn't the xt of a finished word. They also reject `LIT`, and every future word with an inline
+operand, because such a word only works in a thread that supplies the operand. These words
+have the flag `F_COMPILE_ONLY`.
 
 A thread is a list of xts. The inner interpreter takes each one and runs the machine
 code that its Code Field points to. For a primitive, that code is the whole word. For a

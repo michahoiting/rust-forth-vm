@@ -1402,6 +1402,52 @@ fn replacing_an_xt_changes_behavior_at_runtime() {
     assert_eq!(output_of(&lines), "1 2 ");
 }
 
+// Adds the size of a Cell to an execution token, which gives the first Cell of its thread. For
+// a word like `:NONAME 5 ;` that is the CFA of LIT.
+fn lit_cfa_of_noname() -> String {
+    format!(":NONAME 5 ; {} + @", mem::size_of::<Cell>())
+}
+
+#[test]
+fn execute_refuses_lit_from_the_text_interpreter() {
+    unsafe {
+        let output = Capture::default();
+        let mut vm = test_vm(output.clone());
+        let line = format!("{} EXECUTE", lit_cfa_of_noname());
+        assert_error!(&mut vm, &line, ForthError::InvalidExecutionToken(_));
+        outer_interpreter(&mut vm, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn execute_refuses_lit_from_a_colon_word() {
+    unsafe {
+        let output = Capture::default();
+        let mut vm = test_vm(output.clone());
+        let lines = [
+            "VARIABLE V".to_string(),
+            format!("{} V !", lit_cfa_of_noname()),
+            ": C V @ EXECUTE 99 ;".to_string(),
+        ];
+        for line in &lines {
+            outer_interpreter(&mut vm, line).unwrap();
+        }
+        assert_error!(&mut vm, "C", ForthError::InvalidExecutionToken(_));
+        outer_interpreter(&mut vm, "1 2 + .").unwrap();
+        assert_eq!(output.text(), "3 ");
+    }
+}
+
+#[test]
+fn to_body_refuses_lit() {
+    unsafe {
+        let mut vm = test_vm(io::sink());
+        let line = format!("{} >BODY", lit_cfa_of_noname());
+        assert_error!(&mut vm, &line, ForthError::InvalidExecutionToken(_));
+    }
+}
+
 #[test]
 fn noname_definitions_stay_separate() {
     let line = ":NONAME 1 ; :NONAME 2 ; EXECUTE . EXECUTE .";

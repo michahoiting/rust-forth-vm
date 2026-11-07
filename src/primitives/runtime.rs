@@ -87,6 +87,7 @@ pub(super) unsafe fn lit(vm: &mut Vm) {
 #[cfg(test)]
 mod tests {
     use std::io;
+    use std::ptr;
 
     use super::*;
     use crate::dictionary::cfa_of;
@@ -195,6 +196,27 @@ mod tests {
                 vm.error,
                 Some(ForthError::InvalidExecutionToken(token)) if token == xt
             ));
+        }
+    }
+
+    #[test]
+    fn execute_rejects_lit_without_running_it() {
+        unsafe {
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            // A compiled literal starts with the CFA of LIT.
+            let start = vm.dictionary.here() as *const Cell;
+            vm.compiler.compile_literal(&mut vm.dictionary, 5).unwrap();
+            let lit = *start;
+            vm.data_stack.extend_from_slice(&[1, lit]);
+            vm.ip = ptr::null();
+
+            execute(&mut vm);
+            assert!(matches!(
+                vm.error,
+                Some(ForthError::InvalidExecutionToken(token)) if token == lit
+            ));
+            assert_eq!(vm.data_stack, [1]);
+            assert!(vm.ip.is_null());
         }
     }
 

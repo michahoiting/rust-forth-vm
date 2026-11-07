@@ -41,6 +41,10 @@ pub(crate) const F_CREATED: Cell = 1 << 10;
 /// Still being defined, so it can't be found or executed. Unlike [`F_HIDDEN`], this is
 /// cleared when the definition ends.
 pub(crate) const F_PENDING: Cell = 1 << 11;
+/// Reads an inline operand from the thread that calls it, so it only works in compiled code.
+/// [`is_execution_token`](Dictionary::is_execution_token) refuses it, because `EXECUTE` would
+/// run it with `IP` somewhere else. Every word with an inline operand needs this flag.
+pub(crate) const F_COMPILE_ONLY: Cell = 1 << 12;
 
 /// Returns the CFA of the word with this header.
 ///
@@ -111,6 +115,15 @@ pub(crate) unsafe fn is_hidden(header: *mut Cell) -> bool {
 /// See [`cfa_of`].
 pub(crate) unsafe fn is_pending(header: *mut Cell) -> bool {
     *header.add(LEN_FLAGS) & F_PENDING != 0
+}
+
+/// Returns whether the word has [`F_COMPILE_ONLY`] set.
+///
+/// # Safety
+///
+/// See [`cfa_of`].
+pub(crate) unsafe fn is_compile_only(header: *mut Cell) -> bool {
+    *header.add(LEN_FLAGS) & F_COMPILE_ONLY != 0
 }
 
 /// A saved dictionary state, used to discard everything written after it.
@@ -485,7 +498,8 @@ impl Dictionary {
         *self.last_word.add(LEN_FLAGS) |= F_IMMEDIATE;
     }
 
-    /// Returns whether `xt` is the code field of a finished word, hidden or not.
+    /// Returns whether `xt` is the code field of a finished word that can run from anywhere:
+    /// hidden or not, but not one with [`F_COMPILE_ONLY`].
     ///
     /// # Safety
     ///
@@ -495,7 +509,7 @@ impl Dictionary {
 
         while !current_lfa.is_null() {
             if cfa_of(current_lfa) as Cell == xt {
-                return !is_pending(current_lfa);
+                return !is_pending(current_lfa) && !is_compile_only(current_lfa);
             }
             current_lfa = *current_lfa.add(LFA) as *mut Cell;
         }
@@ -1217,6 +1231,30 @@ mod tests {
     }
 
     #[test]
+    fn execution_tokens_exclude_compile_only_words() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let header = dictionary
+                .write_header("X", 0, F_HIDDEN | F_COMPILE_ONLY)
+                .unwrap();
+            assert!(is_compile_only(header));
+            assert!(!dictionary.is_execution_token(cfa_of(header) as Cell));
+
+            // The flag stays when the definition ends.
+            let pending = dictionary
+                .write_header("Y", 0, F_COMPILE_ONLY | F_PENDING)
+                .unwrap();
+            dictionary.finish_last();
+            assert!(is_compile_only(pending));
+            assert!(!dictionary.is_execution_token(cfa_of(pending) as Cell));
+
+            let plain = dictionary.write_header("Z", 0, 0).unwrap();
+            assert!(!is_compile_only(plain));
+            assert!(dictionary.is_execution_token(cfa_of(plain) as Cell));
+        }
+    }
+
+    #[test]
     fn execution_tokens_exclude_pending_words() {
         unsafe {
             let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
@@ -1332,6 +1370,7 @@ mod tests {
         assert_eq!(F_HIDDEN, 1 << 9);
         assert_eq!(F_CREATED, 1 << 10);
         assert_eq!(F_PENDING, 1 << 11);
+        assert_eq!(F_COMPILE_ONLY, 1 << 12);
     }
 
     #[test]
