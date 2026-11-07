@@ -182,7 +182,7 @@ fn floored_div_mod(dividend: Cell, divisor: Cell) -> (Cell, Cell) {
     }
     let mut quotient = dividend / divisor;
     let mut remainder = dividend % divisor;
-    if remainder != 0 && (dividend < 0) != (divisor < 0) {
+    if remainder != 0 && remainder.signum() != divisor.signum() {
         quotient = quotient.wrapping_sub(1);
         remainder = remainder.wrapping_add(divisor);
     }
@@ -919,6 +919,19 @@ mod tests {
                     [remainder, quotient]
                 );
             }
+            let minus_one = Cell::MAX;
+            let min = isize::MIN as Cell;
+            assert_eq!(stack_after(divide, &[5, minus_one]), [(-5isize) as Cell]);
+            assert_eq!(stack_after(modulo, &[5, minus_one]), [0]);
+            assert_eq!(
+                stack_after(divide, &[min, 3]),
+                [(isize::MIN / 3 - 1) as Cell]
+            );
+            assert_eq!(
+                stack_after(modulo, &[min, 3]),
+                [(isize::MIN % 3 + 3) as Cell]
+            );
+            assert_eq!(stack_after(divide, &[min, 1]), [min]);
             assert_eq!(
                 stack_after(divide, &[isize::MIN as Cell, Cell::MAX]),
                 [isize::MIN as Cell]

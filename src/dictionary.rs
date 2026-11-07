@@ -1176,6 +1176,27 @@ mod tests {
     }
 
     #[test]
+    fn two_cell_access_needs_both_whole_cells_to_be_written() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[1]);
+            for _ in 0..CELL_SIZE / 2 {
+                dictionary.char_comma(0).unwrap();
+            }
+            let start = dictionary.start as Cell;
+
+            assert!(matches!(
+                dictionary.fetch_two(start),
+                Err(ForthError::UnwrittenAddress(addr)) if addr == start
+            ));
+            assert!(matches!(
+                dictionary.store_two(start, 7, 8),
+                Err(ForthError::UnwrittenAddress(addr)) if addr == start
+            ));
+            assert_eq!(dictionary.fetch(start).unwrap(), 1);
+        }
+    }
+
+    #[test]
     fn fill_and_move_allow_empty_ranges_and_overlapping_moves() {
         unsafe {
             let mut dictionary = dictionary_with(&[]);
