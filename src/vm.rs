@@ -157,7 +157,35 @@ impl Registers {
         self.compiler.is_compiling()
     }
 
-    /// Creates a VM with an empty dictionary and empty stacks, of the sizes in `config`.
+    /// Returns the sorted names of the words that Forth input can find, each one once. Hidden
+    /// words and an open definition aren't there. A name that `C!` overwrote can come back
+    /// with replacement characters.
+    ///
+    /// # Safety
+    ///
+    /// Every word header must be intact, because links and names are followed as raw
+    /// pointers. `!` can overwrite them.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::io;
+    ///
+    /// use rust_forth_vm::{boot, outer_interpreter, ForthError};
+    ///
+    /// // SAFETY: this VM is only used through the crate's functions.
+    /// unsafe {
+    ///     let mut regs = boot(io::sink(), 1024)?;
+    ///     outer_interpreter(&mut regs, ": THREE 3 ;")?;
+    ///     assert!(regs.word_names().iter().any(|name| name == "THREE"));
+    /// }
+    /// # Ok::<(), ForthError>(())
+    /// ```
+    pub unsafe fn word_names(&self) -> Vec<String> {
+        self.dictionary.word_names()
+    }
+
+    /// Creates a VM with an empty dictionary of `dictionary_cells` Cells.
     ///
     /// # Errors
     ///

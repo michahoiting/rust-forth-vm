@@ -45,9 +45,10 @@ test:
 test-release:
 	cargo test --release --locked
 
-# Without line editing, which is what the library's users can choose.
+# Without line editing, which is what the library's users can choose. It has its own target
+# directory, because the tests build the program, which would replace the one in target/debug.
 test-minimal:
-	cargo test --locked --no-default-features
+	cargo test --locked --no-default-features --target-dir target/minimal
 
 # Both views, because each one can have broken links that the other doesn't render.
 doc:
