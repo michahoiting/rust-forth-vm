@@ -364,12 +364,13 @@ pub(crate) unsafe fn run(vm: &mut Vm) {
     }
 }
 
-/// Executes a single word from the text interpreter.
+/// Runs a single word for the text interpreter, through a trampoline thread. This differs from
+/// the `EXECUTE` word, which enters a word directly from the thread that called it.
 ///
 /// # Safety
 ///
 /// `cfa` must point to the Code Field of a word in the dictionary.
-pub(crate) unsafe fn execute(vm: &mut Vm, cfa: *mut Cell) {
+pub(crate) unsafe fn trampoline_cfa(vm: &mut Vm, cfa: *mut Cell) {
     // To safely execute this single binary CFA via NEXT, we construct a mini 'trampoline' thread in RAM:
     // [ Target CFA Address ] [ Stop / End Marker (0) ]
     let trampoline: [Cell; 2] = [cfa as Cell, 0];
