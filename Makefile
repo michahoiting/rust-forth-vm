@@ -12,6 +12,11 @@
 # make protect    Applies the GitHub ruleset for main, which needs gh and admin access.
 # make metrics    Reports PR lead time and issue throughput, which needs gh and python3.
 # make demo-expected  Updates the expected demo output that the tests compare with.
+# make perf       Measures the VM, and stores the result under target/perf, which needs python3.
+# make perf-report   Shows the stored development of the measurements.
+# make perf-compare  Measures another commit too, such as make perf-compare BASE=origin/main.
+# make perf-pad-check  Checks that gated workloads don't depend on the size of the dictionary.
+# make perf-test  Runs the unit tests of the measuring script.
 
 # Stops rustup from installing a missing toolchain when a target asks for it.
 export RUSTUP_AUTO_INSTALL := 0
@@ -23,7 +28,7 @@ MSRV := $(shell sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
 
 .DEFAULT_GOAL := ci
 
-.PHONY: ci ci-all fmt clippy build test test-release test-minimal doc doc-serve miri miri-32 check-miri msrv msrv-version code-changed mutants demo demo-expected setup-dev hooks protect metrics
+.PHONY: ci ci-all fmt clippy build test test-release test-minimal doc doc-serve miri miri-32 check-miri msrv msrv-version code-changed mutants demo demo-expected setup-dev hooks protect metrics perf perf-report perf-compare perf-pad-check perf-test check-python
 
 ci: fmt clippy build test test-release test-minimal doc
 
@@ -97,6 +102,25 @@ metrics:
 	done
 	@python3 scripts/metrics.py $(ARGS)
 
+check-python:
+	@command -v python3 >/dev/null 2>&1 || { echo "python3 is not installed."; exit 1; }
+
+# Pass options through ARGS, such as make perf ARGS="--note 'Before the rewrite'".
+perf: check-python
+	@python3 scripts/perf.py run $(ARGS)
+
+perf-report: check-python
+	@python3 scripts/perf.py report $(ARGS)
+
+perf-compare: check-python
+	@python3 scripts/perf.py compare $(or $(BASE),main) $(ARGS)
+
+perf-pad-check: check-python
+	@python3 scripts/perf.py pad-check $(ARGS)
+
+perf-test: check-python
+	@cd scripts && python3 -m unittest test_perf
+
 mutants:
 	@cargo mutants --version >/dev/null 2>&1 || { \
 		echo "cargo-mutants is not installed. Install it with:"; \
@@ -127,7 +151,7 @@ setup-dev:
 	@rustup default >/dev/null 2>&1 || rustup default stable
 	@cargo +stable mutants --version >/dev/null 2>&1 || cargo +stable install cargo-mutants --locked
 	@$(MAKE) --no-print-directory hooks
-	@command -v python3 >/dev/null 2>&1 || echo "Note: python3 is not installed. make doc-serve and make metrics need it."
+	@command -v python3 >/dev/null 2>&1 || echo "Note: python3 is not installed. make doc-serve, make metrics and make perf need it."
 	@command -v gh >/dev/null 2>&1 || echo "Note: gh is not installed. make protect and make metrics need it."
 
 hooks:

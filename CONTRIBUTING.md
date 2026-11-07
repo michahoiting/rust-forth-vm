@@ -16,7 +16,7 @@ make setup-dev
 It installs or updates the stable and nightly toolchains, the oldest supported Rust version,
 Miri, and `cargo-mutants`, and installs the git hooks. It's safe to run again. It needs
 `git` and `rustup`, and tells you if `python3` or `gh` is missing, which only `make doc-serve`,
-`make protect` and `make metrics` need.
+`make protect`, `make metrics` and the `make perf` targets need.
 
 The hooks catch problems before CI does:
 
@@ -56,6 +56,34 @@ it, because the ruleset requires no approvals, so nothing else stops an unreview
 
 `CHANGELOG.md` uses git's `union` merge driver, so entries added on two branches don't
 conflict in a local merge or rebase. Check the order of the entries afterwards.
+
+## Measuring performance
+
+`make perf` measures the VM on a set of Forth workloads in `examples/perf/`, and compares the
+result with your previous run. It counts instructions instead of time, because a count hardly
+depends on the machine or what else it's doing. [ADR-0002](docs/adr/0002-measure-performance-with-instruction-counts.md)
+explains the approach.
+
+```sh
+make perf                        # Measures the working tree, and stores the result
+make perf ARGS="--note 'Before'" # Stores a note with the run
+make perf-report                 # Shows the development per workload, without measuring
+make perf-compare BASE=origin/main  # Measures that commit too, in a temporary worktree
+```
+
+`make perf` and `make perf-compare` exit with an error when a gated workload is 5% or more
+slower, and show a warning from 2%. Workloads with a changed source aren't compared.
+
+The counting depends on the machine:
+
+| Backend      | Used when                 | Metric                                        |
+|--------------|---------------------------|-----------------------------------------------|
+| `cachegrind` | Valgrind is installed     | Instructions and branches, counted in software |
+| `macos-pmu`  | On macOS without Valgrind | Instructions from `/usr/bin/time -l`, median of 5 runs |
+| `cpu-time`   | Anywhere else             | User time, median of 5 runs. It's too noisy to warn or fail on |
+
+Results go to `target/perf/results.sqlite`, so `cargo clean` removes them, and each worktree has
+its own. Only runs with the same backend, target, machine and compiler are compared.
 
 ## Why `main` refuses pushes
 

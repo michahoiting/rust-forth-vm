@@ -20,6 +20,18 @@ readline = ["dep:rustyline"]
 [dependencies]
 rustyline = { version = "17", default-features = false, features = ["with-file-history"], optional = true }
 
+# Runs its unit tests with `cargo test`, which checks that every workload still works.
+[[example]]
+name = "perf"
+path = "examples/perf/main.rs"
+test = true
+
+# What `make perf` measures: the settings of `release`, which users get, plus line tables so that
+# a profile can name source lines. These don't change the generated code.
+[profile.perf]
+inherits = "release"
+debug = "line-tables-only"
+
 # `make clippy` and `make doc` deny warnings, so undocumented code fails CI.
 [lints.rust]
 missing_docs = "warn"

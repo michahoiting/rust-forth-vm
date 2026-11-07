@@ -260,6 +260,11 @@ stacks, and rolls back any unfinished colon definition.
 - A negative `ALLOT` can only give back data of the newest word, and only if `CREATE` made
   it.
 
+## Performance
+
+`make perf` measures the VM on a set of Forth workloads, and stores the result in
+`target/perf/results.sqlite`. See [Measuring performance](CONTRIBUTING.md#measuring-performance).
+
 ## Working with Claude Code
 
 We use the [Claude Code](https://code.claude.com/docs/en/overview) CLI to work on this

@@ -29,7 +29,7 @@ make doc-serve # Serves the docs on localhost, including private items. Needs py
 
 CI uses the latest stable toolchain on purpose, so a new lint can fail it with no code change. Raise `rust-version` when code needs a newer feature, and check it with a PR's CI run. CI runs on PRs and on pushes to `main`, not on other branches. PRs that only change Markdown skip Miri.
 
-These five aren't part of CI:
+These aren't part of CI:
 
 ```sh
 make setup-dev # Installs the developer tools and the git hooks. Run it once after cloning
@@ -37,6 +37,11 @@ make hooks     # Installs only the git hooks from `.githooks/`
 make protect   # Applies the ruleset for `main`. Needs gh and admin access
 make metrics   # Reports PR lead time, reviews, CI reruns and closed issues. Needs gh and python3
 make demo-expected # Updates `tests/demo_output.txt`, the expected demo output
+make perf      # Measures the VM, and stores the result in `target/perf/results.sqlite`. Needs python3
+make perf-report  # Shows the stored development of the measurements
+make perf-compare # Measures another commit too, such as BASE=origin/main
+make perf-pad-check # Checks that gated workloads don't depend on the size of the dictionary
+make perf-test # Runs the unit tests of the measuring script
 ```
 
 `main` is protected by the ruleset in `.github/rulesets/protect-main.json`. Renaming a CI job means updating its required check there too. Never bypass the hooks with `--no-verify` unless asked, and don't run `make protect` unless asked.
@@ -59,6 +64,7 @@ main → line_editor
   - `runtime.rs` for words that drive threaded code.
   - `parsing.rs` for words that read the input.
 - Primitives return to the `run` loop, and never call `next`.
+- A new hot path gets a workload in `examples/perf/`. A workload that depends on the size of the dictionary must not be gated, because each new word would slow it down. `make perf-pad-check` shows this. ADR-0002 in `docs/adr/` explains why.
 - The library doesn't print. Output goes through the writer given to `boot`.
 
 ## Conventions
