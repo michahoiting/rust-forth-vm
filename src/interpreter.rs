@@ -8,7 +8,7 @@ use std::io::Write;
 use crate::cell::Cell;
 use crate::dictionary::{cfa_of, is_immediate};
 use crate::error::ForthError;
-use crate::vm::{execute, Vm};
+use crate::vm::{trampoline_cfa, Vm};
 
 /// Parses a decimal number. Accepts negative numbers as well as the full unsigned range of
 /// a Cell.
@@ -30,7 +30,7 @@ unsafe fn interpret_token(vm: &mut Vm, token: &str) {
             let result = vm.compiler.compile_word(&mut vm.dictionary, cfa as Cell);
             vm.check(result);
         } else {
-            execute(vm, cfa);
+            trampoline_cfa(vm, cfa);
         }
     } else if let Some(number) = parse_number(token) {
         // --- CASE B: THE TOKEN IS A NUMBER (LITERAL) ---
