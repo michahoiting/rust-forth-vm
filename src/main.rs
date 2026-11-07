@@ -6,23 +6,37 @@
 //!
 //! With `--demo`, it shows a menu of demo sections. Each section shows the normal use of some
 //! words, and the last one shows how errors are handled.
+//!
+//! With `--version`, it prints what it was built from, and exits.
 
 use std::env;
 use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
 use std::slice;
 
-use rust_forth_vm::{boot, outer_interpreter, ForthError, Registers};
+use rust_forth_vm::{boot, outer_interpreter, ForthError, Registers, COPYRIGHT};
 
 /// The size of the demo's Forth dictionary.
 const DICTIONARY_CELLS: usize = 1024;
 
 /// The usage line, printed for arguments the program doesn't know.
-const USAGE: &str = "Usage: forth-vm [--interactive | --demo]";
+const USAGE: &str = "Usage: forth-vm [--interactive | --demo | --version]";
+
+/// What `--version` prints, and the first line of the interactive prompt. `build.rs` provides the build date and the git state.
+const VERSION: &str = concat!(
+    "Rust Forth VM ",
+    env!("CARGO_PKG_VERSION"),
+    " (",
+    env!("BUILD_INFO"),
+    ")"
+);
+
+/// The last line that the interactive prompt prints when it starts.
+const MORE_INFORMATION: &str = r#"Type "HELP", "COPYRIGHT" or "LICENSE" for more information."#;
 
 /// The demo sections, each with its title and one block of Forth source. Each section runs in a
 /// new VM, so it must define everything it uses.
-const SECTIONS: [(&str, &str); 12] = [
+const SECTIONS: [(&str, &str); 13] = [
     (
         "Evaluating Text Operations",
         r"
@@ -118,7 +132,7 @@ COUNTER @ .                   \ prints 50
 :NONAME 3 + ; CONSTANT ADD3-XT
 4 ADD3-XT EXECUTE .           \ prints 7
 
-\ Pass behaviour to a word, as a callback
+\ Pass behavior to a word, as a callback
 : TWICE DUP ROT SWAP EXECUTE SWAP EXECUTE ;
 5 :NONAME DUP + ; TWICE .     \ prints 20
 1 ADD3-XT TWICE .             \ prints 7
@@ -245,6 +259,14 @@ TABLE 1 CELLS + @ .           \ prints 22
 \ A negative ALLOT gives back data of the newest word made by CREATE
 CREATE SCRATCH 16 ALLOT
 -16 ALLOT
+",
+    ),
+    (
+        "Program Information",
+        r"
+HELP                          \ prints how to leave the prompt
+COPYRIGHT                     \ prints the copyright notice
+LICENSE                       \ prints the license
 ",
     ),
 ];
@@ -457,26 +479,30 @@ fn interactive(mut input: impl BufRead) -> ExitCode {
     }
 }
 
-/// Starts the interactive prompt or the demo menu, depending on the arguments.
+/// Starts the interactive prompt or the demo menu, or prints the version, depending on the
+/// arguments.
 fn main() -> ExitCode {
     let mut arguments = env::args_os().skip(1);
     let demo = match (arguments.next(), arguments.next()) {
         (None, _) => false,
         (Some(argument), None) if argument == "--interactive" => false,
         (Some(argument), None) if argument == "--demo" => true,
+        (Some(argument), None) if argument == "--version" => {
+            println!("{}", VERSION);
+            return ExitCode::SUCCESS;
+        }
         _ => {
             eprintln!("{}", USAGE);
             return ExitCode::from(2);
         }
     };
 
-    println!("--- FORTH BOOTSEQUENCE COMPLETED ---");
-    println!("The Text Interpreter (Outer Interpreter) is online.");
     if demo {
-        println!();
+        println!("--- FORTH BOOTSEQUENCE COMPLETED ---");
+        println!("The Text Interpreter (Outer Interpreter) is online.\n");
         demo_menu(io::stdin().lock())
     } else {
-        println!("Press Ctrl-D to leave.\n");
+        println!("{}\n{}\n{}\n", VERSION, COPYRIGHT, MORE_INFORMATION);
         interactive(io::stdin().lock())
     }
 }

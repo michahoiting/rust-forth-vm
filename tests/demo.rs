@@ -9,10 +9,10 @@ use std::io::Write;
 use std::process::{Command, Output, Stdio};
 
 /// The number of sections in the menu.
-const SECTION_COUNT: usize = 14;
+const SECTION_COUNT: usize = 15;
 
 /// The number of the error handling section, the only one that should report errors.
-const ERROR_SECTION: usize = 14;
+const ERROR_SECTION: usize = 15;
 
 /// The line that ends a section.
 const FOOTER: &str = "-------------------------------------\n";
@@ -21,7 +21,7 @@ const FOOTER: &str = "-------------------------------------\n";
 const MENU: &str = "Demo sections:";
 
 /// The end of the start-up text in interactive mode.
-const INTERACTIVE_HINT: &str = "Press Ctrl-D to leave.\n\n";
+const INTERACTIVE_HINT: &str = "for more information.\n\n";
 
 /// The prompt of the menu.
 const PROMPT: &str = "Enter a section number, Q to quit [0]: ";
@@ -219,8 +219,8 @@ fn menu_lists_every_section() {
     let output = menu("q\n");
     assert!(output.contains("   0. All sections\n"));
     assert!(output.contains("   1. Evaluating Text Operations\n"));
-    assert!(output.contains("  13. Returning to the Interpreter with QUIT and ABORT\n"));
-    assert!(output.contains("  14. Error Handling\n"));
+    assert!(output.contains("  14. Returning to the Interpreter with QUIT and ABORT\n"));
+    assert!(output.contains("  15. Error Handling\n"));
     assert!(output.ends_with(PROMPT));
 }
 
@@ -279,8 +279,8 @@ fn the_menu_comes_back_after_a_run() {
 
 #[test]
 fn an_invalid_choice_shows_the_menu_again() {
-    let output = menu("15\nabc\nq\n");
-    assert!(output.contains("Invalid choice: 15\n"));
+    let output = menu("16\nabc\nq\n");
+    assert!(output.contains("Invalid choice: 16\n"));
     assert!(output.contains("Invalid choice: abc\n"));
     assert_eq!(output.matches(MENU).count(), 3);
     assert!(!output.contains("--- TEST RUN "));
@@ -299,6 +299,64 @@ fn input_that_cannot_be_read_fails_without_a_panic() {
     }
 }
 
+/// Returns whether the text is a date in the form `YYYY-MM-DD`.
+fn is_date(text: &str) -> bool {
+    let digits = |part: &str| part.bytes().all(|byte| byte.is_ascii_digit());
+    let parts: Vec<&str> = text.split('-').collect();
+    parts.iter().map(|part| part.len()).eq([4, 2, 2]) && parts.into_iter().all(digits)
+}
+
+/// Returns whether the git part of the version line has a valid form. The test can't compare
+/// the tag or the hash, because they change, and CI has no tags.
+fn is_git_state(text: &str) -> bool {
+    let is_hash = |hash: &str| hash.len() >= 7 && hash.bytes().all(|b| b.is_ascii_hexdigit());
+    match text.split(' ').collect::<Vec<_>>()[..] {
+        ["unknown", "unknown"] => true,
+        [tag, hash] => tag != "none" && is_hash(hash),
+        [_, hash, "(dirty)"] => is_hash(hash),
+        _ => false,
+    }
+}
+
+#[test]
+fn version_prints_what_the_program_was_built_from() {
+    let output = run(&["--version"], b"");
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let line = stdout.strip_suffix('\n').unwrap();
+    assert!(!line.contains('\n'), "{}", stdout);
+
+    let prefix = format!("Rust Forth VM {} (Built ", env!("CARGO_PKG_VERSION"));
+    let build = line.strip_prefix(&prefix).unwrap();
+    let (date, git) = build
+        .strip_suffix(')')
+        .unwrap()
+        .split_once(", Git ")
+        .unwrap();
+    assert!(is_date(date), "{}", date);
+    assert!(is_git_state(git), "{}", git);
+}
+
+#[test]
+fn the_interactive_prompt_starts_with_the_version_and_the_notice() {
+    let version = stdout_of(&["--version"], "");
+    let expected = format!(
+        "{}Copyright (c) 2026 M.W.R. Hoiting.\n\
+         Type \"HELP\", \"COPYRIGHT\" or \"LICENSE\" for more information.\n\n\n",
+        version
+    );
+    assert_eq!(stdout_of(&[], ""), expected);
+    assert_eq!(stdout_of(&["--interactive"], ""), expected);
+}
+
+#[test]
+fn version_is_not_accepted_with_other_arguments() {
+    let output = run(&["--version", "--demo"], b"");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+}
+
 #[test]
 fn unknown_arguments_print_the_usage() {
     for arguments in [&["--nope"][..], &["--demo", "1"][..]] {
@@ -307,7 +365,7 @@ fn unknown_arguments_print_the_usage() {
         assert!(output.stdout.is_empty());
         assert_eq!(
             String::from_utf8(output.stderr).unwrap(),
-            "Usage: forth-vm [--interactive | --demo]\n"
+            "Usage: forth-vm [--interactive | --demo | --version]\n"
         );
     }
 }

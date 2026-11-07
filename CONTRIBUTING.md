@@ -76,7 +76,7 @@ After the first release, versions follow
 version number covers is:
 
 - The public items of the Rust library.
-- The Forth words and their documented behaviour.
+- The Forth words and their documented behavior.
 - The messages of `ForthError`.
 
 Demo output and private items aren't part of it.
@@ -110,6 +110,6 @@ The project owner makes releases:
    ```sh
    git switch main
    git pull --ff-only
-   git tag -a v0.2.0 -m "Version 0.2.0"
-   git push origin v0.2.0
+   git tag -a 0.2.0 -m "Version 0.2.0"
+   git push origin 0.2.0
    ```

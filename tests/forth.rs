@@ -1,6 +1,6 @@
 // Copyright (c) 2026 M.W.R. Hoiting
 
-//! Tests of Forth behaviour, using only the public API. Results are checked
+//! Tests of Forth behavior, using only the public API. Results are checked
 //! through `.` and the output writer.
 
 use std::cell::RefCell;
@@ -9,7 +9,7 @@ use std::io::{self, BufWriter, Write};
 use std::mem;
 use std::rc::Rc;
 
-use rust_forth_vm::{boot, outer_interpreter, Cell, ForthError, Registers};
+use rust_forth_vm::{boot, outer_interpreter, Cell, ForthError, Registers, COPYRIGHT};
 
 const TEST_CELLS: usize = 1024;
 
@@ -212,6 +212,31 @@ fn misused_words_are_rejected() {
 #[test]
 fn dot_writes_a_signed_number() {
     assert_eq!(output_of(&["-5 3 + ."]), "-2 ");
+}
+
+#[test]
+fn information_words_write_their_text() {
+    assert_eq!(output_of(&["HELP"]), "Type BYE or press Ctrl-D to leave.\n");
+    assert_eq!(output_of(&["COPYRIGHT"]), format!("{}\n", COPYRIGHT));
+    assert_eq!(output_of(&["LICENSE"]), include_str!("../LICENSE"));
+}
+
+#[test]
+fn information_words_work_from_a_definition() {
+    assert_eq!(
+        output_of(&[": ABOUT COPYRIGHT HELP ;", "ABOUT"]),
+        format!("{}\nType BYE or press Ctrl-D to leave.\n", COPYRIGHT)
+    );
+}
+
+#[test]
+fn information_words_report_output_errors() {
+    for word in ["HELP", "COPYRIGHT", "LICENSE"] {
+        unsafe {
+            let mut regs = test_vm(FailingWriter);
+            assert_error!(&mut regs, word, ForthError::Output(_));
+        }
+    }
 }
 
 #[test]
@@ -1007,7 +1032,7 @@ fn xt_works_as_a_callback() {
 }
 
 #[test]
-fn replacing_an_xt_changes_behaviour_at_runtime() {
+fn replacing_an_xt_changes_behavior_at_runtime() {
     let lines = [
         "VARIABLE V",
         ": RUN V @ EXECUTE ;",

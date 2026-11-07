@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 # Newer pushes to a PR cancel its older runs. Each push to main gets its own group, so that
-# none of them is ever cancelled or replaced.
+# none of them is ever canceled or replaced.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
