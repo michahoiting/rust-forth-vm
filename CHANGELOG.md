@@ -12,6 +12,8 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 
 ### Added
 
+- Monthly grouped Dependabot updates for GitHub Actions, reviewed and merged by the project
+  owner without auto-merge.
 - Single-cell arithmetic, comparison, logic and memory words, including floored division,
   double-cell stack/memory operations, and overlap-safe `MOVE`.
 - An advisory incremental mutation check on pull requests, with elapsed time and results.
