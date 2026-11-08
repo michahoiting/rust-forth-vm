@@ -24,6 +24,7 @@ import statistics
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -51,6 +52,18 @@ TOP_FUNCTIONS = 20
 
 # How many runs a sparkline shows.
 HISTORY_RUNS = 20
+
+# How many functions the analysis of a slowdown shows.
+ANALYSIS_FUNCTIONS = 10
+
+# The time that `ci` may take, out of the job's budget of about 2.5 minutes. Above it, the report
+# and the job show a warning.
+CI_BUDGET_SECONDS = 150
+
+# The directory that `ci` checks out both sides in. The analysis strips it from file names, so
+# that the same file has the same name on both sides. The sides are `base` and `head`, which
+# have the same length, so that the paths in both binaries do too.
+CHECKOUTS = "perf-checkouts"
 
 # The metric that decides on a slowdown, for each backend. Time is too noisy to decide on, so
 # `cpu-time` shows a change but never gives a warning or a failure.
@@ -189,8 +202,11 @@ def fixed_environment():
     return {"PATH": os.environ.get("PATH", "")}
 
 
-def measure_cachegrind(binary, workload, extra):
-    """Returns the metrics and the functions of one run under Cachegrind."""
+def measure_cachegrind(binary, workload, extra, keep=None):
+    """Returns the metrics and the functions of one run under Cachegrind.
+
+    With `keep`, the output file is also copied to `<keep>/<workload>.cachegrind`.
+    """
     with tempfile.TemporaryDirectory() as directory:
         out_file = Path(directory) / "cachegrind.out"
         done = subprocess.run(
@@ -211,11 +227,14 @@ def measure_cachegrind(binary, workload, extra):
         )
         check_finished(done, workload)
         totals, functions = parse_cachegrind(out_file.read_text())
+        if keep is not None:
+            keep.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(out_file, keep / f"{workload}.cachegrind")
     return {"ir": totals["Ir"], "bi": totals["Bi"], "bim": totals["Bim"]}, functions
 
 
-def measure_macos(binary, workload, extra):
-    """Returns the median counters of a workload, from macOS's `time -l`."""
+def measure_macos(binary, workload, extra, keep=None):
+    """Returns the median counters of a workload, from macOS's `time -l`. Ignores `keep`."""
     rows = []
     for _ in range(REPEATS):
         done = subprocess.run(
@@ -229,8 +248,8 @@ def measure_macos(binary, workload, extra):
     return median_of(rows), {}
 
 
-def measure_cpu_time(binary, workload, extra):
-    """Returns the median user time of a workload."""
+def measure_cpu_time(binary, workload, extra, keep=None):
+    """Returns the median user time of a workload. Ignores `keep`."""
     rows = []
     for _ in range(REPEATS):
         before = resource.getrusage(resource.RUSAGE_CHILDREN).ru_utime
@@ -274,19 +293,22 @@ def source_hash(tree, workload):
     return digest.hexdigest()
 
 
-def measure_tree(tree, backend, pad_words=0):
-    """Builds the harness in a source tree, and measures every workload in it."""
+def measure_tree(tree, backend, pad_words=0, target=TARGET, keep=None):
+    """Builds the harness in a source tree, and measures every workload in it.
+
+    It builds in the `target` directory. With `keep`, Cachegrind's output files go there.
+    """
     print(f"Building {tree}", file=sys.stderr)
-    env = dict(os.environ, CARGO_TARGET_DIR=str(TARGET))
+    env = dict(os.environ, CARGO_TARGET_DIR=str(target))
     subprocess.run(["cargo", "build", "--quiet", *BUILD], cwd=tree, env=env, check=True)
-    binary = str(TARGET / "perf" / "examples" / "perf")
+    binary = str(Path(target) / "perf" / "examples" / "perf")
     extra = ["--pad-words", str(pad_words)] if pad_words else []
 
     results = []
     workloads = json.loads(command_output(binary, "--list"))
     for workload in workloads:
         print(f"Measuring {workload['name']}", file=sys.stderr)
-        metrics, functions = MEASURE[backend](binary, workload["name"], extra)
+        metrics, functions = MEASURE[backend](binary, workload["name"], extra, keep)
         results.append(
             {
                 **workload,
@@ -316,32 +338,42 @@ def status_of(change, gated, decides=True):
 def compare(base, head, metric, decides=True):
     """Compares two lists of workload results, and returns a row for each workload.
 
-    A workload only counts when it's on both sides and unchanged. A row has `name`, `base`,
-    `head`, `change` and `status`, which can also be `new`, `changed` or `removed`.
+    A workload only counts when it's on both sides and unchanged. A row has `name`, `gated`,
+    `base`, `head`, `change` and `status`, which can also be `new`, `changed` or `removed`.
     """
     old = {workload["name"]: workload for workload in base}
     rows = []
     for workload in head:
-        name = workload["name"]
+        name, gated = workload["name"], workload["gated"]
         new_value = workload["metrics"].get(metric)
         if name not in old:
-            rows.append(row_of(name, None, new_value, None, "new"))
+            rows.append(row_of(name, gated, None, new_value, None, "new"))
         elif old[name]["source_sha256"] != workload["source_sha256"]:
-            rows.append(row_of(name, old[name]["metrics"].get(metric), new_value, None, "changed"))
+            old_value = old[name]["metrics"].get(metric)
+            rows.append(row_of(name, gated, old_value, new_value, None, "changed"))
         else:
             old_value = old[name]["metrics"][metric]
             change = percent_change(old_value, new_value)
-            rows.append(row_of(name, old_value, new_value, change, status_of(change, workload["gated"], decides)))
+            status = status_of(change, gated, decides)
+            rows.append(row_of(name, gated, old_value, new_value, change, status))
     names = {workload["name"] for workload in head}
     for name, workload in old.items():
         if name not in names:
-            rows.append(row_of(name, workload["metrics"].get(metric), None, None, "removed"))
+            old_value = workload["metrics"].get(metric)
+            rows.append(row_of(name, workload["gated"], old_value, None, None, "removed"))
     return rows
 
 
-def row_of(name, base, head, change, status):
+def row_of(name, gated, base, head, change, status):
     """Returns one row of a comparison."""
-    return {"name": name, "base": base, "head": head, "change": change, "status": status}
+    return {
+        "name": name,
+        "gated": gated,
+        "base": base,
+        "head": head,
+        "change": change,
+        "status": status,
+    }
 
 
 def sparkline(values):
@@ -370,6 +402,246 @@ def print_table(rows, developments=None):
         base, head = format_value(row["base"]), format_value(row["head"])
         line = f"{row['name']:<15}{base:>13}{head:>13}{change:>10}  {row['status']:<9}{chart}"
         print(line.rstrip())
+
+
+# --- The analysis and the report of `ci` ---
+
+STATUS_TEXT = {
+    "ok": "Passed",
+    "warn": "Warning",
+    "fail": "Too slow",
+    "new": "New",
+    "changed": "Changed source",
+    "removed": "Removed",
+}
+
+
+def same_name(function, file):
+    """Makes the name and file of a function equal between two builds.
+
+    It drops the hash that Rust adds to a symbol, the checkout of the side, and the path of the
+    compiler's own source, which has its commit in it. cg_annotate_diff does the first two too.
+    """
+    function = re.sub(r"::h[0-9a-f]{16}", "", function)
+    file = re.sub(rf".*/{CHECKOUTS}/[^/]+/", "", file)
+    file = re.sub(r"^/rustc/[0-9a-f]+/", "", file)
+    return function, file
+
+
+def by_same_name(functions):
+    """Adds up the functions of parse_cachegrind under the names that same_name gives."""
+    totals = {}
+    for (function, file), ir in functions.items():
+        key = same_name(function, file)
+        totals[key] = totals.get(key, 0) + ir
+    return totals
+
+
+def function_differences(base, head, count=ANALYSIS_FUNCTIONS):
+    """Returns the functions whose cost changed most between two runs, the largest change first.
+
+    Both arguments are functions as parse_cachegrind returns them. A function that exists on one
+    side only counts as 0 on the other.
+    """
+    old, new = by_same_name(base), by_same_name(head)
+    rows = []
+    for key in old.keys() | new.keys():
+        difference = new.get(key, 0) - old.get(key, 0)
+        if difference:
+            rows.append(
+                {
+                    "function": key[0],
+                    "file": key[1],
+                    "base": old.get(key, 0),
+                    "head": new.get(key, 0),
+                    "difference": difference,
+                }
+            )
+    rows.sort(key=lambda row: (-abs(row["difference"]), row["function"], row["file"]))
+    return rows[:count]
+
+
+def cg_annotate_diff(base_file, head_file):
+    """Returns cg_annotate's comparison of two Cachegrind output files, or None without it.
+
+    Version 3.22 only accepts `/` as the separator of these expressions.
+    """
+    if shutil.which("cg_annotate") is None:
+        return None
+    done = subprocess.run(
+        [
+            "cg_annotate",
+            "--diff",
+            f"--mod-filename=s/.*/{CHECKOUTS}/[^/]+//",
+            "--mod-funcname=s/::h[0-9a-f]{16}//",
+            "--context=0",
+            "--no-annotate",
+            str(base_file),
+            str(head_file),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    return done.stdout if done.returncode == 0 else f"cg_annotate failed:\n{done.stderr}"
+
+
+def analyze(rows, base_dir, head_dir, out):
+    """Explains each workload that is at or above the warning limit, gated or not.
+
+    Returns the function_differences by workload, for the workloads that have Cachegrind output
+    on both sides. cg_annotate's comparison goes to `<out>/<workload>.diff.txt`.
+    """
+    analyses = {}
+    for row in rows:
+        if row["change"] is None or row["change"] < WARN_PERCENT:
+            continue
+        name = row["name"]
+        base_file, head_file = base_dir / f"{name}.cachegrind", head_dir / f"{name}.cachegrind"
+        if not (base_file.exists() and head_file.exists()):
+            continue
+        _, old = parse_cachegrind(base_file.read_text())
+        _, new = parse_cachegrind(head_file.read_text())
+        analyses[name] = function_differences(old, new)
+        text = cg_annotate_diff(base_file, head_file)
+        if text is not None:
+            (out / f"{name}.diff.txt").write_text(text)
+    return analyses
+
+
+def metric_changes(base, head, metric):
+    """Returns the change of a metric in percent, by workload.
+
+    Only workloads with an unchanged source, and with a value other than 0 on the base, have one.
+    """
+    old = {workload["name"]: workload for workload in base}
+    changes = {}
+    for workload in head:
+        before = old.get(workload["name"])
+        if before is None or before["source_sha256"] != workload["source_sha256"]:
+            continue
+        old_value, new_value = before["metrics"].get(metric), workload["metrics"].get(metric)
+        if old_value and new_value is not None:
+            changes[workload["name"]] = percent_change(old_value, new_value)
+    return changes
+
+
+def markdown_code(text):
+    """Returns text as inline code that is safe inside a Markdown table."""
+    return "`" + str(text).replace("`", "'").replace("|", "\\|") + "`"
+
+
+def format_change(change):
+    """Formats a change in percent, or a dash without one."""
+    return "-" if change is None else f"{change:+.2f}%"
+
+
+def status_text(row):
+    """Says what a row of a comparison means, for a reader."""
+    if row["status"] == "ok" and not row["gated"]:
+        return "Reported"
+    return STATUS_TEXT[row["status"]]
+
+
+def markdown_report(summary):
+    """Returns the report of a `ci` run as Markdown, from the summary that command_ci writes."""
+    metric, rows = summary["metric"], summary["rows"]
+    lines = [
+        "## Performance",
+        "",
+        f"The `{metric}` of {markdown_code(summary['head_sha'][:12])} against its base"
+        f" {markdown_code(summary['base_sha'][:12])}, counted by {summary['backend']}"
+        f" ({summary['tool_version'] or 'no version'}), built with {summary['rustc']}.",
+        "",
+    ]
+    if rows is None:
+        lines += [
+            "The base has no workloads, so there's nothing to compare with. The head has:",
+            "",
+            "| Workload | Category | Head |",
+            "|---|---|--:|",
+        ]
+        for result in summary["head"]:
+            value = format_value(result["metrics"][metric])
+            lines.append(f"| {markdown_code(result['name'])} | {result['category']} | {value} |")
+    else:
+        categories = {result["name"]: result["category"] for result in summary["base"]}
+        categories.update({result["name"]: result["category"] for result in summary["head"]})
+        branches = summary["backend"] == "cachegrind"
+        misses = metric_changes(summary["base"], summary["head"], "bim") if branches else {}
+        lines.append(
+            "| Workload | Category | Base | Head | Change |"
+            + (" Branch misses |" if branches else "")
+            + " Status |"
+        )
+        lines.append("|---|---|--:|--:|--:|" + ("--:|" if branches else "") + "---|")
+        for row in rows:
+            cells = [
+                markdown_code(row["name"]),
+                categories[row["name"]],
+                format_value(row["base"]),
+                format_value(row["head"]),
+                format_change(row["change"]),
+            ]
+            if branches:
+                cells.append(format_change(misses.get(row["name"])))
+            cells.append(status_text(row))
+            lines.append("| " + " | ".join(cells) + " |")
+        lines += [
+            "",
+            f"A gated workload warns from +{WARN_PERCENT:g}%, and is too slow from"
+            f" +{FAIL_PERCENT:g}%. A reported one depends on the size of the dictionary, so it"
+            " never warns. Being too slow doesn't fail this check yet. See #125.",
+        ]
+        if branches:
+            lines += [
+                "",
+                "Branch misses are Cachegrind's mispredicted indirect branches. Its model is"
+                " simple, so they're only reported.",
+            ]
+        if summary["backend"] not in DECIDES:
+            lines += ["", "Time is too noisy to decide on, so nothing warns."]
+        changed = [row["name"] for row in rows if row["status"] == "changed"]
+        if changed:
+            names = ", ".join(markdown_code(name) for name in changed)
+            lines += ["", f"Not compared, because their source changed: {names}."]
+    for name, differences in summary["analyses"].items():
+        change = next(row["change"] for row in rows if row["name"] == name)
+        lines += [
+            "",
+            f"### Why {markdown_code(name)} is {format_change(change)}",
+            "",
+            f"Up to {ANALYSIS_FUNCTIONS} functions whose instruction count changed most. The"
+            " `perf` artifact has the Cachegrind output, and cg_annotate's whole comparison.",
+            "",
+            "| Function | File | Base | Head | Difference |",
+            "|---|---|--:|--:|--:|",
+        ]
+        for item in differences:
+            lines.append(
+                f"| {markdown_code(item['function'])} | {markdown_code(item['file'])}"
+                f" | {item['base']:,} | {item['head']:,} | {item['difference']:+,} |"
+            )
+    lines += ["", f"Measured in {summary['elapsed_seconds']:.0f} s."]
+    if summary["elapsed_seconds"] > CI_BUDGET_SECONDS:
+        lines[-1] += f" That's more than the budget of {CI_BUDGET_SECONDS} s."
+    return "\n".join(lines) + "\n"
+
+
+def annotations(summary):
+    """Returns GitHub Actions warnings for the slowdowns and the time of a `ci` run."""
+    lines = []
+    for row in summary["rows"] or []:
+        if row["status"] in ("warn", "fail"):
+            lines.append(
+                f"::warning title=Performance::{row['name']} has"
+                f" {format_change(row['change'])} {summary['metric']}"
+            )
+    if summary["elapsed_seconds"] > CI_BUDGET_SECONDS:
+        lines.append(
+            f"::warning title=Performance::Measuring took {summary['elapsed_seconds']:.0f} s,"
+            f" more than the budget of {CI_BUDGET_SECONDS} s"
+        )
+    return lines
 
 
 # --- The database ---
@@ -636,6 +908,83 @@ def command_pad_check(args):
     return 1 if failed else 0
 
 
+def command_ci(args):
+    """Compares two commits as CI does, and writes a report. It doesn't store anything.
+
+    Both sides are checked out in a temporary directory, and built in a target directory each.
+    The report goes to `<out>/report.md`, to the job summary in GitHub Actions, and to the
+    output. `<out>/summary.json` has the figures, and `<out>/base` and `<out>/head` Cachegrind's
+    output files.
+    """
+    started = time.monotonic()
+    backend = args.backend or choose_backend()
+    metric = MAIN_METRIC[backend]
+    out = Path(args.out).resolve()
+    for side in ("base", "head"):
+        shutil.rmtree(out / side, ignore_errors=True)
+    for old in out.glob("*.diff.txt"):
+        old.unlink()
+    out.mkdir(parents=True, exist_ok=True)
+
+    shas = {
+        "base": command_output("git", "rev-parse", "--verify", f"{args.base}^{{commit}}"),
+        "head": command_output("git", "rev-parse", "--verify", f"{args.head}^{{commit}}"),
+    }
+    results = {}
+    with tempfile.TemporaryDirectory() as directory:
+        trees = {}
+        try:
+            for side, sha in shas.items():
+                tree = trees[side] = Path(directory) / CHECKOUTS / side
+                command_output("git", "worktree", "add", "--quiet", "--detach", str(tree), sha)
+            for side, tree in trees.items():
+                if not (tree / HARNESS).exists():
+                    print(f"The {side} has no workloads.", file=sys.stderr)
+                    continue
+                target = TARGET / "perf-ci" / side
+                results[side] = measure_tree(tree, backend, target=target, keep=out / side)
+            info = run_info(trees["head"], backend, None)
+        finally:
+            for tree in trees.values():
+                if tree.exists():
+                    command_output("git", "worktree", "remove", "--force", str(tree))
+    if "head" not in results:
+        sys.exit(f"{args.head} has no workloads to measure.")
+
+    rows = None
+    analyses = {}
+    if "base" in results:
+        rows = compare(results["base"], results["head"], metric, backend in DECIDES)
+        if backend == "cachegrind":
+            analyses = analyze(rows, out / "base", out / "head", out)
+    summary = {
+        "base_sha": shas["base"],
+        "head_sha": shas["head"],
+        "backend": backend,
+        "metric": metric,
+        "tool_version": info["tool_version"],
+        "rustc": info["rustc"],
+        "target": info["target"],
+        "machine": info["machine"],
+        "base": results.get("base"),
+        "head": results["head"],
+        "rows": rows,
+        "analyses": analyses,
+        "elapsed_seconds": round(time.monotonic() - started, 1),
+    }
+    (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
+    report = markdown_report(summary)
+    (out / "report.md").write_text(report)
+    if os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as job_summary:
+            job_summary.write(report)
+    print(report)
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        for line in annotations(summary):
+            print(line)
+    return 0
+
+
 def main():
     """Parses the command line, and runs the command."""
     common = argparse.ArgumentParser(add_help=False)
@@ -665,6 +1014,16 @@ def main():
         "pad-check", parents=[common], help="check that gated workloads ignore dictionary size"
     )
     pad.set_defaults(handler=command_pad_check)
+
+    ci = commands.add_parser(
+        "ci", parents=[common], help="compare two commits as CI does, without storing them"
+    )
+    ci.add_argument("base", help="the commit to compare with")
+    ci.add_argument("--head", default="HEAD", help="the commit to measure, default: HEAD")
+    ci.add_argument(
+        "--out", default=str(TARGET / "perf" / "ci"), help="where the report and files go"
+    )
+    ci.set_defaults(handler=command_ci)
 
     args = parser.parse_args()
     sys.exit(args.handler(args))

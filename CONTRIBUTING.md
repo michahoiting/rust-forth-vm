@@ -105,6 +105,18 @@ The counting depends on the machine:
 Results go to `target/perf/results.sqlite`, so `cargo clean` removes them, and each worktree has
 its own. Only runs with the same backend, target, machine and compiler are compared.
 
+### In CI
+
+The `perf` job of the Performance workflow runs `make perf-ci BASE=HEAD^1` on each PR and each
+push to `main`. It builds and measures the base and the head in the same job, with Cachegrind,
+so that a new compiler or runner changes both sides alike. The job summary shows the change per
+workload. For each workload that is 2% or more slower, it also shows the functions whose
+instruction count changed most, and the `perf` artifact keeps Cachegrind's files for 14 days.
+The job doesn't fail on a slowdown yet. PRs that only change Markdown skip the measurement.
+
+`make perf-ci BASE=main` runs the same comparison locally, between two commits, so it leaves out
+uncommitted changes. It doesn't store anything, and writes its report to `target/perf/ci`.
+
 ## Why `main` refuses pushes
 
 A GitHub ruleset protects `main`, for everyone including the project owner. Changes land
