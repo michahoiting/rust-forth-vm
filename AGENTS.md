@@ -23,6 +23,7 @@ make msrv      # Checks the oldest supported Rust version, from `rust-version`
 make mutants   # Mutation testing, which CI runs weekly. Needs cargo-mutants
 make mutants-diff DIFF=/tmp/pr.diff # Test mutations overlapping a diff
 make mutants-test # Test incremental mutation reporting
+make perf-ci   # Compares the performance of two commits, such as BASE=HEAD^1. Needs python3
 make demo      # Opens the demo menu
 make doc-serve # Serves the docs on localhost, including private items. Needs python3
 ```
@@ -43,7 +44,7 @@ make perf      # Measures the VM, and stores the result in `target/perf/results.
 make perf-report  # Shows the stored development of the measurements
 make perf-compare # Measures another commit too, such as BASE=origin/main
 make perf-pad-check # Checks that gated workloads don't depend on the size of the dictionary
-make perf-test # Runs the unit tests of the measuring script
+make perf-test # Runs the unit tests of the measuring script, which make perf-ci also does
 ```
 
 `main` is protected by the ruleset in `.github/rulesets/protect-main.json`. Renaming a CI job means updating its required check there too. Never bypass the hooks with `--no-verify` unless asked, and don't run `make protect` unless asked.
@@ -84,6 +85,8 @@ main → line_editor
 - Breaking changes are fine until the project owner says otherwise.
 - Everything is part of the unreleased `0.1.0` until the project owner releases it. Until then, all changelog entries go under `### Added`, including fixes and changes, and nothing is marked as breaking. After the first release, this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), and breaking changes start with `**Breaking:**`.
 - Every user-visible change adds an entry under `[Unreleased]` in `CHANGELOG.md`.
+- Dependabot PRs need no issue or changelog entry. The project owner reviews and merges them
+  without auto-merge.
 - Don't bump the version or create tags unless asked. Only the project owner decides when to release.
 - Use American English in code, docs, issues and PRs, such as `license` and `behavior`.
 - Stay within the requested scope. Report anything else you find instead of fixing it in passing.

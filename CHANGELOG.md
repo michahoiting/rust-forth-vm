@@ -15,12 +15,17 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 - `quit_loop` runs the loop that the standard's `QUIT` stands for: it reads lines through a
   closure, evaluates them, and reports each `LineResult`, so `QUIT` and `ABORT` carry on with the
   next line, and a host only sees the end of the input and `BYE`. `forth-vm` uses it.
+- Monthly grouped Dependabot updates for GitHub Actions, reviewed and merged by the project
+  owner without auto-merge.
 - Single-cell arithmetic, comparison, logic and memory words, including floored division,
   double-cell stack/memory operations, and overlap-safe `MOVE`.
 - An advisory incremental mutation check on pull requests, with elapsed time and results.
 - Performance measurement: `make perf` runs Forth workloads for each part of the VM, counts
   their instructions, and stores the results in a SQLite database under `target/perf`.
   `make perf-report` shows the development, and `make perf-compare` compares with another commit.
+- A performance report on each PR: the `perf` job counts the instructions of the base and the
+  head with Cachegrind, and shows the change per workload in the job summary, with the
+  functions behind each change from 2%. It doesn't fail the job yet.
 - An indirect-threaded Forth VM with a linked-list dictionary, a text interpreter, and a
   compiler for colon definitions.
 - A library API: `boot` creates a VM from a `VmConfig` and an output writer, and

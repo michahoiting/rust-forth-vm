@@ -19,6 +19,7 @@
 # make perf-compare  Measures another commit too, such as make perf-compare BASE=origin/main.
 # make perf-pad-check  Checks that gated workloads don't depend on the size of the dictionary.
 # make perf-test  Runs the unit tests of the measuring script.
+# make perf-ci    Compares two commits as CI does, such as make perf-ci BASE=HEAD^1.
 
 # Stops rustup from installing a missing toolchain when a target asks for it.
 export RUSTUP_AUTO_INSTALL := 0
@@ -30,7 +31,7 @@ MSRV := $(shell sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
 
 .DEFAULT_GOAL := ci
 
-.PHONY: ci ci-all fmt clippy build test test-release test-minimal doc doc-serve miri miri-32 check-miri msrv msrv-version code-changed mutants mutants-diff mutants-test check-mutants demo demo-expected setup-dev hooks protect metrics perf perf-report perf-compare perf-pad-check perf-test check-python
+.PHONY: ci ci-all fmt clippy build test test-release test-minimal doc doc-serve miri miri-32 check-miri msrv msrv-version code-changed mutants mutants-diff mutants-test check-mutants demo demo-expected setup-dev hooks protect metrics perf perf-report perf-compare perf-pad-check perf-test perf-ci check-python
 
 ci: fmt clippy build test test-release test-minimal doc
 
@@ -122,6 +123,11 @@ perf-pad-check: check-python
 
 perf-test: check-python
 	@cd scripts && python3 -m unittest test_perf
+
+# What the perf workflow runs: the unit tests, then a comparison of the commit BASE with HEAD.
+# The report and Cachegrind's files go to OUT, by default target/perf/ci.
+perf-ci: perf-test
+	@python3 scripts/perf.py ci $(or $(BASE),main) $(if $(OUT),--out "$(OUT)") $(ARGS)
 
 check-mutants:
 	@cargo mutants --version >/dev/null 2>&1 || { \
