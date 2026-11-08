@@ -2,10 +2,15 @@
 
 """Unit tests for perf.py. Run them with `make perf-test`."""
 
+import argparse
+import contextlib
+import io
+import json
 import os
 import sqlite3
 import tempfile
 import unittest
+from unittest import mock
 
 import perf
 
@@ -302,6 +307,256 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(len(lines), 3)
         self.assertTrue(all(line.startswith("::warning title=Performance::") for line in lines))
         self.assertIn("stack has +6.00% ir", lines[0])
+
+
+def entry(
+    commit, value, date, source="same", rustc="rustc 1.99.0", tool="valgrind-3.22.0", pr=None
+):
+    """Returns one line of the history of main, with the workload `stack`."""
+    return {
+        "schema": perf.HISTORY_SCHEMA,
+        "commit": commit,
+        "pr": pr,
+        "date": date,
+        "backend": "cachegrind",
+        "rustc": rustc,
+        "tool_version": tool,
+        "target": "x86_64-unknown-linux-gnu",
+        "machine": "m1",
+        "workloads": {"stack": {"source_sha256": source, "gated": True, "ir": value}},
+    }
+
+
+def entries(values, **identity):
+    """Returns a history with one line per value, oldest first, with commits c0, c1 and so on."""
+    return [
+        entry(f"c{index}", value, f"2026-11-{index + 1:02d}T00:00:00Z", **identity)
+        for index, value in enumerate(values)
+    ]
+
+
+def head_series(history, limit=perf.HISTORY_RUNS, **head):
+    """Returns the series of `stack` in a history, for a head like the summary's."""
+    head_result = {"name": "stack", "source_sha256": head.get("source", "same"), "gated": True}
+    return perf.series(
+        history,
+        "stack",
+        head_result,
+        head.get("rustc", "rustc 1.99.0"),
+        head.get("tool", "valgrind-3.22.0"),
+        limit,
+    )
+
+
+class HistoryTests(unittest.TestCase):
+    """The history of main, on the perf-data branch."""
+
+    def test_the_pr_number_comes_from_a_squash_merge_subject(self):
+        self.assertEqual(perf.pr_number("Report the performance (#134)"), 134)
+        self.assertEqual(perf.pr_number("Fix (#1) of (#2)\n\nBody (#3)"), 2)
+        self.assertIsNone(perf.pr_number("Merge branch 'x'"))
+        self.assertIsNone(perf.pr_number("See (#12) for why"))
+        self.assertIsNone(perf.pr_number(""))
+
+    def test_dates_are_stored_in_utc(self):
+        self.assertEqual(perf.utc_date("2026-11-08T17:54:43+01:00"), "2026-11-08T16:54:43Z")
+        self.assertEqual(perf.utc_date("2026-11-08T16:54:43Z"), "2026-11-08T16:54:43Z")
+
+    def test_an_entry_has_the_head_of_a_summary(self):
+        head = [result("stack", 103e6), result("compile_far", 2e6, gated=False)]
+        head[0]["metrics"]["bim"] = 7
+        made = perf.history_entry(summary([], head=head), "Speed up (#140)", "2026-11-08T16:54:43Z")
+        self.assertEqual(
+            made,
+            {
+                "schema": perf.HISTORY_SCHEMA,
+                "commit": "b" * 40,
+                "pr": 140,
+                "date": "2026-11-08T16:54:43Z",
+                "backend": "cachegrind",
+                "rustc": "rustc 1.99.0",
+                "tool_version": "valgrind-3.22.0",
+                "target": "x86_64-unknown-linux-gnu",
+                "machine": "m1",
+                "workloads": {
+                    "stack": {"source_sha256": "same", "gated": True, "ir": 103e6, "bim": 7},
+                    "compile_far": {"source_sha256": "same", "gated": False, "ir": 2e6},
+                },
+            },
+        )
+
+    def test_a_history_is_sorted_and_skips_other_schemas_and_bad_lines(self):
+        old, new = entries([1, 2])
+        other = dict(old, schema=perf.HISTORY_SCHEMA + 1, commit="other")
+        with tempfile.TemporaryDirectory() as directory:
+            path = perf.Path(directory) / "history.jsonl"
+            lines = [json.dumps(new), json.dumps(other), "{not json", "", json.dumps(old)]
+            path.write_text("\n".join(lines) + "\n")
+            with contextlib.redirect_stderr(io.StringIO()):
+                read = perf.read_history(path)
+        self.assertEqual([item["commit"] for item in read], ["c0", "c1"])
+
+    def test_a_missing_history_is_empty(self):
+        self.assertEqual(perf.read_history("/nonexistent/history.jsonl"), [])
+
+    def test_a_series_is_newest_last_and_limited(self):
+        points, broke = head_series(entries([1, 2, 3, 4]), limit=3)
+        self.assertEqual([point["value"] for point in points], [2, 3, 4])
+        self.assertEqual(points[-1], {"commit": "c3", "pr": None, "value": 4})
+        self.assertIsNone(broke)
+
+    def test_a_series_without_a_break_goes_back_to_the_start(self):
+        points, broke = head_series(entries([1, 2]))
+        self.assertEqual([point["commit"] for point in points], ["c0", "c1"])
+        self.assertIsNone(broke)
+
+    def test_a_series_breaks_on_the_source_rustc_and_valgrind(self):
+        for change, reason in (
+            ({"source": "old"}, "changed workload source"),
+            ({"rustc": "rustc 1.98.0"}, "new rustc, rustc 1.98.0 before"),
+            ({"tool": "valgrind-3.21.0"}, "new counter version, valgrind-3.21.0 before"),
+        ):
+            history = entries([1, 2], **change) + [
+                entry("c2", 3, "2026-11-03T00:00:00Z"),
+                entry("c3", 4, "2026-11-04T00:00:00Z"),
+            ]
+            points, broke = head_series(history)
+            self.assertEqual([point["commit"] for point in points], ["c2", "c3"], change)
+            self.assertEqual(broke, {"reasons": [reason], "since": "c2"}, change)
+
+    def test_a_break_at_the_newest_line_starts_with_the_head(self):
+        points, broke = head_series(entries([1, 2]), rustc="rustc 2.0.0")
+        self.assertEqual(points, [])
+        self.assertEqual(broke["since"], None)
+
+    def test_a_workload_missing_from_older_lines_is_new_not_broken(self):
+        history = entries([1, 2])
+        del history[0]["workloads"]["stack"]
+        points, broke = head_series(history)
+        self.assertEqual([point["commit"] for point in points], ["c1"])
+        self.assertIsNone(broke)
+
+    def test_drift_is_from_the_oldest_of_the_last_points(self):
+        points = [{"commit": f"c{n}", "pr": None, "value": n} for n in range(1, 41)]
+        self.assertAlmostEqual(perf.drift(points, 22), 100.0)  # The window starts at 11.
+        self.assertIsNone(perf.drift([], 5))
+
+    def test_drift_warns_from_its_limit_for_gated_workloads(self):
+        def drifting(head_value, gated=True, backend="cachegrind"):
+            head = [result("stack", head_value, gated=gated, metric=perf.MAIN_METRIC[backend])]
+            made = summary([], head=head, backend=backend)
+            return perf.history_of(made, entries([100] * 3))["stack"]["drifting"]
+
+        # 25% is exact in floating point, unlike 110 / 100, so the limit itself is tested.
+        with mock.patch.object(perf, "DRIFT_PERCENT", 25.0):
+            self.assertFalse(drifting(124.99))
+            self.assertTrue(drifting(125))
+        self.assertTrue(drifting(100 + perf.DRIFT_PERCENT + 0.01))
+        self.assertFalse(drifting(200, gated=False))
+
+    def test_drift_needs_a_backend_that_decides(self):
+        history = [entry("c0", 100, "2026-11-01T00:00:00Z")]
+        history[0]["workloads"]["stack"]["user_seconds"] = 1.0
+        history[0]["tool_version"] = None
+        made = summary([], head=[result("stack", 2.0, metric="user_seconds")], backend="cpu-time")
+        made["tool_version"] = None
+        item = perf.history_of(made, history)["stack"]
+        self.assertAlmostEqual(item["drift"], 100.0)
+        self.assertFalse(item["drifting"])
+
+
+class HistoryReportTests(unittest.TestCase):
+    """The development in the report of a CI run."""
+
+    def report(self, history, head_value=103e6):
+        """Returns a report and its summary with a history, for `stack`."""
+        rows = [perf.row_of("stack", True, 100e6, head_value, 3.0, "warn")]
+        made = summary(rows, head=[result("stack", head_value)])
+        made["history"] = perf.history_of(made, history)
+        return perf.markdown_report(made), made
+
+    def test_without_history_there_is_no_column(self):
+        rows = [perf.row_of("stack", True, 100e6, 103e6, 3.0, "warn")]
+        report = perf.markdown_report(summary(rows))
+        self.assertNotIn("merges", report)
+
+    def test_the_column_has_the_merges_and_the_head(self):
+        report, _ = self.report(entries([100e6, 101e6, 102e6]))
+        self.assertIn("| Status | Last 20 merges |", report)
+        self.assertIn("| Warning | ▁▃▆█ |", report)
+        self.assertNotIn("Drift", report)
+        self.assertNotIn("starts again", report)
+
+    def test_an_empty_history_says_so(self):
+        report, _ = self.report([])
+        self.assertIn("| Warning | - |", report)
+        self.assertIn("No earlier merges", report)
+
+    def test_a_break_is_explained(self):
+        history = entries([1, 2], rustc="rustc 1.98.0")
+        history.append(entry("d" * 40, 100e6, "2026-11-05T00:00:00Z", pr=140))
+        report, _ = self.report(history)
+        self.assertIn(
+            "The series of `stack` starts again at `dddddddddddd` (#140):"
+            " new rustc, rustc 1.98.0 before.",
+            report,
+        )
+
+    def test_a_break_at_the_head_is_explained(self):
+        report, _ = self.report(entries([1, 2], source="old"))
+        self.assertIn("starts again with this head: changed workload source.", report)
+
+    def test_drift_is_reported_and_annotated(self):
+        report, made = self.report(entries([90e6, 100e6]), head_value=100e6)
+        self.assertIn("**Drift:** `stack` is +11.11% above `c0`", report)
+        lines = perf.annotations(made)
+        self.assertEqual(len(lines), 2)
+        self.assertIn("Performance drift::stack is +11.11% ir", lines[1])
+
+    def test_a_report_without_a_base_has_the_column_too(self):
+        made = summary(None, head=[result("stack", 103e6)])
+        made["history"] = perf.history_of(made, entries([100e6]))
+        self.assertIn("| `stack` | Stack | 103.00 M | ▁█ |", perf.markdown_report(made))
+
+
+class RecordTests(unittest.TestCase):
+    """Appending to the history of main."""
+
+    def record(self, directory, made, subject="Speed up (#140)"):
+        """Writes a summary, and records it in `<directory>/history.jsonl`."""
+        summary_path = perf.Path(directory) / "summary.json"
+        if made is not None:
+            summary_path.write_text(json.dumps(made))
+        args = argparse.Namespace(
+            summary=str(summary_path),
+            history=str(perf.Path(directory) / "history.jsonl"),
+            subject=subject,
+            date="2026-11-08T16:54:43Z",
+        )
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(perf.command_record(args), 0)
+        return perf.read_history(args.history)
+
+    def test_a_summary_appends_one_line(self):
+        with tempfile.TemporaryDirectory() as directory:
+            history_path = perf.Path(directory) / "history.jsonl"
+            history_path.write_text(json.dumps(entry("c0", 1, "2026-11-01T00:00:00Z")) + "\n")
+            recorded = self.record(directory, summary([]))
+            self.assertEqual(len(history_path.read_text().splitlines()), 2)
+        self.assertEqual(
+            [(item["commit"], item["pr"]) for item in recorded], [("c0", None), ("b" * 40, 140)]
+        )
+
+    def test_a_rerun_records_the_commit_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.record(directory, summary([]))
+            self.assertEqual(len(self.record(directory, summary([]))), 1)
+
+    def test_nothing_measured_records_nothing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(self.record(directory, None), [])
+            self.assertEqual(self.record(directory, summary([], head=[])), [])
+            self.assertFalse((perf.Path(directory) / "history.jsonl").exists())
 
 
 class SparklineTests(unittest.TestCase):

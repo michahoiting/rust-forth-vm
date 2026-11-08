@@ -20,6 +20,7 @@
 # make perf-pad-check  Checks that gated workloads don't depend on the size of the dictionary.
 # make perf-test  Runs the unit tests of the measuring script.
 # make perf-ci    Compares two commits as CI does, such as make perf-ci BASE=HEAD^1.
+# make perf-record  Appends a CI result to the history of main, which the perf workflow does.
 
 # Stops rustup from installing a missing toolchain when a target asks for it.
 export RUSTUP_AUTO_INSTALL := 0
@@ -31,7 +32,7 @@ MSRV := $(shell sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
 
 .DEFAULT_GOAL := ci
 
-.PHONY: ci ci-all fmt clippy build test test-release test-minimal doc doc-serve miri miri-32 check-miri msrv msrv-version code-changed mutants mutants-diff mutants-test check-mutants demo demo-expected setup-dev hooks protect metrics perf perf-report perf-compare perf-pad-check perf-test perf-ci check-python
+.PHONY: ci ci-all fmt clippy build test test-release test-minimal doc doc-serve miri miri-32 check-miri msrv msrv-version code-changed mutants mutants-diff mutants-test check-mutants demo demo-expected setup-dev hooks protect metrics perf perf-report perf-compare perf-pad-check perf-test perf-ci perf-record check-python
 
 ci: fmt clippy build test test-release test-minimal doc
 
@@ -125,9 +126,17 @@ perf-test: check-python
 	@cd scripts && python3 -m unittest test_perf
 
 # What the perf workflow runs: the unit tests, then a comparison of the commit BASE with HEAD.
-# The report and Cachegrind's files go to OUT, by default target/perf/ci.
+# The report and Cachegrind's files go to OUT, by default target/perf/ci. With HISTORY, a
+# history.jsonl of main, the report also shows the development and drift of each workload.
 perf-ci: perf-test
-	@python3 scripts/perf.py ci $(or $(BASE),main) $(if $(OUT),--out "$(OUT)") $(ARGS)
+	@python3 scripts/perf.py ci $(or $(BASE),main) $(if $(OUT),--out "$(OUT)") \
+		$(if $(HISTORY),--history "$(HISTORY)") $(ARGS)
+
+# Appends the head of the summary.json that perf-ci wrote, SUMMARY, to the history HISTORY. It
+# does nothing when nothing was measured. The perf workflow runs it on each push to main.
+perf-record: check-python
+	@test -n "$(SUMMARY)" -a -n "$(HISTORY)" || { echo "Usage: make perf-record SUMMARY=... HISTORY=..."; exit 2; }
+	@python3 scripts/perf.py record "$(SUMMARY)" "$(HISTORY)" $(ARGS)
 
 check-mutants:
 	@cargo mutants --version >/dev/null 2>&1 || { \

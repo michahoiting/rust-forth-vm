@@ -26,6 +26,11 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 - A performance report on each PR: the `perf` job counts the instructions of the base and the
   head with Cachegrind, and shows the change per workload in the job summary, with the
   functions behind each change from 2%. It doesn't fail the job yet.
+- The development of the performance: each push to `main` appends its figures to
+  `history.jsonl` on the `perf-data` branch, and each PR's report shows a sparkline of the last
+  20 merges per workload, notes where a series starts again after a new workload source, `rustc`
+  or Valgrind, and warns when a gated workload drifted 10% or more over its last 30 merges. The
+  report is also kept up to date in one comment on the PR. `make perf-record` appends a result.
 - An indirect-threaded Forth VM with a linked-list dictionary, a text interpreter, and a
   compiler for colon definitions.
 - A library API: `boot` creates a VM from a `VmConfig` and an output writer, and

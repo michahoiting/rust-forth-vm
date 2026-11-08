@@ -114,8 +114,24 @@ workload. For each workload that is 2% or more slower, it also shows the functio
 instruction count changed most, and the `perf` artifact keeps Cachegrind's files for 14 days.
 The job doesn't fail on a slowdown yet. PRs that only change Markdown skip the measurement.
 
+The report also shows the development: a column **Last 20 merges** has a sparkline of each
+workload over the last 20 merges to `main`, with the head as the last point. The `record` job
+appends the figures of each push to `main` as one line to `history.jsonl` on the orphan branch
+`perf-data`, which it creates on the first push. Only that job writes the branch, so don't edit
+it by hand. A series starts again, with a note, when the workload's source, `rustc` or the
+Valgrind version changes, since its figures can't be compared across that. A gated workload
+that is 10% or more above the oldest of its last 30 comparable merges gets a drift warning, which
+catches many small slowdowns that no single PR shows. Drift doesn't fail the job either.
+
+On a PR from this repository, the `comment` job puts the report in one comment, marked
+`<!-- perf-report -->`, and edits it on each run. PRs from forks get no comment, only the job
+summary.
+
 `make perf-ci BASE=main` runs the same comparison locally, between two commits, so it leaves out
-uncommitted changes. It doesn't store anything, and writes its report to `target/perf/ci`.
+uncommitted changes. It doesn't store anything, and writes its report to `target/perf/ci`. With
+`HISTORY=history.jsonl`, a copy of the file on `perf-data`, it shows the development too.
+`make perf-record SUMMARY=target/perf/ci/summary.json HISTORY=history.jsonl` appends a result,
+as the `record` job does.
 
 ## Why `main` refuses pushes
 

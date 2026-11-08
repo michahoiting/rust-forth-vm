@@ -1,8 +1,10 @@
 name: Performance
 
 # Counts the instructions of the workloads in examples/perf, on the base and the head in the same
-# job, and reports the difference. See ADR-0002 in docs/adr. The report is in the job summary,
-# and doesn't fail the job yet.
+# job, and reports the difference. See ADR-0002 in docs/adr. The report is in the job summary and
+# in one comment on the PR, and doesn't fail the job yet. It also shows the development over the
+# last merges to main, from history.jsonl on the perf-data branch, which only the record job
+# writes, one line per push to main.
 on:
   push:
     branches: [main]
@@ -37,9 +39,36 @@ jobs:
         id: changes
         run: echo "code=$(make -s code-changed BASE=HEAD^1)" >> "$GITHUB_OUTPUT"
 
+      # The comment job always gets a report, so that a PR's comment doesn't keep old figures.
       - name: Skip a change to only Markdown
         if: steps.changes.outputs.code == 'false'
-        run: echo "Only Markdown changed, so nothing was measured." >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          mkdir -p "$RUNNER_TEMP/perf"
+          printf '## Performance\n\nOnly Markdown changed, so nothing was measured.\n' \
+            | tee -a "$GITHUB_STEP_SUMMARY" > "$RUNNER_TEMP/perf/report.md"
+
+      # The branch doesn't exist until the first push to main is recorded. Without it, the
+      # report has no development, and nothing fails.
+      - name: Check for the history of main
+        id: history
+        if: steps.changes.outputs.code != 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/branches/perf-data" --silent; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No perf-data branch yet, so the report has no development."
+          fi
+
+      - name: Read the history of main
+        if: steps.history.outputs.exists == 'true'
+        continue-on-error: true
+        uses: actions/checkout@v7
+        with:
+          ref: perf-data
+          path: perf-data
+          persist-credentials: false
 
       - name: Install Rust
         if: steps.changes.outputs.code != 'false'
@@ -55,13 +84,117 @@ jobs:
 
       - name: Measure the base and the head
         if: steps.changes.outputs.code != 'false'
-        run: make perf-ci BASE=HEAD^1 OUT="$RUNNER_TEMP/perf"
+        run: make perf-ci BASE=HEAD^1 OUT="$RUNNER_TEMP/perf" HISTORY=perf-data/history.jsonl
 
-      - name: Keep the Cachegrind output
-        if: ${{ always() && !cancelled() && steps.changes.outputs.code != 'false' }}
+      - name: Keep the report and the Cachegrind output
+        if: ${{ always() && !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: perf
           path: ${{ runner.temp }}/perf
           retention-days: 14
-          if-no-files-found: ignore
+          if-no-files-found: warn
+
+  # Appends the figures of each push to main to history.jsonl on the perf-data branch. It's the
+  # only job with write access to the repository, and it runs no code from a PR.
+  record:
+    needs: perf
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: perf
+          path: ${{ runner.temp }}/perf
+
+      # Creates the orphan branch on the first record. Pushes from two merges can race, so a
+      # rejected push fetches the branch again and appends to it again. Rebasing two appends to
+      # the end of one file would conflict.
+      - name: Record the figures on perf-data
+        env:
+          DATA: ${{ runner.temp }}/perf-data
+          SUMMARY: ${{ runner.temp }}/perf/summary.json
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch --depth=1 origin +perf-data:refs/remotes/origin/perf-data; then
+            git worktree add -B perf-data "$DATA" origin/perf-data
+          else
+            git worktree add --detach "$DATA"
+            git -C "$DATA" checkout -q --orphan perf-data
+            git -C "$DATA" rm -rfq .
+            printf '%s\n' "# Performance history" "" \
+              "The figures of each push to main, one JSON line each, appended by the record job" \
+              "of .github/workflows/perf.yml. Don't edit this branch by hand." > "$DATA/README.md"
+          fi
+          for attempt in 1 2 3; do
+            make perf-record SUMMARY="$SUMMARY" HISTORY="$DATA/history.jsonl"
+            git -C "$DATA" add -A
+            if git -C "$DATA" diff --cached --quiet; then
+              echo "Nothing to record."
+              exit 0
+            fi
+            git -C "$DATA" commit -qm "Record $GITHUB_SHA"
+            if git -C "$DATA" push origin HEAD:refs/heads/perf-data; then
+              exit 0
+            fi
+            echo "The push was rejected, so attempt $attempt starts again from perf-data."
+            git fetch --depth=1 origin +perf-data:refs/remotes/origin/perf-data
+            git -C "$DATA" reset -q --hard origin/perf-data
+          done
+          exit 1
+
+  # Puts the report in one comment on the PR, and edits it on each run. Forks get no comment,
+  # since their token can't write, and a failure here never fails the workflow.
+  comment:
+    needs: perf
+    if: ${{ always() && !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    continue-on-error: true
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: perf
+          path: ${{ runner.temp }}/perf
+
+      - name: Comment on the PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MARKER: "<!-- perf-report -->"
+        run: |
+          case "$PR_NUMBER" in
+            ''|*[!0-9]*) echo "Invalid PR number" >&2; exit 1 ;;
+          esac
+          python3 - <<'PY' > "$RUNNER_TEMP/comment.json"
+          import json
+          import os
+
+          env = os.environ
+          report = open(os.path.join(env["RUNNER_TEMP"], "perf", "report.md"), encoding="utf-8").read()
+          url = f'{env["GITHUB_SERVER_URL"]}/{env["GITHUB_REPOSITORY"]}/actions/runs/{env["GITHUB_RUN_ID"]}'
+          # GitHub refuses a comment above 65536 characters.
+          report = report[:60000]
+          body = f'{env["MARKER"]}\n{report}\n[Actions run, with the perf artifact]({url})\n'
+          print(json.dumps({"body": body}))
+          PY
+          comments="repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments"
+          id=$(gh api --paginate "$comments" --jq '.[]
+            | select(.user.login == "github-actions[bot]" and (.body | startswith(env.MARKER)))
+            | .id' | head -n 1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" \
+              --input "$RUNNER_TEMP/comment.json" > /dev/null
+          else
+            gh api --method POST "$comments" --input "$RUNNER_TEMP/comment.json" > /dev/null
+          fi
