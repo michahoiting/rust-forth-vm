@@ -20,7 +20,9 @@ use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
 use std::slice;
 
-use rust_forth_vm::{boot, outer_interpreter, ForthError, Vm, VmConfig, COPYRIGHT};
+use rust_forth_vm::{
+    boot, outer_interpreter, quit_loop, ForthError, LineResult, Vm, VmConfig, COPYRIGHT,
+};
 
 #[cfg(feature = "readline")]
 use line_editor::LineEditor;
@@ -534,19 +536,30 @@ fn demo_menu(mut input: impl BufRead) -> ExitCode {
 /// Evaluates each line from `read_line` in one VM, until it returns an exit code or Forth ends
 /// the program. `read_line` gets the VM, for what it can complete.
 fn interactive(mut read_line: impl FnMut(&Vm) -> Result<String, ExitCode>) -> ExitCode {
+    let mut end = ExitCode::SUCCESS;
     // SAFETY: `vm` comes from `boot`, through `new_vm`.
-    unsafe {
+    let bye = unsafe {
         let mut vm = new_vm(VmConfig::new(DICTIONARY_CELLS));
-        loop {
-            match read_line(&vm) {
-                Ok(line) => {
-                    if let Err(code) = interpret(&mut vm, &line) {
-                        return code;
-                    }
+        quit_loop(
+            &mut vm,
+            |vm| match read_line(vm) {
+                Ok(line) => Some(line),
+                Err(code) => {
+                    end = code;
+                    None
                 }
-                Err(code) => return code,
-            }
-        }
+            },
+            |vm, result| match result {
+                LineResult::Ok if vm.is_compiling() => {}
+                LineResult::Ok => println!("ok"),
+                LineResult::Quit | LineResult::Abort => println!(),
+                LineResult::Error(error) => println!("Forth Error: {}", error),
+            },
+        )
+    };
+    match bye {
+        Some(code) => ExitCode::from(code as u8),
+        None => end,
     }
 }
 

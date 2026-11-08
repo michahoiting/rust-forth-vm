@@ -67,7 +67,7 @@ mod vm;
 
 pub use cell::Cell;
 pub use error::ForthError;
-pub use interpreter::outer_interpreter;
+pub use interpreter::{outer_interpreter, quit_loop, LineResult};
 pub use primitives::COPYRIGHT;
 pub use vm::{Vm, VmConfig, DEFAULT_DATA_STACK_CELLS, DEFAULT_RETURN_STACK_CELLS};
 

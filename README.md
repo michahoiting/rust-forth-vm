@@ -209,7 +209,7 @@ it.
 | `[']`    | `( -- )`     | Inside a definition: parses a name, and compiles its execution token as a literal (immediate) |
 | `>BODY`  | `( xt -- addr )` | Replaces an execution token with the address of that word's Parameter Field |
 | `EXIT`   | `( -- )`     | Returns from the current definition               |
-| `QUIT`   | `( -- )`     | Clears the return stack, discards the rest of the input, and returns to interpreting. Keeps the data stack, and doesn't leave the program |
+| `QUIT`   | `( -- )`     | Clears the return stack, discards the rest of the line, and returns to interpreting. Keeps the data stack, and doesn't leave the program. `quit_loop` reads on with the next line |
 | `ABORT`  | `( i*x -- )` | Clears the data stack, then does the same as `QUIT` |
 | `BYE`    | `( -- )`     | Stops the program with exit code 0                          |
 | `(BYE)`  | `( n -- )`    | Stops the program with exit code `n`'s low byte             |

@@ -76,10 +76,12 @@ unsafe fn abort(vm: &mut Vm) {
 /// colon definition. Words that were already finished stay, and the VM can still be used.
 ///
 /// The word `QUIT` does the same, except that it keeps the data stack. It isn't a failure, but
-/// it's reported as [`ForthError::Quit`] so that a host knows the input didn't finish. The
+/// this function only evaluates one piece of text and doesn't read more input, so it reports
+/// it as [`ForthError::Quit`] so that a host knows the input didn't finish. The
 /// word `ABORT` does what an error does, and is reported as [`ForthError::Abort`]. `BYE` stops
 /// evaluation and is reported as [`ForthError::Bye`] with its exit code; the library doesn't
-/// leave the process.
+/// leave the process. A host that wants the standard's `QUIT`, which reads on by itself, uses
+/// [`quit_loop`], which handles these for it.
 ///
 /// # Errors
 ///
@@ -158,6 +160,86 @@ pub unsafe fn outer_interpreter(vm: &mut Vm, input: &str) -> Result<(), ForthErr
         return Err(ForthError::Output(error));
     }
     Ok(())
+}
+
+/// What happened to one line that [`quit_loop`] evaluated. It's reported to the host, which
+/// decides what to show. The library shows nothing itself.
+#[derive(Debug)]
+pub enum LineResult {
+    /// The whole line ran. A host usually shows `ok`, unless [`Vm::is_compiling`] says that a
+    /// definition is still open.
+    Ok,
+    /// `QUIT` ran. The rest of the line was discarded and the data stack is kept. The standard
+    /// says that no message is displayed.
+    Quit,
+    /// `ABORT` ran. The rest of the line was discarded and the data stack is clear. The standard
+    /// says that no message is displayed.
+    Abort,
+    /// A word or token failed. The rest of the line was discarded, as
+    /// [`outer_interpreter`] describes, and the loop goes on with the next line.
+    Error(ForthError),
+}
+
+/// Runs the loop that the standard's `QUIT` stands for: reads a line, evaluates it, and reports
+/// the result, until the input ends or `BYE` runs.
+///
+/// `read_line` gets the VM, so that a host can use it, for instance to complete words. It
+/// returns the next line, or `None` at the end of the input. `report` gets the VM and the
+/// [`LineResult`] of each line.
+///
+/// `QUIT` and `ABORT`, from the top level or from any depth of colon words, discard the rest of
+/// their line and carry on with the next one, so a host never has to handle
+/// [`ForthError::Quit`] or [`ForthError::Abort`]. An error ends only its line. Unlike
+/// [`outer_interpreter`], which evaluates one piece of text, this keeps reading input.
+///
+/// Returns `Some(code)` if `BYE` ran, with its exit code. The library doesn't leave the
+/// process. Returns `None` at the end of the input.
+///
+/// # Safety
+///
+/// `vm` must come from [`boot`](crate::boot), and the requirements of [`outer_interpreter`]
+/// apply.
+///
+/// # Examples
+///
+/// ```
+/// use std::io;
+///
+/// use rust_forth_vm::{boot, quit_loop, LineResult, VmConfig};
+///
+/// let mut lines = ["1 2 QUIT 3", ".", "ABORT", "BYE"].into_iter();
+/// let mut results = Vec::new();
+///
+/// // SAFETY: this VM is only used through the crate's functions.
+/// let code = unsafe {
+///     let mut vm = boot(io::sink(), VmConfig::new(1024))?;
+///     quit_loop(
+///         &mut vm,
+///         |_| lines.next().map(String::from),
+///         |_, result| results.push(matches!(result, LineResult::Quit | LineResult::Abort)),
+///     )
+/// };
+///
+/// assert_eq!(code, Some(0));
+/// assert_eq!(results, [true, false, true]);
+/// # Ok::<(), rust_forth_vm::ForthError>(())
+/// ```
+pub unsafe fn quit_loop(
+    vm: &mut Vm,
+    mut read_line: impl FnMut(&Vm) -> Option<String>,
+    mut report: impl FnMut(&Vm, LineResult),
+) -> Option<Cell> {
+    while let Some(line) = read_line(vm) {
+        let result = match outer_interpreter(vm, &line) {
+            Ok(()) => LineResult::Ok,
+            Err(ForthError::Quit) => LineResult::Quit,
+            Err(ForthError::Abort) => LineResult::Abort,
+            Err(ForthError::Bye(code)) => return Some(code),
+            Err(error) => LineResult::Error(error),
+        };
+        report(vm, result);
+    }
+    None
 }
 
 #[cfg(test)]
