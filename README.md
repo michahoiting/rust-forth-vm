@@ -304,7 +304,8 @@ stacks, and rolls back any unfinished colon definition.
 ## Performance
 
 `make perf` measures the VM on a set of Forth workloads, and stores the result in
-`target/perf/results.sqlite`. See [Measuring performance](CONTRIBUTING.md#measuring-performance).
+`target/perf/results.sqlite`. Each PR gets a report of the change in its job summary. See
+[Measuring performance](CONTRIBUTING.md#measuring-performance).
 
 ## Working with Claude Code
 

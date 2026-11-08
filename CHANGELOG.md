@@ -18,6 +18,9 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 - Performance measurement: `make perf` runs Forth workloads for each part of the VM, counts
   their instructions, and stores the results in a SQLite database under `target/perf`.
   `make perf-report` shows the development, and `make perf-compare` compares with another commit.
+- A performance report on each PR: the `perf` job counts the instructions of the base and the
+  head with Cachegrind, and shows the change per workload in the job summary, with the
+  functions behind each change from 2%. It doesn't fail the job yet.
 - An indirect-threaded Forth VM with a linked-list dictionary, a text interpreter, and a
   compiler for colon definitions.
 - A library API: `boot` creates a VM from a `VmConfig` and an output writer, and

@@ -1,0 +1,67 @@
+name: Performance
+
+# Counts the instructions of the workloads in examples/perf, on the base and the head in the same
+# job, and reports the difference. See ADR-0002 in docs/adr. The report is in the job summary,
+# and doesn't fail the job yet.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# Newer pushes to a PR cancel its older runs. Each push to main gets its own group, so that
+# none of them is ever canceled or replaced.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  perf:
+    # A fixed image, so that a new one doesn't move the figures between runs.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # On a PR, HEAD is the merge commit, and its first parent is the base. On a push to main,
+      # the first parent is the previous commit on main.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Check for changes besides Markdown
+        id: changes
+        run: echo "code=$(make -s code-changed BASE=HEAD^1)" >> "$GITHUB_OUTPUT"
+
+      - name: Skip a change to only Markdown
+        if: steps.changes.outputs.code == 'false'
+        run: echo "Only Markdown changed, so nothing was measured." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install Rust
+        if: steps.changes.outputs.code != 'false'
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Install Valgrind
+        if: steps.changes.outputs.code != 'false'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends valgrind
+
+      - name: Measure the base and the head
+        if: steps.changes.outputs.code != 'false'
+        run: make perf-ci BASE=HEAD^1 OUT="$RUNNER_TEMP/perf"
+
+      - name: Keep the Cachegrind output
+        if: ${{ always() && !cancelled() && steps.changes.outputs.code != 'false' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: perf
+          path: ${{ runner.temp }}/perf
+          retention-days: 14
+          if-no-files-found: ignore

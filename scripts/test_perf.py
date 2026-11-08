@@ -156,6 +156,154 @@ class CompareTests(unittest.TestCase):
         self.assertEqual((rows[0]["status"], rows[0]["head"]), ("removed", None))
 
 
+    def test_rows_say_whether_a_workload_is_gated(self):
+        rows = perf.compare([result("a", 1), result("b", 1, gated=False)], [result("a", 1)], "ir")
+        self.assertEqual([(row["name"], row["gated"]) for row in rows], [("a", True), ("b", False)])
+
+
+def summary(rows, analyses=None, backend="cachegrind", elapsed=60.0, base=None, head=None):
+    """Returns a summary, as command_ci writes it."""
+    metric = perf.MAIN_METRIC[backend]
+    return {
+        "base_sha": "a" * 40,
+        "head_sha": "b" * 40,
+        "backend": backend,
+        "metric": metric,
+        "tool_version": "valgrind-3.22.0",
+        "rustc": "rustc 1.99.0",
+        "target": "x86_64-unknown-linux-gnu",
+        "machine": "m1",
+        "base": base if base is not None else [result("stack", 100e6, metric=metric)],
+        "head": head if head is not None else [result("stack", 103e6, metric=metric)],
+        "rows": rows,
+        "analyses": analyses or {},
+        "elapsed_seconds": elapsed,
+    }
+
+
+class AnalysisTests(unittest.TestCase):
+    """Explaining a slowdown by function."""
+
+    def test_names_lose_the_symbol_hash_the_checkout_and_the_compiler_path(self):
+        self.assertEqual(
+            perf.same_name(
+                "rust_forth_vm::vm::Vm::pop::h0123456789abcdef",
+                "/tmp/x/perf-checkouts/head/src/vm.rs",
+            ),
+            ("rust_forth_vm::vm::Vm::pop", "src/vm.rs"),
+        )
+        self.assertEqual(
+            perf.same_name("core::ptr::drop", "/rustc/0123abcd/library/core/src/ptr/mod.rs")[1],
+            "library/core/src/ptr/mod.rs",
+        )
+
+    def test_the_largest_differences_come_first_either_way(self):
+        base = {("a", "f"): 10, ("b", "f"): 10, ("c", "f"): 10}
+        head = {("a", "f"): 11, ("b", "f"): 2, ("c", "f"): 10, ("d", "f"): 5}
+        differences = perf.function_differences(base, head, count=2)
+        self.assertEqual(
+            differences,
+            [
+                {"function": "b", "file": "f", "base": 10, "head": 2, "difference": -8},
+                {"function": "d", "file": "f", "base": 0, "head": 5, "difference": 5},
+            ],
+        )
+
+    def test_the_two_sides_match_after_renaming(self):
+        base = {("f::h0000000000000000", "/t/perf-checkouts/base/src/a.rs"): 10}
+        head = {("f::h1111111111111111", "/t/perf-checkouts/head/src/a.rs"): 12}
+        differences = perf.function_differences(base, head)
+        self.assertEqual([(row["function"], row["difference"]) for row in differences], [("f", 2)])
+
+    def test_only_workloads_from_the_warning_limit_are_analyzed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = perf.Path(directory)
+            for side in ("base", "head"):
+                (out / side).mkdir()
+                for name in ("slow", "same"):
+                    (out / side / f"{name}.cachegrind").write_text(CACHEGRIND_OUTPUT)
+            rows = [
+                perf.row_of("slow", True, 100, 103, perf.WARN_PERCENT, "warn"),
+                perf.row_of("same", True, 100, 100, perf.WARN_PERCENT - 0.01, "ok"),
+                perf.row_of("new", True, None, 100, None, "new"),
+            ]
+            analyses = perf.analyze(rows, out / "base", out / "head", out)
+        self.assertEqual(analyses, {"slow": []})
+
+
+class ReportTests(unittest.TestCase):
+    """The Markdown report of a CI run."""
+
+    def test_a_comparison_has_a_row_for_each_workload(self):
+        rows = [
+            perf.row_of("stack", True, 100e6, 103e6, 3.0, "warn"),
+            perf.row_of("compile_far", False, 1e6, 2e6, 100.0, "ok"),
+        ]
+        base = [result("stack", 100e6), result("compile_far", 1e6, gated=False)]
+        head = [result("stack", 103e6), result("compile_far", 2e6, gated=False)]
+        report = perf.markdown_report(summary(rows, base=base, head=head))
+        self.assertIn("| `stack` | Stack | 100.00 M | 103.00 M | +3.00% | - | Warning |", report)
+        self.assertIn("| `compile_far` | Stack | 1.00 M | 2.00 M | +100.00% | - | Reported |", report)
+        self.assertIn("doesn't fail this check yet", report)
+
+    def test_branch_misses_are_compared_too(self):
+        base = [result("stack", 100, metric="ir")]
+        base[0]["metrics"]["bim"] = 10
+        head = [result("stack", 100, metric="ir")]
+        head[0]["metrics"]["bim"] = 12
+        rows = perf.compare(base, head, "ir")
+        report = perf.markdown_report(summary(rows, base=base, head=head))
+        self.assertIn("| +0.00% | +20.00% | Passed |", report)
+
+    def test_branch_misses_need_a_base_other_than_zero(self):
+        base = [result("a", 0, metric="bim"), result("b", 1, metric="bim", source="old")]
+        head = [result("a", 5, metric="bim"), result("b", 2, metric="bim")]
+        self.assertEqual(perf.metric_changes(base, head, "bim"), {})
+
+    def test_other_backends_have_no_branch_misses(self):
+        rows = [perf.row_of("stack", True, 100e6, 103e6, 3.0, "warn")]
+        report = perf.markdown_report(summary(rows, backend="macos-pmu"))
+        self.assertNotIn("Branch misses", report)
+        self.assertNotIn("too noisy", report)
+        report = perf.markdown_report(summary(rows, backend="cpu-time"))
+        self.assertIn("too noisy", report)
+
+    def test_a_changed_source_is_named(self):
+        rows = [perf.row_of("stack", True, 100e6, 103e6, None, "changed")]
+        report = perf.markdown_report(summary(rows))
+        self.assertIn("because their source changed: `stack`.", report)
+
+    def test_an_analysis_lists_its_functions(self):
+        rows = [perf.row_of("stack", True, 100e6, 106e6, 6.0, "fail")]
+        analysis = {"function": "<a as b>::c|d", "file": "src/vm.rs", "base": 1000, "head": 4000}
+        analysis["difference"] = 3000
+        report = perf.markdown_report(summary(rows, {"stack": [analysis]}))
+        self.assertIn("### Why `stack` is +6.00%", report)
+        self.assertIn("| `<a as b>::c\\|d` | `src/vm.rs` | 1,000 | 4,000 | +3,000 |", report)
+
+    def test_without_a_base_it_shows_the_head(self):
+        report = perf.markdown_report(summary(None))
+        self.assertIn("nothing to compare with", report)
+        self.assertIn("| `stack` | Stack | 103.00 M |", report)
+
+    def test_more_time_than_the_budget_is_reported(self):
+        rows = [perf.row_of("stack", True, 1, 1, 0.0, "ok")]
+        self.assertNotIn("budget", perf.markdown_report(summary(rows)))
+        over = summary(rows, elapsed=perf.CI_BUDGET_SECONDS + 1)
+        self.assertIn("more than the budget", perf.markdown_report(over))
+
+    def test_annotations_warn_about_slowdowns_and_time(self):
+        rows = [
+            perf.row_of("stack", True, 1, 1, 6.0, "fail"),
+            perf.row_of("output", True, 1, 1, 3.0, "warn"),
+            perf.row_of("boot", True, 1, 1, 0.0, "ok"),
+        ]
+        lines = perf.annotations(summary(rows, elapsed=perf.CI_BUDGET_SECONDS + 1))
+        self.assertEqual(len(lines), 3)
+        self.assertTrue(all(line.startswith("::warning title=Performance::") for line in lines))
+        self.assertIn("stack has +6.00% ir", lines[0])
+
+
 class SparklineTests(unittest.TestCase):
     """The small chart."""
 
