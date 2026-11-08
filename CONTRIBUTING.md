@@ -47,6 +47,9 @@ it. CI still runs the same checks.
    checks the results that its comments state.
 6. Open a PR that closes the issue. The project owner reviews and merges.
 
+Dependabot PRs need no issue or changelog entry. The project owner reviews and merges them
+without auto-merge.
+
 If you use the Claude CLI, see [Working with Claude Code](README.md#working-with-claude-code)
 for how these steps look in practice.
 
