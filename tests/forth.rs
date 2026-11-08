@@ -10,8 +10,8 @@ use std::mem;
 use std::rc::Rc;
 
 use rust_forth_vm::{
-    boot, outer_interpreter, Cell, ForthError, Vm, VmConfig, COPYRIGHT, DEFAULT_DATA_STACK_CELLS,
-    DEFAULT_RETURN_STACK_CELLS,
+    boot, outer_interpreter, quit_loop, Cell, ForthError, LineResult, Vm, VmConfig, COPYRIGHT,
+    DEFAULT_DATA_STACK_CELLS, DEFAULT_RETURN_STACK_CELLS,
 };
 
 const TEST_CELLS: usize = 64 * 1024;
@@ -2675,4 +2675,88 @@ fn word_names_are_sorted() {
         sorted.sort();
         assert_eq!(names, sorted);
     }
+}
+
+// Runs `lines` through `quit_loop`. Returns the result of BYE, the output, a label for the
+// result of each line, and the depth of the data stack after the loop.
+fn run_loop(lines: &[&str]) -> (Option<Cell>, String, Vec<String>, usize) {
+    unsafe {
+        let output = Capture::default();
+        let mut vm = test_vm(output.clone());
+        let mut lines = lines.iter().map(|line| line.to_string());
+        let mut labels = Vec::new();
+        let code = quit_loop(
+            &mut vm,
+            |_| lines.next(),
+            |_, result| {
+                labels.push(match result {
+                    LineResult::Ok => "ok".to_string(),
+                    LineResult::Quit => "quit".to_string(),
+                    LineResult::Abort => "abort".to_string(),
+                    LineResult::Error(error) => format!("error: {}", error),
+                });
+            },
+        );
+        let printed = output.text();
+        let before = printed.len();
+        outer_interpreter(&mut vm, "DEPTH .").unwrap();
+        let depth = output.text()[before..].trim().parse().unwrap();
+        (code, printed, labels, depth)
+    }
+}
+
+#[test]
+fn quit_loop_quit_keeps_the_stack_and_reads_on() {
+    let (code, output, labels, depth) =
+        run_loop(&["1 2 QUIT 3 .", ".", ": X QUIT ;", "X 4 .", "7 ."]);
+    assert_eq!(code, None);
+    assert_eq!(output.trim(), "2 7");
+    assert_eq!(labels, ["quit", "ok", "ok", "quit", "ok"]);
+    assert_eq!(depth, 1);
+}
+
+#[test]
+fn quit_loop_abort_clears_the_stack_and_reads_on() {
+    let (code, output, labels, depth) =
+        run_loop(&["1 2 ABORT 3 .", ": X ABORT ;", "5 X 4 .", "7 ."]);
+    assert_eq!(code, None);
+    assert_eq!(output.trim(), "7");
+    assert_eq!(labels, ["abort", "ok", "abort", "ok"]);
+    assert_eq!(depth, 0);
+}
+
+#[test]
+fn quit_loop_error_ends_only_its_line() {
+    let (code, output, labels, _) = run_loop(&["1 NOPE .", "2 ."]);
+    assert_eq!(code, None);
+    assert_eq!(output.trim(), "2");
+    assert_eq!(
+        labels,
+        [
+            "error: Word or numeric literal 'NOPE' not recognized.",
+            "ok"
+        ]
+    );
+}
+
+#[test]
+fn quit_loop_bye_ends_it_with_its_code() {
+    unsafe {
+        let mut vm = test_vm(io::sink());
+        let mut lines = ["1 .", "3 (BYE) 2 .", "never"]
+            .into_iter()
+            .map(String::from);
+        let mut count = 0;
+        let code = quit_loop(&mut vm, |_| lines.next(), |_, _| count += 1);
+        assert_eq!(code, Some(3));
+        assert_eq!(count, 1);
+        assert_eq!(lines.next().as_deref(), Some("never"));
+    }
+}
+
+#[test]
+fn quit_loop_ends_at_the_end_of_the_input() {
+    let (code, _, labels, _) = run_loop(&[]);
+    assert_eq!(code, None);
+    assert!(labels.is_empty());
 }
