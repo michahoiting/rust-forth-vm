@@ -21,7 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      # Write, so the review can post comments with GITHUB_TOKEN when the actor is a bot.
+      pull-requests: write
       issues: read
       id-token: write
 
@@ -36,6 +37,12 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The Claude app token is refused for actors without write access, such as the
+          # Copilot bot that pushes agent PRs. For that actor, use GITHUB_TOKEN instead,
+          # which skips the token exchange, and let it past the action's human actor check.
+          # Everyone else keeps the app token.
+          github_token: ${{ github.actor == 'Copilot' && secrets.GITHUB_TOKEN || '' }}
+          allowed_bots: 'Copilot'
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
