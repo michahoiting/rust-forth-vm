@@ -10,6 +10,8 @@ use crate::cell::Cell;
 
 /// An error that stopped the evaluation of some input. [`ForthError::Quit`],
 /// [`ForthError::Abort`] and [`ForthError::Bye`] also stop it, but aren't failures.
+/// [`quit_loop`](crate::quit_loop) handles those three itself, so a host that uses it only
+/// sees real errors, as a [`LineResult`](crate::LineResult).
 ///
 /// [`outer_interpreter`](crate::outer_interpreter) returns these, and so does
 /// [`boot`](crate::boot). `Display` gives a message for the user.
