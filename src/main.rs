@@ -120,6 +120,8 @@ OTHER @ . COUNTER @ .              \ prints 7 45
 1 2 SWAP . .                  \ prints 1 2
 3 4 OVER . . .                \ prints 3 4 3
 1 2 3 ROT . . .               \ prints 1 3 2
+1 2 NIP .                     \ prints 2
+1 2 TUCK . . .                \ prints 2 1 2
 5 ?DUP . .                    \ prints 5 5
 0 ?DUP .                      \ prints 0
 10 20 30 2 PICK . . . .       \ prints 10 30 20 10

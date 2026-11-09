@@ -12,6 +12,7 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 
 ### Added
 
+- The stack words `NIP` and `TUCK`.
 - `docs/words.md`, which replaces the word table in the README. It lists every word of the
   FORTH-83 Required Word Set and the ANS Forth CORE and CORE EXT word sets, with the standard of
   each word and whether rust-forth-vm has it, and a test keeps that column in line with the VM.

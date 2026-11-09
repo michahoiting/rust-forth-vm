@@ -126,6 +126,10 @@ pub(crate) unsafe fn install(vm: &mut Vm) -> Result<(), ForthError> {
     vm.dictionary
         .add_primitive_word("OVER", code_cell(core::over), 0)?;
     vm.dictionary
+        .add_primitive_word("NIP", code_cell(core::nip), 0)?;
+    vm.dictionary
+        .add_primitive_word("TUCK", code_cell(core::tuck), 0)?;
+    vm.dictionary
         .add_primitive_word("ROT", code_cell(core::rot), 0)?;
     vm.dictionary
         .add_primitive_word("PICK", code_cell(core::pick), 0)?;

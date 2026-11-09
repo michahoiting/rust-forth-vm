@@ -234,6 +234,23 @@ fn pairs_and_memory_words_work_interpreted_and_compiled() {
 }
 
 #[test]
+fn nip_and_tuck_work_interpreted_and_compiled() {
+    assert_eq!(
+        output_of(&["1 2 3 NIP . . DEPTH .", "1 2 TUCK . . . DEPTH ."]),
+        "3 1 0 2 1 2 0 "
+    );
+    assert_eq!(
+        output_of(&[
+            ": DROP-SECOND NIP ;",
+            ": TUCK-TOP TUCK ;",
+            "1 2 3 DROP-SECOND . . DEPTH .",
+            "1 2 TUCK-TOP . . . DEPTH .",
+        ]),
+        "3 1 0 2 1 2 0 "
+    );
+}
+
+#[test]
 fn division_by_zero_is_reported_without_panicking_and_vm_recovers() {
     unsafe {
         let output = Capture::default();
@@ -279,7 +296,7 @@ fn new_words_report_api_underflow_and_leave_the_vm_usable() {
                 "{word}: {error}"
             );
         }
-        for word in ["2DROP", "2DUP"] {
+        for word in ["2DROP", "2DUP", "NIP", "TUCK"] {
             let source = format!("1 {word}");
             let error = outer_interpreter(&mut vm, &source).unwrap_err();
             assert!(
@@ -1186,6 +1203,7 @@ fn every_word_that_grows_the_stack_overflows_at_the_limit() {
         "DUP",
         "?DUP",
         "OVER",
+        "TUCK",
         "DEPTH",
         "X",
         "C",

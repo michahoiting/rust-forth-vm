@@ -41,13 +41,13 @@ See the [limitations](../README.md#limitations) in the README for what the VM do
 | `DEPTH` | `( -- n )` | FORTH-83, ANS CORE | Yes | Pushes the number of Cells on the stack |
 | `DROP` | `( x -- )` | FORTH-83, ANS CORE | Yes | Removes the top Cell |
 | `DUP` | `( x -- x x )` | FORTH-83, ANS CORE | Yes | Copies the top Cell |
-| `NIP` | `( x1 x2 -- x2 )` | ANS CORE EXT | No | Removes the second Cell |
+| `NIP` | `( x1 x2 -- x2 )` | ANS CORE EXT | Yes | Removes the second Cell |
 | `OVER` | `( a b -- a b a )` | FORTH-83, ANS CORE | Yes | Copies the second Cell to the top |
 | `PICK` | `( ... n -- ... x )` | FORTH-83, ANS CORE EXT | Yes | Copies the `n`th Cell below `n`, counting from 0 |
 | `ROLL` | `( ... n -- ... x )` | FORTH-83, ANS CORE EXT | Yes | Moves the `n`th Cell below `n` to the top, counting from 0 |
 | `ROT` | `( a b c -- b c a )` | FORTH-83, ANS CORE | Yes | Moves the third Cell to the top |
 | `SWAP` | `( a b -- b a )` | FORTH-83, ANS CORE | Yes | Exchanges the top two Cells |
-| `TUCK` | `( x1 x2 -- x2 x1 x2 )` | ANS CORE EXT | No | Copies the top Cell below the second one |
+| `TUCK` | `( x1 x2 -- x2 x1 x2 )` | ANS CORE EXT | Yes | Copies the top Cell below the second one |
 
 ## Return stack
 
