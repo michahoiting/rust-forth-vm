@@ -6,9 +6,8 @@
 use std::io::Write;
 
 use crate::cell::Cell;
-use crate::dictionary::{cfa_of, is_immediate};
 use crate::error::ForthError;
-use crate::vm::{trampoline_cfa, Vm};
+use crate::vm::{execute_word, Vm};
 
 /// Parses a decimal number. Accepts negative numbers as well as the full unsigned range of
 /// a Cell.
@@ -18,19 +17,14 @@ fn parse_number(token: &str) -> Option<Cell> {
 }
 
 /// Handles a single token, either interpreting or compiling it.
-///
-/// # Safety
-///
-/// `vm` must come from [`boot`](crate::boot).
-unsafe fn interpret_token(vm: &mut Vm, token: &str) {
-    if let Some(header) = vm.dictionary.find_word(token) {
+fn interpret_token(vm: &mut Vm, token: &str) {
+    if let Some(xt) = vm.dictionary.find_word(token) {
         // --- CASE A: THE TOKEN IS A DICTIONARY WORD ---
-        let cfa = cfa_of(header);
-        if vm.compiler.is_compiling() && !is_immediate(header) {
-            let result = vm.compiler.compile_word(&mut vm.dictionary, cfa as Cell);
+        if vm.compiler.is_compiling() && !vm.dictionary.is_immediate(xt) {
+            let result = vm.compiler.compile_word(&mut vm.dictionary, xt);
             vm.check(result);
         } else {
-            trampoline_cfa(vm, cfa);
+            execute_word(vm, xt);
         }
     } else if let Some(number) = parse_number(token) {
         // --- CASE B: THE TOKEN IS A NUMBER (LITERAL) ---
@@ -48,21 +42,13 @@ unsafe fn interpret_token(vm: &mut Vm, token: &str) {
 
 /// QUIT: Clears the return stack and returns to interpreting, discarding any half-built
 /// definition, which could never be finished or used.
-///
-/// # Safety
-///
-/// `vm` must come from [`boot`](crate::boot).
-unsafe fn quit(vm: &mut Vm) {
+fn quit(vm: &mut Vm) {
     vm.return_stack.clear();
     vm.compiler.abort(&mut vm.dictionary);
 }
 
 /// ABORT: Resets the VM after an error, by clearing the data stack and doing a [`quit`].
-///
-/// # Safety
-///
-/// `vm` must come from [`boot`](crate::boot).
-unsafe fn abort(vm: &mut Vm) {
+fn abort(vm: &mut Vm) {
     vm.data_stack.clear();
     quit(vm);
 }
@@ -92,12 +78,6 @@ unsafe fn abort(vm: &mut Vm) {
 /// [`boot`](crate::boot) fails. A failed flush is ignored after another error, so the
 /// original error is the one reported.
 ///
-/// # Safety
-///
-/// `vm` must come from [`boot`](crate::boot). The VM runs threaded code through
-/// raw pointers into its dictionary, which only this crate's functions keep valid.
-/// Some Forth input can still crash the process: see the limitations in the README.
-///
 /// # Examples
 ///
 /// ```
@@ -118,28 +98,25 @@ unsafe fn abort(vm: &mut Vm) {
 ///
 /// let output = Output::default();
 ///
-/// // SAFETY: this VM is only used through the crate's functions.
-/// unsafe {
-///     let mut vm = boot(output.clone(), VmConfig::new(1024))?;
-///     outer_interpreter(&mut vm, "40 2 + .")?;
+/// let mut vm = boot(output.clone(), VmConfig::new(1024))?;
+/// outer_interpreter(&mut vm, "40 2 + .")?;
 ///
-///     // The error discards the rest of the input, so the second `.` never runs.
-///     let error = outer_interpreter(&mut vm, "7 . 8 NO-SUCH-WORD .").unwrap_err();
-///     assert!(matches!(error, ForthError::UnknownWord(_)));
+/// // The error discards the rest of the input, so the second `.` never runs.
+/// let error = outer_interpreter(&mut vm, "7 . 8 NO-SUCH-WORD .").unwrap_err();
+/// assert!(matches!(error, ForthError::UnknownWord(_)));
 ///
-///     // The stacks are clear, so the 8 is gone, but the VM still works.
-///     let error = outer_interpreter(&mut vm, ".").unwrap_err();
-///     assert!(matches!(error, ForthError::DataStackUnderflow));
+/// // The stacks are clear, so the 8 is gone, but the VM still works.
+/// let error = outer_interpreter(&mut vm, ".").unwrap_err();
+/// assert!(matches!(error, ForthError::DataStackUnderflow));
 ///
-///     // A definition can continue in the next call.
-///     outer_interpreter(&mut vm, ": THREE 3")?;
-///     outer_interpreter(&mut vm, "; THREE .")?;
-/// }
+/// // A definition can continue in the next call.
+/// outer_interpreter(&mut vm, ": THREE 3")?;
+/// outer_interpreter(&mut vm, "; THREE .")?;
 ///
 /// assert_eq!(output.0.borrow().as_slice(), b"42 7 3 ");
 /// # Ok::<(), ForthError>(())
 /// ```
-pub unsafe fn outer_interpreter(vm: &mut Vm, input: &str) -> Result<(), ForthError> {
+pub fn outer_interpreter(vm: &mut Vm, input: &str) -> Result<(), ForthError> {
     vm.input.load(input);
 
     // Tokenize the input string by whitespace (spaces, tabs, newlines)
@@ -195,11 +172,6 @@ pub enum LineResult {
 /// Returns `Some(code)` if `BYE` ran, with its exit code. The library doesn't leave the
 /// process. Returns `None` at the end of the input.
 ///
-/// # Safety
-///
-/// `vm` must come from [`boot`](crate::boot), and the requirements of [`outer_interpreter`]
-/// apply.
-///
 /// # Examples
 ///
 /// ```
@@ -210,21 +182,18 @@ pub enum LineResult {
 /// let mut lines = ["1 2 QUIT 3", ".", "ABORT", "BYE"].into_iter();
 /// let mut results = Vec::new();
 ///
-/// // SAFETY: this VM is only used through the crate's functions.
-/// let code = unsafe {
-///     let mut vm = boot(io::sink(), VmConfig::new(1024))?;
-///     quit_loop(
-///         &mut vm,
-///         |_| lines.next().map(String::from),
-///         |_, result| results.push(matches!(result, LineResult::Quit | LineResult::Abort)),
-///     )
-/// };
+/// let mut vm = boot(io::sink(), VmConfig::new(1024))?;
+/// let code = quit_loop(
+///     &mut vm,
+///     |_| lines.next().map(String::from),
+///     |_, result| results.push(matches!(result, LineResult::Quit | LineResult::Abort)),
+/// );
 ///
 /// assert_eq!(code, Some(0));
 /// assert_eq!(results, [true, false, true]);
 /// # Ok::<(), rust_forth_vm::ForthError>(())
 /// ```
-pub unsafe fn quit_loop(
+pub fn quit_loop(
     vm: &mut Vm,
     mut read_line: impl FnMut(&Vm) -> Option<String>,
     mut report: impl FnMut(&Vm, LineResult),
@@ -247,7 +216,7 @@ mod tests {
     use std::io;
 
     use super::*;
-    use crate::vm::run;
+    use crate::dictionary::Code;
     use crate::{boot, VmConfig};
 
     const TEST_CELLS: usize = 64 * 1024;
@@ -263,42 +232,42 @@ mod tests {
 
     #[test]
     fn failed_definition_is_rolled_back() {
-        unsafe {
-            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            let mark = vm.dictionary.mark();
-            assert_error!(&mut vm, ": BROKEN 1 NOPE ;", ForthError::UnknownWord(name) if name == "NOPE");
-            assert_eq!(vm.dictionary.mark(), mark);
-            assert!(!vm.compiler.is_compiling());
-        }
+        let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+        let mark = vm.dictionary.mark();
+        assert_error!(&mut vm, ": BROKEN 1 NOPE ;", ForthError::UnknownWord(name) if name == "NOPE");
+        assert_eq!(vm.dictionary.mark(), mark);
+        assert!(!vm.compiler.is_compiling());
     }
 
     #[test]
     fn dictionary_overflow_is_reported() {
-        unsafe {
-            let mut vm = boot(io::sink(), VmConfig::new(FILL_TEST_CELLS)).unwrap();
-            let cells = "1 , ".repeat(FILL_TEST_CELLS);
-            assert_error!(&mut vm, &cells, ForthError::DictionaryOverflow);
-            assert_error!(&mut vm, "1 ,", ForthError::DictionaryOverflow);
-            assert_error!(&mut vm, "CREATE X", ForthError::DictionaryOverflow);
-        }
+        let mut vm = boot(io::sink(), VmConfig::new(FILL_TEST_CELLS)).unwrap();
+        let cells = "1 , ".repeat(FILL_TEST_CELLS);
+        assert_error!(&mut vm, &cells, ForthError::DictionaryOverflow);
+        assert_error!(&mut vm, "1 ,", ForthError::DictionaryOverflow);
+        assert_error!(&mut vm, "CREATE X", ForthError::DictionaryOverflow);
     }
 
     #[test]
     fn long_threads_do_not_grow_the_rust_stack() {
-        unsafe {
-            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            outer_interpreter(&mut vm, ": NOOP ;").unwrap();
-            let cfa = cfa_of(vm.dictionary.find_word("NOOP").unwrap());
+        // Miri is far too slow for the full length, but still checks each step.
+        let cells = if cfg!(miri) { 1_000 } else { 5_000_000 };
+        let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS + cells)).unwrap();
+        outer_interpreter(&mut vm, ": NOOP ;").unwrap();
+        let noop = vm.dictionary.find_word("NOOP").unwrap();
 
-            // Miri is far too slow for the full length, but still checks each step.
-            let cells = if cfg!(miri) { 1_000 } else { 5_000_000 };
-            let mut thread = vec![cfa as Cell; cells];
-            thread.push(0);
-            vm.ip = thread.as_ptr();
-            run(&mut vm);
-
-            assert!(vm.error.is_none());
-            assert!(vm.return_stack.is_empty());
+        // A colon word whose thread calls NOOP `cells` times.
+        let xt = vm
+            .compiler
+            .begin_definition(&mut vm.dictionary, "LONG", Code::Colon, 0)
+            .unwrap();
+        for _ in 0..cells {
+            vm.compiler.compile_word(&mut vm.dictionary, noop).unwrap();
         }
+        vm.compiler.end_definition(&mut vm.dictionary).unwrap();
+        execute_word(&mut vm, xt);
+
+        assert!(vm.error.is_none(), "got: {:?}", vm.error);
+        assert!(vm.return_stack.is_empty());
     }
 }

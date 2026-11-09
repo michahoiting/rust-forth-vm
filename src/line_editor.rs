@@ -92,11 +92,7 @@ impl LineEditor {
     /// Reads a line, and adds it to the history. Tab completes the words of `vm`. Ctrl-C
     /// discards the line being edited and starts a new one. Returns the exit code instead if
     /// the program should end.
-    ///
-    /// # Safety
-    ///
-    /// The word headers of `vm` must be intact, as for [`Vm::word_names`].
-    pub(crate) unsafe fn read_line(&mut self, vm: &Vm) -> Result<String, ExitCode> {
+    pub(crate) fn read_line(&mut self, vm: &Vm) -> Result<String, ExitCode> {
         if let Some(helper) = self.editor.helper_mut() {
             helper.words = vm.word_names();
         }

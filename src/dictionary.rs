@@ -1,33 +1,48 @@
 // Copyright (c) 2026 M.W.R. Hoiting
 
-//! The dictionary: its storage, the word header layout, and the functions that
-//! write to and search the linked list of words. Nothing outside this module
-//! knows how a header is laid out: other modules use its accessors, such as [`pfa_of`].
+//! The dictionary: its storage, the word header layout, the table of execution tokens, and the
+//! functions that write to and search the linked list of words. Nothing outside this module
+//! knows how a header is laid out: other modules use its accessors.
 //!
-//! Every word uses the same header layout, whether it is a primitive or was created at
-//! runtime. The name bytes are stored in the dictionary directly in front of the header. A
-//! word's `header` is a pointer to its first Cell, the LFA, and the constants below are
-//! offsets from there.
+//! The arena is a block of bytes, and every address in it is a byte offset from its start, so
+//! Forth address 0 is its first byte. No Cell in the arena holds a native pointer, and every
+//! access is bounds-checked.
+//!
+//! Every word has an entry in the XT table, and its execution token (XT) is the index of that
+//! entry. The entry holds what the word does, as a [`Code`], and the address of its body, which
+//! is its data or its thread. The body itself stays in the arena, so `ALLOT`, `,` and `>BODY`
+//! work on it like on any other memory.
+//!
+//! Every word also has a header in the arena, with the same layout for primitives and for words
+//! created at runtime. The name bytes are stored directly in front of the header. A word's
+//! `header` is the address of its first Cell, the link, and the constants below are Cell
+//! indexes from there.
 
 use std::mem;
 use std::ops::Range;
-use std::ptr;
 
 use crate::cell::Cell;
 use crate::error::ForthError;
 
-/// Link Field: points to the LFA of the previous word.
+/// The size of a Cell in bytes.
+const CELL_SIZE: usize = mem::size_of::<Cell>();
+
+/// Link Field: the address of the header of the previous word, or [`NO_WORD`].
 const LFA: usize = 0;
-/// Name Field: points to the name bytes.
+/// Name Field: the address of the name bytes.
 const NFA: usize = 1;
 /// The length of the name in bytes, in the bits of [`LEN_MASK`], combined with the `F_*` flags
 /// below.
 const LEN_FLAGS: usize = 2;
-/// Code Field: the machine-code pointer. For a word changed by DOES>, this is the address of
-/// its action thread instead, which [`enter_word`](crate::vm::enter_word) tells apart.
-const CFA: usize = 3;
+/// The execution token of the word, which leads from its header back to its entry in the XT
+/// table.
+const XT: usize = 3;
 /// The size of a header in Cells.
 const HEADER_CELLS: usize = 4;
+
+/// The link of the oldest word. The search also stops at any link that doesn't point to an
+/// older header, so a header that `!` changed can't make it loop.
+const NO_WORD: Cell = Cell::MAX;
 
 /// The bits of [`LEN_FLAGS`] that hold the name length, which is also the longest name.
 const LEN_MASK: Cell = 0xFF;
@@ -37,166 +52,123 @@ pub(crate) const F_IMMEDIATE: Cell = 1 << 8;
 /// Can never be found by name. Unlike [`F_PENDING`], this stays set, and the word can still
 /// be run through its execution token.
 pub(crate) const F_HIDDEN: Cell = 1 << 9;
-/// Made by CREATE, so DOES> may change its action.
-pub(crate) const F_CREATED: Cell = 1 << 10;
 /// Still being defined, so it can't be found or executed. Unlike [`F_HIDDEN`], this is
 /// cleared when the definition ends.
-pub(crate) const F_PENDING: Cell = 1 << 11;
+pub(crate) const F_PENDING: Cell = 1 << 10;
 /// Reads an inline operand from the thread that calls it, so it only works in compiled code.
 /// [`is_execution_token`](Dictionary::is_execution_token) refuses it, because `EXECUTE` would
 /// run it with `IP` somewhere else. Every word with an inline operand needs this flag.
-pub(crate) const F_COMPILE_ONLY: Cell = 1 << 12;
+pub(crate) const F_COMPILE_ONLY: Cell = 1 << 11;
 
-/// Returns the CFA of the word with this header.
-///
-/// # Safety
-///
-/// `header` must point to a word in the dictionary.
-pub(crate) unsafe fn cfa_of(header: *mut Cell) -> *mut Cell {
-    header.add(CFA)
+/// What a word does when it runs. This takes the place of a code field.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Code {
+    /// Calls the primitive with this index in the VM's table of primitives.
+    Primitive(usize),
+    /// Runs the thread at the body, as a word made by `:` or `:NONAME`.
+    Colon,
+    /// Pushes the address of the body, as a word made by `CREATE` or `VARIABLE`.
+    Variable,
+    /// Pushes the Cell at the body, as a word made by `CONSTANT`.
+    Constant,
+    /// Pushes the address of the body, and runs the action thread at this address. `DOES>`
+    /// gives a word made by `CREATE` this code.
+    Does(Cell),
 }
 
-/// Returns the PFA of the word with this CFA. Every word's Parameter Field follows its Code
-/// Field, but a primitive has nothing there.
-///
-/// # Safety
-///
-/// `cfa` must point to the Code Field of a word in the dictionary.
-pub(crate) unsafe fn pfa_of(cfa: *const Cell) -> *const Cell {
-    cfa.add(1)
+/// The entry of one word in the XT table.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct XtEntry {
+    /// What the word does when it runs.
+    pub(crate) code: Code,
+    /// The address of the word's body: its data or its thread. It directly follows the header.
+    pub(crate) body: Cell,
+    /// The address of the word's header.
+    header: usize,
 }
 
 /// Returns `addr` rounded up to the next cell-aligned address. Like other Cell arithmetic, this
 /// wraps at the top of the address range.
 pub(crate) fn aligned(addr: Cell) -> Cell {
-    let mask = mem::size_of::<Cell>() - 1;
+    let mask = CELL_SIZE - 1;
     addr.wrapping_add(mask) & !mask
-}
-
-/// Returns whether the word has [`F_IMMEDIATE`] set.
-///
-/// # Safety
-///
-/// See [`cfa_of`].
-pub(crate) unsafe fn is_immediate(header: *mut Cell) -> bool {
-    *header.add(LEN_FLAGS) & F_IMMEDIATE != 0
-}
-
-/// Returns whether the word has [`F_CREATED`] set.
-///
-/// # Safety
-///
-/// See [`cfa_of`].
-pub(crate) unsafe fn is_created(header: *mut Cell) -> bool {
-    *header.add(LEN_FLAGS) & F_CREATED != 0
-}
-
-/// Returns whether a name can find the word, so it's neither hidden nor still being defined.
-///
-/// # Safety
-///
-/// `header` must point to a word header.
-unsafe fn is_findable(header: *mut Cell) -> bool {
-    !is_hidden(header) && !is_pending(header)
-}
-
-/// Returns whether the word has [`F_HIDDEN`] set.
-///
-/// # Safety
-///
-/// See [`cfa_of`].
-pub(crate) unsafe fn is_hidden(header: *mut Cell) -> bool {
-    *header.add(LEN_FLAGS) & F_HIDDEN != 0
-}
-
-/// Returns whether the word has [`F_PENDING`] set.
-///
-/// # Safety
-///
-/// See [`cfa_of`].
-pub(crate) unsafe fn is_pending(header: *mut Cell) -> bool {
-    *header.add(LEN_FLAGS) & F_PENDING != 0
-}
-
-/// Returns whether the word has [`F_COMPILE_ONLY`] set.
-///
-/// # Safety
-///
-/// See [`cfa_of`].
-pub(crate) unsafe fn is_compile_only(header: *mut Cell) -> bool {
-    *header.add(LEN_FLAGS) & F_COMPILE_ONLY != 0
 }
 
 /// A saved dictionary state, used to discard everything written after it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Mark {
     /// The saved [`Dictionary::here`].
-    here: *mut u8,
-    /// The saved [`Dictionary::last_word`].
-    last_word: *mut Cell,
+    here: usize,
+    /// The saved length of the XT table.
+    words: usize,
 }
 
-/// The arena that holds every word, and the linked list running through it.
+/// The arena that holds every word, the linked list running through it, and the XT table.
 pub(crate) struct Dictionary {
-    /// The first Cell of the arena.
-    start: *mut Cell,
-    /// Dictionary pointer to the next free byte. It is cell-aligned unless `C,` or `ALLOT` left
-    /// it unaligned.
-    here: *mut u8,
-    /// Pointer to the LFA of the most recently created word.
-    last_word: *mut Cell,
-    /// One past the last usable Cell.
-    end: *mut Cell,
-    /// Owns the arena that the pointers above refer to.
-    _storage: Vec<Cell>,
+    /// The arena. Its length is a whole number of Cells, and never changes.
+    bytes: Vec<u8>,
+    /// The address of the next free byte. It is cell-aligned unless `C,` or `ALLOT` left it
+    /// unaligned.
+    here: usize,
+    /// The XT table, oldest word first. The last entry is the newest word.
+    words: Vec<XtEntry>,
 }
 
 impl Dictionary {
-    /// Allocates an untyped arena of `cells` Cells for our Forth dictionary space. The arena
-    /// can't grow later, because threads, links and Code Fields hold raw addresses into it.
+    /// Allocates an arena of `cells` Cells for our Forth dictionary space. Its size can't change
+    /// later.
     ///
     /// # Errors
     ///
     /// Returns [`ForthError::DictionaryTooLarge`] if the arena can't be allocated.
-    pub(crate) unsafe fn new(cells: usize) -> Result<Dictionary, ForthError> {
-        let mut storage: Vec<Cell> = Vec::new();
-        storage
-            .try_reserve_exact(cells)
+    pub(crate) fn new(cells: usize) -> Result<Dictionary, ForthError> {
+        let too_large = ForthError::DictionaryTooLarge(cells);
+        let size = cells.checked_mul(CELL_SIZE).ok_or(too_large)?;
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes
+            .try_reserve_exact(size)
             .map_err(|_| ForthError::DictionaryTooLarge(cells))?;
-        storage.resize(cells, 0);
+        bytes.resize(size, 0);
 
-        let start = storage.as_mut_ptr();
         Ok(Dictionary {
-            start,
-            here: start as *mut u8,
-            last_word: ptr::null_mut(), // Dictionary starts out empty
-            end: start.add(storage.len()),
-            _storage: storage,
+            bytes,
+            here: 0,
+            words: Vec::new(),
         })
     }
 
     /// Returns HERE, which is the address of the next free byte.
     pub(crate) fn here(&self) -> Cell {
-        self.here as Cell
+        self.here
     }
 
     /// Returns the first cell-aligned address at or after HERE. The arena ends on a Cell
     /// boundary, so this is never past its end.
-    fn next_cell(&self) -> *mut u8 {
-        let padding = aligned(self.here()) - self.here();
-        self.here.wrapping_add(padding)
+    fn next_cell(&self) -> usize {
+        aligned(self.here)
     }
 
     /// Returns how many bytes are free from `from` to the end of the arena.
-    fn free_bytes(&self, from: *mut u8) -> usize {
-        self.end as Cell - from as Cell
+    fn free_bytes(&self, from: usize) -> usize {
+        self.bytes.len() - from
+    }
+
+    /// Reads the Cell at `offset`, which the caller has checked.
+    fn read_cell(&self, offset: usize) -> Cell {
+        let mut bytes = [0; CELL_SIZE];
+        bytes.copy_from_slice(&self.bytes[offset..offset + CELL_SIZE]);
+        Cell::from_ne_bytes(bytes)
+    }
+
+    /// Writes the Cell at `offset`, which the caller has checked.
+    fn write_cell(&mut self, offset: usize, value: Cell) {
+        self.bytes[offset..offset + CELL_SIZE].copy_from_slice(&value.to_ne_bytes());
     }
 
     /// Moves HERE to the next cell-aligned address, and clears the bytes it passes.
     pub(crate) fn align(&mut self) {
         let cell = self.next_cell();
-        // SAFETY: HERE and `cell` are both in the arena, and `cell` isn't before HERE.
-        unsafe { ptr::write_bytes(self.here, 0, cell as Cell - self.here as Cell) };
+        self.bytes[self.here..cell].fill(0);
         self.here = cell;
     }
 
@@ -205,13 +177,13 @@ impl Dictionary {
     /// # Errors
     ///
     /// Returns [`ForthError::DictionaryOverflow`] if the Cell doesn't fit. HERE doesn't move.
-    pub(crate) unsafe fn comma(&mut self, value: Cell) -> Result<(), ForthError> {
-        if self.free_bytes(self.next_cell()) < mem::size_of::<Cell>() {
+    pub(crate) fn comma(&mut self, value: Cell) -> Result<(), ForthError> {
+        if self.free_bytes(self.next_cell()) < CELL_SIZE {
             return Err(ForthError::DictionaryOverflow);
         }
         self.align();
-        *(self.here as *mut Cell) = value;
-        self.here = self.here.add(mem::size_of::<Cell>());
+        self.write_cell(self.here, value);
+        self.here += CELL_SIZE;
         Ok(())
     }
 
@@ -220,12 +192,12 @@ impl Dictionary {
     /// # Errors
     ///
     /// Returns [`ForthError::DictionaryOverflow`] if the dictionary is full.
-    pub(crate) unsafe fn char_comma(&mut self, value: u8) -> Result<(), ForthError> {
+    pub(crate) fn char_comma(&mut self, value: u8) -> Result<(), ForthError> {
         if self.free_bytes(self.here) == 0 {
             return Err(ForthError::DictionaryOverflow);
         }
-        *self.here = value;
-        self.here = self.here.add(1);
+        self.bytes[self.here] = value;
+        self.here += 1;
         Ok(())
     }
 
@@ -237,54 +209,44 @@ impl Dictionary {
     ///
     /// Returns [`ForthError::DictionaryOverflow`] if `bytes` doesn't fit, and
     /// [`ForthError::AllotBelowData`] if it gives back more than that data.
-    ///
-    /// # Safety
-    ///
-    /// The newest word's header must be intact, as for [`find_word`](Self::find_word).
-    pub(crate) unsafe fn allot(&mut self, bytes: isize) -> Result<(), ForthError> {
+    pub(crate) fn allot(&mut self, bytes: isize) -> Result<(), ForthError> {
         let size = bytes.unsigned_abs();
         if bytes >= 0 {
             if size > self.free_bytes(self.here) {
                 return Err(ForthError::DictionaryOverflow);
             }
-            ptr::write_bytes(self.here, 0, size);
-            self.here = self.here.add(size);
+            self.bytes[self.here..self.here + size].fill(0);
+            self.here += size;
         } else {
-            if self.last_word.is_null() || !is_created(self.last_word) {
+            let data = match self.words.last() {
+                Some(entry) if is_created(entry.code) => entry.body,
+                _ => return Err(ForthError::AllotBelowData(bytes)),
+            };
+            if size > self.here - data {
                 return Err(ForthError::AllotBelowData(bytes));
             }
-            let data = pfa_of(cfa_of(self.last_word)) as Cell;
-            if size > self.here() - data {
-                return Err(ForthError::AllotBelowData(bytes));
-            }
-            self.here = self.here.sub(size);
+            self.here -= size;
         }
         Ok(())
     }
 
-    /// Returns whether `addr` points into the arena, to a written Cell or not.
-    #[inline(always)]
-    pub(crate) fn is_in_arena(&self, addr: Cell) -> bool {
-        addr >= self.start as Cell && addr < self.end as Cell
-    }
-
     /// Checks that `len` bytes at `addr` are in the written part of the arena, and returns
-    /// the offset of `addr` from the start of the arena. The checks run in a fixed order, so
-    /// the error names the first fault.
+    /// `addr`. The checks run in a fixed order, so the error names the first fault.
     ///
     /// # Errors
     ///
     /// Returns [`ForthError::AddressOutOfBounds`] if `addr` isn't in the arena, and
     /// [`ForthError::UnwrittenAddress`] if the bytes reach HERE or past it.
+    #[inline(always)]
     fn written_offset(&self, addr: Cell, len: usize) -> Result<usize, ForthError> {
-        let end = self.end as Cell;
-        if !self.is_in_arena(addr) && !(len == 0 && addr == end && addr == self.here()) {
+        let end = self.bytes.len();
+        if addr >= end && !(len == 0 && addr == end && addr == self.here) {
             return Err(ForthError::AddressOutOfBounds(addr));
         }
-        if addr.checked_add(len).is_none_or(|end| end > self.here()) {
+        if addr.checked_add(len).is_none_or(|end| end > self.here) {
             return Err(ForthError::UnwrittenAddress(addr));
         }
-        Ok(addr - self.start as Cell)
+        Ok(addr)
     }
 
     /// Checks that `len` bytes at `addr` are written and returns their range in the arena.
@@ -299,46 +261,47 @@ impl Dictionary {
         Ok(offset..offset + len)
     }
 
+    /// Checks that the `count` Cells at `addr` are written and cell-aligned, and returns
+    /// `addr`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::AddressOutOfBounds`] or [`ForthError::UnwrittenAddress`] from
+    /// [`written_offset`](Self::written_offset), and [`ForthError::MisalignedAddress`] if
+    /// `addr` isn't cell-aligned.
+    #[inline(always)]
+    fn cells_offset(&self, addr: Cell, count: usize) -> Result<usize, ForthError> {
+        let offset = self.written_offset(addr, count * CELL_SIZE)?;
+        if !offset.is_multiple_of(CELL_SIZE) {
+            return Err(ForthError::MisalignedAddress(addr));
+        }
+        Ok(offset)
+    }
+
     /// Reads two adjacent Cells at `addr`, which must be aligned.
     ///
     /// # Errors
     ///
-    /// Returns the same address errors as [`fetch`](Self::fetch), and
-    /// [`ForthError::MisalignedAddress`] if `addr` isn't cell-aligned.
+    /// Returns the same address errors as [`fetch`](Self::fetch).
     pub(crate) fn fetch_two(&self, addr: Cell) -> Result<(Cell, Cell), ForthError> {
-        let cell_size = mem::size_of::<Cell>();
-        let offset = self.written_offset(addr, 2 * cell_size)?;
-        if !offset.is_multiple_of(cell_size) {
-            return Err(ForthError::MisalignedAddress(addr));
-        }
-        let index = offset / cell_size;
-        // SAFETY: the range check covers both Cells, and their alignment was checked.
-        unsafe { Ok((*self.start.add(index), *self.start.add(index + 1))) }
+        let offset = self.cells_offset(addr, 2)?;
+        Ok((self.read_cell(offset), self.read_cell(offset + CELL_SIZE)))
     }
 
     /// Writes two adjacent Cells at `addr`, checking both before either write.
     ///
     /// # Errors
     ///
-    /// Returns the same address errors as [`store`](Self::store), and
-    /// [`ForthError::MisalignedAddress`] if `addr` isn't cell-aligned. Nothing is written.
+    /// Returns the same address errors as [`store`](Self::store). Nothing is written.
     pub(crate) fn store_two(
         &mut self,
         addr: Cell,
         first: Cell,
         second: Cell,
     ) -> Result<(), ForthError> {
-        let cell_size = mem::size_of::<Cell>();
-        let offset = self.written_offset(addr, 2 * cell_size)?;
-        if !offset.is_multiple_of(cell_size) {
-            return Err(ForthError::MisalignedAddress(addr));
-        }
-        let index = offset / cell_size;
-        // SAFETY: the range check covers both Cells, and their alignment was checked.
-        unsafe {
-            *self.start.add(index) = first;
-            *self.start.add(index + 1) = second;
-        }
+        let offset = self.cells_offset(addr, 2)?;
+        self.write_cell(offset, first);
+        self.write_cell(offset + CELL_SIZE, second);
         Ok(())
     }
 
@@ -350,8 +313,7 @@ impl Dictionary {
     /// range isn't written. No bytes are changed on error.
     pub(crate) fn fill(&mut self, addr: Cell, len: usize, byte: u8) -> Result<(), ForthError> {
         let range = self.written_range(addr, len)?;
-        // SAFETY: the range is inside the written part of the arena.
-        unsafe { ptr::write_bytes((self.start as *mut u8).add(range.start), byte, len) };
+        self.bytes[range].fill(byte);
         Ok(())
     }
 
@@ -369,64 +331,35 @@ impl Dictionary {
     ) -> Result<(), ForthError> {
         let source_range = self.written_range(source, len)?;
         let destination_range = self.written_range(destination, len)?;
-        // SAFETY: both ranges are inside the same arena. `ptr::copy` supports overlap.
-        unsafe {
-            ptr::copy(
-                (self.start as *const u8).add(source_range.start),
-                (self.start as *mut u8).add(destination_range.start),
-                len,
-            )
-        };
+        self.bytes
+            .copy_within(source_range, destination_range.start);
         Ok(())
     }
 
-    /// Returns the index of the Cell at `addr`, which must be cell-aligned and end at or below
-    /// HERE. This keeps the Cell inside the part of the arena that has been written.
+    /// Reads the Cell at `addr`, which must be cell-aligned and end at or below HERE. This keeps
+    /// the Cell inside the part of the arena that has been written. The inner interpreter reads
+    /// threads through here too.
     ///
     /// # Errors
     ///
-    /// Returns [`ForthError::AddressOutOfBounds`] or [`ForthError::UnwrittenAddress`] from
-    /// [`written_offset`](Self::written_offset), and [`ForthError::MisalignedAddress`] if
-    /// `addr` isn't cell-aligned.
-    fn cell_index(&self, addr: Cell) -> Result<usize, ForthError> {
-        let cell_size = mem::size_of::<Cell>();
-        let offset = self.written_offset(addr, cell_size)?;
-        if !offset.is_multiple_of(cell_size) {
-            return Err(ForthError::MisalignedAddress(addr));
-        }
-        Ok(offset / cell_size)
-    }
-
-    /// Returns the offset of the byte at `addr`, which must be below HERE.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ForthError::AddressOutOfBounds`] or [`ForthError::UnwrittenAddress`] from
-    /// [`written_offset`](Self::written_offset).
-    fn byte_offset(&self, addr: Cell) -> Result<usize, ForthError> {
-        self.written_offset(addr, 1)
-    }
-
-    /// Reads the Cell at `addr`. The number from the stack is only used as an offset,
-    /// never as a pointer.
-    ///
-    /// # Errors
-    ///
-    /// Returns the error of [`cell_index`](Self::cell_index) if it rejects `addr`.
+    /// Returns [`ForthError::AddressOutOfBounds`] if `addr` isn't in the arena,
+    /// [`ForthError::UnwrittenAddress`] if the Cell reaches HERE or past it, and
+    /// [`ForthError::MisalignedAddress`] if `addr` isn't cell-aligned.
+    #[inline(always)]
     pub(crate) fn fetch(&self, addr: Cell) -> Result<Cell, ForthError> {
-        let index = self.cell_index(addr)?;
-        Ok(unsafe { *self.start.add(index) })
+        let offset = self.cells_offset(addr, 1)?;
+        Ok(self.read_cell(offset))
     }
 
     /// Writes the Cell at `addr`, checked in the same way as `fetch`. This can change word
-    /// headers and compiled code, which the VM trusts.
+    /// headers and compiled code, but not the XT table.
     ///
     /// # Errors
     ///
-    /// Returns the error of [`cell_index`](Self::cell_index) if it rejects `addr`.
+    /// Returns the same errors as [`fetch`](Self::fetch).
     pub(crate) fn store(&mut self, addr: Cell, value: Cell) -> Result<(), ForthError> {
-        let index = self.cell_index(addr)?;
-        unsafe { *self.start.add(index) = value };
+        let offset = self.cells_offset(addr, 1)?;
+        self.write_cell(offset, value);
         Ok(())
     }
 
@@ -434,11 +367,11 @@ impl Dictionary {
     ///
     /// # Errors
     ///
-    /// Returns the error of [`byte_offset`](Self::byte_offset) if it rejects `addr`.
+    /// Returns [`ForthError::AddressOutOfBounds`] or [`ForthError::UnwrittenAddress`] if the
+    /// byte isn't below HERE.
     pub(crate) fn fetch_byte(&self, addr: Cell) -> Result<u8, ForthError> {
-        let offset = self.byte_offset(addr)?;
-        // SAFETY: `byte_offset` keeps the byte in the arena, and every byte there is initialized.
-        Ok(unsafe { *(self.start as *const u8).add(offset) })
+        let offset = self.written_offset(addr, 1)?;
+        Ok(self.bytes[offset])
     }
 
     /// Writes the byte at `addr`, checked in the same way as `fetch_byte`. Like `store`, this
@@ -446,183 +379,215 @@ impl Dictionary {
     ///
     /// # Errors
     ///
-    /// Returns the error of [`byte_offset`](Self::byte_offset) if it rejects `addr`.
+    /// Returns the same errors as [`fetch_byte`](Self::fetch_byte).
     pub(crate) fn store_byte(&mut self, addr: Cell, value: u8) -> Result<(), ForthError> {
-        let offset = self.byte_offset(addr)?;
-        // SAFETY: `byte_offset` keeps the byte in the arena.
-        unsafe { *(self.start as *mut u8).add(offset) = value };
+        let offset = self.written_offset(addr, 1)?;
+        self.bytes[offset] = value;
         Ok(())
     }
 
     /// Writes a complete word into the dictionary: the name bytes, then the header, both at
-    /// the next cell-aligned address. Returns the LFA of the new word.
+    /// the next cell-aligned address, and adds its entry to the XT table. The body of the word
+    /// starts at HERE afterwards. Returns the execution token of the new word.
     ///
     /// # Errors
     ///
     /// Returns [`ForthError::NameTooLong`] if the length doesn't fit in [`LEN_MASK`], and
     /// [`ForthError::DictionaryOverflow`] if the word doesn't fit. Nothing is written.
-    ///
-    /// # Safety
-    ///
-    /// `code` must come from [`code_cell`](crate::vm::code_cell), because the VM calls it.
-    pub(crate) unsafe fn write_header(
+    pub(crate) fn write_header(
         &mut self,
         name: &str,
-        code: Cell,
+        code: Code,
         flags: Cell,
-    ) -> Result<*mut Cell, ForthError> {
+    ) -> Result<Cell, ForthError> {
         if name.len() > LEN_MASK {
             return Err(ForthError::NameTooLong(name.len()));
         }
 
-        let cell_size = mem::size_of::<Cell>();
-        let name_cells = name.len().div_ceil(cell_size);
-        if (name_cells + HEADER_CELLS) * cell_size > self.free_bytes(self.next_cell()) {
+        let name_cells = name.len().div_ceil(CELL_SIZE);
+        if (name_cells + HEADER_CELLS) * CELL_SIZE > self.free_bytes(self.next_cell()) {
             return Err(ForthError::DictionaryOverflow);
         }
         self.align();
 
         // The dictionary owns its own copy, because the input does not outlive this call.
-        let name_ptr = self.here;
-        ptr::copy_nonoverlapping(name.as_ptr(), name_ptr, name.len());
+        let name_offset = self.here;
+        self.bytes[name_offset..name_offset + name.len()].copy_from_slice(name.as_bytes());
+        // Clear the padding, which may hold bytes from a word that was rolled back.
+        self.bytes[name_offset + name.len()..name_offset + name_cells * CELL_SIZE].fill(0);
 
-        let header = (name_ptr as *mut Cell).add(name_cells);
-        *header.add(LFA) = self.last_word as Cell;
-        *header.add(NFA) = name_ptr as Cell;
-        *header.add(LEN_FLAGS) = name.len() | flags;
-        *header.add(CFA) = code;
+        let header = name_offset + name_cells * CELL_SIZE;
+        let link = self.words.last().map_or(NO_WORD, |entry| entry.header);
+        let xt = self.words.len();
+        self.write_cell(header + LFA * CELL_SIZE, link);
+        self.write_cell(header + NFA * CELL_SIZE, name_offset);
+        self.write_cell(header + LEN_FLAGS * CELL_SIZE, name.len() | flags);
+        self.write_cell(header + XT * CELL_SIZE, xt);
 
-        self.here = header.add(HEADER_CELLS) as *mut u8;
-        self.last_word = header; // Update the head pointer of the dictionary
-        Ok(header)
+        self.here = header + HEADER_CELLS * CELL_SIZE;
+        self.words.push(XtEntry {
+            code,
+            body: self.here,
+            header,
+        });
+        Ok(xt)
     }
 
-    /// Simulates the built-in bootstrap dictionary populated when a Forth system boots.
-    /// Returns the CFA of the new word.
-    ///
-    /// # Errors
-    ///
-    /// See [`write_header`](Self::write_header).
-    ///
-    /// # Safety
-    ///
-    /// `code` must come from [`code_cell`](crate::vm::code_cell), because the VM calls it.
-    pub(crate) unsafe fn add_primitive_word(
-        &mut self,
-        name: &str,
-        code: Cell,
-        flags: Cell,
-    ) -> Result<Cell, ForthError> {
-        let header = self.write_header(name, code, flags)?;
-        Ok(cfa_of(header) as Cell)
+    /// Reads Cell `field` of the header at `header`, or returns `None` if that isn't in the
+    /// arena. Headers can be changed by `!`, so nothing read from one is trusted.
+    fn header_cell(&self, header: usize, field: usize) -> Option<Cell> {
+        let offset = header.checked_add(field * CELL_SIZE)?;
+        let end = offset.checked_add(CELL_SIZE)?;
+        (end <= self.bytes.len()).then(|| self.read_cell(offset))
     }
 
-    /// Linearly traverses the linked list of the dictionary (from newest to oldest).
-    /// Returns the LFA of the matching word.
-    ///
-    /// # Safety
-    ///
-    /// Every word header must be intact, because links and names are followed as raw
-    /// pointers. `!` can overwrite them.
-    pub(crate) unsafe fn find_word(&self, token: &str) -> Option<*mut Cell> {
-        let mut current_lfa = self.last_word;
+    /// Returns the flags of the header at `header`, without the name length. A header that
+    /// isn't in the arena reads as [`F_HIDDEN`] and [`F_PENDING`], so it can't be found or run.
+    fn header_flags(&self, header: usize) -> Cell {
+        self.header_cell(header, LEN_FLAGS)
+            .map_or(F_HIDDEN | F_PENDING, |cell| cell & !LEN_MASK)
+    }
 
-        while !current_lfa.is_null() {
-            let nfa_ptr = *current_lfa.add(NFA) as *const u8;
-            let len = *current_lfa.add(LEN_FLAGS) & LEN_MASK;
+    /// Returns the name bytes of the header at `header`, or `None` if they aren't in the arena.
+    fn header_name(&self, header: usize) -> Option<&[u8]> {
+        let name = self.header_cell(header, NFA)?;
+        let len = self.header_cell(header, LEN_FLAGS)? & LEN_MASK;
+        self.bytes.get(name..name.checked_add(len)?)
+    }
 
-            // Reconstruct the name from raw dictionary data pointers
-            if is_findable(current_lfa)
-                && std::slice::from_raw_parts(nfa_ptr, len) == token.as_bytes()
-            {
-                return Some(current_lfa);
-            }
-            // Follow the link pointer to the previous word (LFA)
-            current_lfa = *current_lfa.add(LFA) as *mut Cell;
-        }
-        None
+    /// Returns whether a name can find the word with this header, so it's neither hidden nor
+    /// still being defined.
+    fn is_findable(&self, header: usize) -> bool {
+        self.header_flags(header) & (F_HIDDEN | F_PENDING) == 0
+    }
+
+    /// Returns the headers of the word list, from newest to oldest. It follows the links, but
+    /// stops at a link that doesn't point to an older header, so it always ends.
+    fn headers(&self) -> impl Iterator<Item = usize> + '_ {
+        let mut current = self.words.last().map(|entry| entry.header);
+        std::iter::from_fn(move || {
+            let header = current?;
+            current = self.header_cell(header, LFA).filter(|&link| link < header);
+            Some(header)
+        })
+    }
+
+    /// Linearly traverses the linked list of the dictionary (from newest to oldest). Returns
+    /// the execution token stored in the header of the matching word.
+    pub(crate) fn find_word(&self, token: &str) -> Option<Cell> {
+        self.headers()
+            .find(|&header| {
+                self.is_findable(header) && self.header_name(header) == Some(token.as_bytes())
+            })
+            .and_then(|header| self.header_cell(header, XT))
     }
 
     /// Returns the sorted names of the words that [`find_word`](Self::find_word) can find, each
     /// one once. A name that isn't valid UTF-8, because `C!` overwrote it, comes back with
     /// replacement characters.
-    ///
-    /// # Safety
-    ///
-    /// Every word header must be intact, as for [`find_word`](Self::find_word).
-    pub(crate) unsafe fn word_names(&self) -> Vec<String> {
-        let mut names = Vec::new();
-        let mut current_lfa = self.last_word;
-
-        while !current_lfa.is_null() {
-            let nfa_ptr = *current_lfa.add(NFA) as *const u8;
-            let len = *current_lfa.add(LEN_FLAGS) & LEN_MASK;
-
-            if is_findable(current_lfa) && len > 0 {
-                let name = std::slice::from_raw_parts(nfa_ptr, len);
-                names.push(String::from_utf8_lossy(name).into_owned());
-            }
-            current_lfa = *current_lfa.add(LFA) as *mut Cell;
-        }
+    pub(crate) fn word_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .headers()
+            .filter(|&header| self.is_findable(header))
+            .filter_map(|header| self.header_name(header))
+            .filter(|name| !name.is_empty())
+            .map(|name| String::from_utf8_lossy(name).into_owned())
+            .collect();
         names.sort_unstable();
         names.dedup();
         names
     }
 
-    /// Returns the header of the most recently created word, or null if there are none.
-    pub(crate) fn last_word(&self) -> *mut Cell {
-        self.last_word
+    /// Returns the entry of the word with this execution token, or `None` if there is none.
+    #[inline(always)]
+    pub(crate) fn entry(&self, xt: Cell) -> Option<XtEntry> {
+        self.words.get(xt).copied()
+    }
+
+    /// Returns the flags of the word with this execution token, without the name length, or
+    /// `None` if there is no such word.
+    pub(crate) fn flags(&self, xt: Cell) -> Option<Cell> {
+        self.words
+            .get(xt)
+            .map(|entry| self.header_flags(entry.header))
+    }
+
+    /// Returns whether the word with this execution token has [`F_IMMEDIATE`] set.
+    pub(crate) fn is_immediate(&self, xt: Cell) -> bool {
+        self.flags(xt).is_some_and(|flags| flags & F_IMMEDIATE != 0)
+    }
+
+    /// Returns the execution token of the most recently created word, or `None` if there are
+    /// none.
+    #[cfg(test)]
+    pub(crate) fn last_xt(&self) -> Option<Cell> {
+        self.words.len().checked_sub(1)
+    }
+
+    /// Changes the flags of the most recently created word with `change`, if there is one. The
+    /// name length stays as it is.
+    fn change_last_flags(&mut self, change: impl FnOnce(Cell) -> Cell) {
+        let Some(header) = self.words.last().map(|entry| entry.header) else {
+            return;
+        };
+        let offset = header + LEN_FLAGS * CELL_SIZE;
+        let len_flags = self.read_cell(offset);
+        let flags = change(len_flags & !LEN_MASK) & !LEN_MASK;
+        self.write_cell(offset, len_flags & LEN_MASK | flags);
     }
 
     /// Marks the most recently created word as finished. Its other flags stay as they are.
-    ///
-    /// # Safety
-    ///
-    /// The dictionary must hold at least one word.
-    pub(crate) unsafe fn finish_last(&mut self) {
-        *self.last_word.add(LEN_FLAGS) &= !F_PENDING;
+    pub(crate) fn finish_last(&mut self) {
+        self.change_last_flags(|flags| flags & !F_PENDING);
     }
 
     /// Marks the most recently created word as immediate. Its other flags stay as they are.
-    ///
-    /// # Safety
-    ///
-    /// The dictionary must hold at least one word.
-    pub(crate) unsafe fn mark_last_immediate(&mut self) {
-        *self.last_word.add(LEN_FLAGS) |= F_IMMEDIATE;
+    pub(crate) fn mark_last_immediate(&mut self) {
+        self.change_last_flags(|flags| flags | F_IMMEDIATE);
     }
 
-    /// Returns whether `xt` is the code field of a finished word that can run from anywhere:
-    /// hidden or not, but not one with [`F_COMPILE_ONLY`].
-    ///
-    /// # Safety
-    ///
-    /// Every link in the word list must be intact, as for [`find_word`](Self::find_word).
-    pub(crate) unsafe fn is_execution_token(&self, xt: Cell) -> bool {
-        let mut current_lfa = self.last_word;
+    /// Returns whether the most recently created word was made by `CREATE`, so that `DOES>`
+    /// may change its action.
+    pub(crate) fn is_last_created(&self) -> bool {
+        self.words
+            .last()
+            .is_some_and(|entry| is_created(entry.code))
+    }
 
-        while !current_lfa.is_null() {
-            if cfa_of(current_lfa) as Cell == xt {
-                return !is_pending(current_lfa) && !is_compile_only(current_lfa);
-            }
-            current_lfa = *current_lfa.add(LFA) as *mut Cell;
+    /// Gives the most recently created word a new action, if there is one.
+    pub(crate) fn set_last_code(&mut self, code: Code) {
+        if let Some(entry) = self.words.last_mut() {
+            entry.code = code;
         }
-        false
+    }
+
+    /// Returns whether `xt` is the execution token of a finished word that can run from
+    /// anywhere: hidden or not, but not one with [`F_COMPILE_ONLY`].
+    pub(crate) fn is_execution_token(&self, xt: Cell) -> bool {
+        self.flags(xt)
+            .is_some_and(|flags| flags & (F_PENDING | F_COMPILE_ONLY) == 0)
     }
 
     /// Saves the current state, for a later [`restore`](Self::restore).
     pub(crate) fn mark(&self) -> Mark {
         Mark {
             here: self.here,
-            last_word: self.last_word,
+            words: self.words.len(),
         }
     }
 
-    /// Discards everything written since `mark` was saved.
+    /// Discards everything written since `mark` was saved, including the words in the XT
+    /// table.
     pub(crate) fn restore(&mut self, mark: Mark) {
         self.here = mark.here;
-        self.last_word = mark.last_word;
+        self.words.truncate(mark.words);
     }
+}
+
+/// Returns whether a word with this code was made by `CREATE`, so that `DOES>` may change its
+/// action and `ALLOT` may give back its data.
+fn is_created(code: Code) -> bool {
+    matches!(code, Code::Variable | Code::Does(_))
 }
 
 #[cfg(test)]
@@ -632,16 +597,40 @@ mod tests {
     use super::*;
     use crate::{boot, outer_interpreter, VmConfig};
 
-    const CELL_SIZE: usize = mem::size_of::<Cell>();
     const TEST_CELLS: usize = 64 * 1024;
 
+    // A Cell that stands for -1, and for -1 Cell, as a negative address.
+    const MINUS_ONE: Cell = Cell::MAX;
+    const MINUS_ONE_CELL: Cell = Cell::MAX - CELL_SIZE + 1;
+
     // Creates a dictionary holding these Cells, starting at its first Cell.
-    unsafe fn dictionary_with(values: &[Cell]) -> Dictionary {
+    fn dictionary_with(values: &[Cell]) -> Dictionary {
         let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
         for value in values {
             dictionary.comma(*value).unwrap();
         }
         dictionary
+    }
+
+    // Returns the address one past the last byte of the arena.
+    fn end_of(dictionary: &Dictionary) -> Cell {
+        dictionary.bytes.len()
+    }
+
+    // Returns the header of the word with this execution token.
+    fn header_of(dictionary: &Dictionary, xt: Cell) -> usize {
+        dictionary.words[xt].header
+    }
+
+    // Returns the length and flags Cell of the word with this execution token.
+    fn len_flags_of(dictionary: &Dictionary, xt: Cell) -> Cell {
+        dictionary
+            .header_cell(header_of(dictionary, xt), LEN_FLAGS)
+            .unwrap()
+    }
+
+    fn has_flag(dictionary: &Dictionary, xt: Cell, flag: Cell) -> bool {
+        dictionary.flags(xt).unwrap() & flag != 0
     }
 
     // The error variants carry no payload besides the address, so Debug output pins the exact
@@ -681,293 +670,297 @@ mod tests {
     }
 
     #[test]
-    fn store_byte_changes_only_the_target_byte() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[0, 0]);
-            let start = dictionary.start as Cell;
-            dictionary.store_byte(start + 1, 0xAB).unwrap();
+    fn new_rejects_a_size_that_overflows() {
+        assert!(matches!(
+            Dictionary::new(usize::MAX),
+            Err(ForthError::DictionaryTooLarge(usize::MAX))
+        ));
+    }
 
-            for offset in 0..2 * CELL_SIZE {
-                let expected = if offset == 1 { 0xAB } else { 0 };
-                assert_eq!(dictionary.fetch_byte(start + offset).unwrap(), expected);
-            }
+    #[test]
+    fn store_byte_changes_only_the_target_byte() {
+        let mut dictionary = dictionary_with(&[0, 0]);
+        dictionary.store_byte(1, 0xAB).unwrap();
+
+        for offset in 0..2 * CELL_SIZE {
+            let expected = if offset == 1 { 0xAB } else { 0 };
+            assert_eq!(dictionary.fetch_byte(offset).unwrap(), expected);
         }
     }
 
     #[test]
     fn byte_access_covers_exactly_the_written_bytes() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[0]);
-            let start = dictionary.start as Cell;
-            let here = dictionary.here();
+        let mut dictionary = dictionary_with(&[0]);
+        let here = dictionary.here();
+        let end = end_of(&dictionary);
 
-            assert!(dictionary.fetch_byte(start).is_ok());
-            assert!(dictionary.fetch_byte(here - 1).is_ok());
-            for addr in [start - 1, Cell::MAX, dictionary.end as Cell] {
-                assert!(matches!(
-                    dictionary.fetch_byte(addr),
-                    Err(ForthError::AddressOutOfBounds(a)) if a == addr
-                ));
-                assert!(matches!(
-                    dictionary.store_byte(addr, 1),
-                    Err(ForthError::AddressOutOfBounds(a)) if a == addr
-                ));
-            }
-            for addr in [here, here + 1, dictionary.end as Cell - 1] {
-                assert!(matches!(
-                    dictionary.fetch_byte(addr),
-                    Err(ForthError::UnwrittenAddress(a)) if a == addr
-                ));
-                assert!(matches!(
-                    dictionary.store_byte(addr, 1),
-                    Err(ForthError::UnwrittenAddress(a)) if a == addr
-                ));
-            }
+        assert!(dictionary.fetch_byte(0).is_ok());
+        assert!(dictionary.fetch_byte(here - 1).is_ok());
+        for addr in [MINUS_ONE, end] {
+            assert!(matches!(
+                dictionary.fetch_byte(addr),
+                Err(ForthError::AddressOutOfBounds(a)) if a == addr
+            ));
+            assert!(matches!(
+                dictionary.store_byte(addr, 1),
+                Err(ForthError::AddressOutOfBounds(a)) if a == addr
+            ));
+        }
+        for addr in [here, here + 1, end - 1] {
+            assert!(matches!(
+                dictionary.fetch_byte(addr),
+                Err(ForthError::UnwrittenAddress(a)) if a == addr
+            ));
+            assert!(matches!(
+                dictionary.store_byte(addr, 1),
+                Err(ForthError::UnwrittenAddress(a)) if a == addr
+            ));
         }
     }
 
     #[test]
     fn a_cell_that_ends_past_here_is_rejected() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[1]);
-            let addr = dictionary.here();
-            dictionary.char_comma(2).unwrap();
-            assert!(addr < dictionary.here());
+        let mut dictionary = dictionary_with(&[1]);
+        let addr = dictionary.here();
+        dictionary.char_comma(2).unwrap();
+        assert!(addr < dictionary.here());
 
-            assert_rejected(&mut dictionary, addr, ForthError::UnwrittenAddress);
-        }
+        assert_rejected(&mut dictionary, addr, ForthError::UnwrittenAddress);
     }
 
     #[test]
     fn cell_access_checks_bounds_then_here_then_alignment() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[1, 2]);
-            let start = dictionary.start as Cell;
-            let here = dictionary.here();
-            let end = dictionary.end as Cell;
+        let mut dictionary = dictionary_with(&[1, 2]);
+        let here = dictionary.here();
+        let end = end_of(&dictionary);
 
-            assert_eq!(dictionary.fetch(start).unwrap(), 1);
-            assert_eq!(dictionary.fetch(here - CELL_SIZE).unwrap(), 2);
-            assert!(dictionary.store(here - CELL_SIZE, 3).is_ok());
+        assert_eq!(dictionary.fetch(0).unwrap(), 1);
+        assert_eq!(dictionary.fetch(here - CELL_SIZE).unwrap(), 2);
+        assert!(dictionary.store(here - CELL_SIZE, 3).is_ok());
 
-            assert_rejected(&mut dictionary, 0, ForthError::AddressOutOfBounds);
-            assert_rejected(&mut dictionary, start - 1, ForthError::AddressOutOfBounds);
-            assert_rejected(
-                &mut dictionary,
-                start - CELL_SIZE,
-                ForthError::AddressOutOfBounds,
-            );
-            assert_rejected(&mut dictionary, end, ForthError::AddressOutOfBounds);
-            assert_rejected(&mut dictionary, Cell::MAX, ForthError::AddressOutOfBounds);
+        assert_rejected(&mut dictionary, MINUS_ONE, ForthError::AddressOutOfBounds);
+        assert_rejected(
+            &mut dictionary,
+            MINUS_ONE_CELL,
+            ForthError::AddressOutOfBounds,
+        );
+        assert_rejected(&mut dictionary, end, ForthError::AddressOutOfBounds);
 
-            assert_rejected(&mut dictionary, here, ForthError::UnwrittenAddress);
-            assert_rejected(&mut dictionary, here - 1, ForthError::UnwrittenAddress);
-            assert_rejected(&mut dictionary, here + 1, ForthError::UnwrittenAddress);
-            assert_rejected(
-                &mut dictionary,
-                end - CELL_SIZE,
-                ForthError::UnwrittenAddress,
-            );
-            assert_rejected(&mut dictionary, end - 1, ForthError::UnwrittenAddress);
+        assert_rejected(&mut dictionary, here, ForthError::UnwrittenAddress);
+        assert_rejected(&mut dictionary, here - 1, ForthError::UnwrittenAddress);
+        assert_rejected(&mut dictionary, here + 1, ForthError::UnwrittenAddress);
+        assert_rejected(
+            &mut dictionary,
+            end - CELL_SIZE,
+            ForthError::UnwrittenAddress,
+        );
+        assert_rejected(&mut dictionary, end - 1, ForthError::UnwrittenAddress);
 
-            assert_rejected(&mut dictionary, start + 1, ForthError::MisalignedAddress);
-            assert_rejected(
-                &mut dictionary,
-                here - CELL_SIZE + 1,
-                ForthError::UnwrittenAddress,
-            );
-        }
+        assert_rejected(&mut dictionary, 1, ForthError::MisalignedAddress);
+        assert_rejected(
+            &mut dictionary,
+            here - CELL_SIZE + 1,
+            ForthError::UnwrittenAddress,
+        );
     }
 
     #[test]
     fn char_comma_stores_one_byte_and_can_leave_here_unaligned() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[]);
-            let start = dictionary.here();
-            dictionary.char_comma(7).unwrap();
+        let mut dictionary = dictionary_with(&[]);
+        let start = dictionary.here();
+        dictionary.char_comma(7).unwrap();
 
-            assert_eq!(dictionary.here(), start + 1);
-            assert_eq!(dictionary.fetch_byte(start).unwrap(), 7);
-        }
+        assert_eq!(dictionary.here(), start + 1);
+        assert_eq!(dictionary.fetch_byte(start).unwrap(), 7);
     }
 
     #[test]
     fn char_comma_fills_the_arena_and_then_overflows() {
-        unsafe {
-            let mut dictionary = Dictionary::new(1).unwrap();
-            for byte in 0..CELL_SIZE {
-                dictionary.char_comma(byte as u8).unwrap();
-            }
-            let here = dictionary.here();
-
-            assert!(matches!(
-                dictionary.char_comma(0),
-                Err(ForthError::DictionaryOverflow)
-            ));
-            assert_eq!(dictionary.here(), here);
+        let mut dictionary = Dictionary::new(1).unwrap();
+        for byte in 0..CELL_SIZE {
+            dictionary.char_comma(byte as u8).unwrap();
         }
+        let here = dictionary.here();
+
+        assert!(matches!(
+            dictionary.char_comma(0),
+            Err(ForthError::DictionaryOverflow)
+        ));
+        assert_eq!(dictionary.here(), here);
     }
 
     #[test]
     fn align_moves_here_and_clears_the_bytes_it_passes() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[Cell::MAX]);
-            let start = dictionary.start as Cell;
-            let mark = dictionary.mark();
-            dictionary.restore(Mark {
-                here: dictionary.start as *mut u8,
-                ..mark
-            });
-            dictionary.char_comma(1).unwrap();
-            dictionary.align();
+        let mut dictionary = dictionary_with(&[Cell::MAX]);
+        let mark = dictionary.mark();
+        dictionary.restore(Mark { here: 0, ..mark });
+        dictionary.char_comma(1).unwrap();
+        dictionary.align();
 
-            assert_eq!(dictionary.here(), start + CELL_SIZE);
-            assert_eq!(
-                dictionary.fetch(start).unwrap(),
-                Cell::from_ne_bytes({
-                    let mut bytes = [0; CELL_SIZE];
-                    bytes[0] = 1;
-                    bytes
-                })
-            );
-        }
+        assert_eq!(dictionary.here(), CELL_SIZE);
+        assert_eq!(
+            dictionary.fetch(0).unwrap(),
+            Cell::from_ne_bytes({
+                let mut bytes = [0; CELL_SIZE];
+                bytes[0] = 1;
+                bytes
+            })
+        );
     }
 
     #[test]
     fn align_leaves_an_aligned_here_alone() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[1]);
-            let here = dictionary.here();
-            dictionary.align();
-            assert_eq!(dictionary.here(), here);
-        }
+        let mut dictionary = dictionary_with(&[1]);
+        let here = dictionary.here();
+        dictionary.align();
+        assert_eq!(dictionary.here(), here);
     }
 
     #[test]
     fn align_stops_at_the_end_of_the_arena() {
-        unsafe {
-            let mut dictionary = Dictionary::new(1).unwrap();
-            dictionary.char_comma(1).unwrap();
-            dictionary.align();
-            assert_eq!(dictionary.here(), dictionary.end as Cell);
-        }
+        let mut dictionary = Dictionary::new(1).unwrap();
+        dictionary.char_comma(1).unwrap();
+        dictionary.align();
+        assert_eq!(dictionary.here(), end_of(&dictionary));
     }
 
     #[test]
     fn comma_aligns_here_first() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[]);
-            let start = dictionary.here();
-            dictionary.char_comma(1).unwrap();
-            dictionary.comma(7).unwrap();
+        let mut dictionary = dictionary_with(&[]);
+        let start = dictionary.here();
+        dictionary.char_comma(1).unwrap();
+        dictionary.comma(7).unwrap();
 
-            assert_eq!(dictionary.here(), start + 2 * CELL_SIZE);
-            assert_eq!(dictionary.fetch(start + CELL_SIZE).unwrap(), 7);
-        }
+        assert_eq!(dictionary.here(), start + 2 * CELL_SIZE);
+        assert_eq!(dictionary.fetch(start + CELL_SIZE).unwrap(), 7);
     }
 
     #[test]
     fn comma_that_does_not_fit_after_aligning_leaves_here_alone() {
-        unsafe {
-            let mut dictionary = Dictionary::new(1).unwrap();
-            dictionary.char_comma(1).unwrap();
-            let here = dictionary.here();
+        let mut dictionary = Dictionary::new(1).unwrap();
+        dictionary.char_comma(1).unwrap();
+        let here = dictionary.here();
 
-            assert!(matches!(
-                dictionary.comma(2),
-                Err(ForthError::DictionaryOverflow)
-            ));
-            assert_eq!(dictionary.here(), here);
-        }
+        assert!(matches!(
+            dictionary.comma(2),
+            Err(ForthError::DictionaryOverflow)
+        ));
+        assert_eq!(dictionary.here(), here);
     }
 
     #[test]
     fn write_header_aligns_here_first() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[]);
-            dictionary.char_comma(1).unwrap();
-            let header = dictionary.write_header("X", 0, 0).unwrap();
+        let mut dictionary = dictionary_with(&[]);
+        dictionary.char_comma(1).unwrap();
+        let xt = dictionary.write_header("X", Code::Colon, 0).unwrap();
 
-            assert!((header as Cell).is_multiple_of(CELL_SIZE));
-            assert!(dictionary.find_word("X").is_some());
-            assert!(dictionary.here().is_multiple_of(CELL_SIZE));
-        }
+        assert!(header_of(&dictionary, xt).is_multiple_of(CELL_SIZE));
+        assert_eq!(dictionary.find_word("X"), Some(xt));
+        assert!(dictionary.here().is_multiple_of(CELL_SIZE));
     }
 
     #[test]
     fn write_header_that_does_not_fit_after_aligning_changes_nothing() {
-        unsafe {
-            // The name and header fill the arena exactly when HERE starts aligned.
-            let mut dictionary = Dictionary::new(HEADER_CELLS + 1).unwrap();
-            dictionary.char_comma(1).unwrap();
-            let mark = dictionary.mark();
+        // The name and header fill the arena exactly when HERE starts aligned.
+        let mut dictionary = Dictionary::new(HEADER_CELLS + 1).unwrap();
+        dictionary.char_comma(1).unwrap();
+        let mark = dictionary.mark();
 
-            assert!(matches!(
-                dictionary.write_header("X", 0, 0),
-                Err(ForthError::DictionaryOverflow)
-            ));
-            assert_eq!(dictionary.mark(), mark);
-        }
+        assert!(matches!(
+            dictionary.write_header("X", Code::Colon, 0),
+            Err(ForthError::DictionaryOverflow)
+        ));
+        assert_eq!(dictionary.mark(), mark);
+    }
+
+    #[test]
+    fn write_header_lays_out_the_name_and_the_header() {
+        let mut dictionary = dictionary_with(&[]);
+        let first = dictionary.write_header("A", Code::Colon, 0).unwrap();
+        let second = dictionary
+            .write_header("ABCDEFGHI", Code::Variable, F_HIDDEN)
+            .unwrap();
+        let name_cells = "ABCDEFGHI".len().div_ceil(CELL_SIZE);
+        let first_header = CELL_SIZE;
+        let second_header = first_header + HEADER_CELLS * CELL_SIZE + name_cells * CELL_SIZE;
+
+        assert_eq!((first, second), (0, 1));
+        assert_eq!(header_of(&dictionary, first), first_header);
+        assert_eq!(header_of(&dictionary, second), second_header);
+        let header = |field| dictionary.header_cell(second_header, field).unwrap();
+        assert_eq!(header(LFA), first_header);
+        assert_eq!(header(NFA), first_header + HEADER_CELLS * CELL_SIZE);
+        assert_eq!(header(LEN_FLAGS), 9 | F_HIDDEN);
+        assert_eq!(header(XT), second);
+        assert_eq!(dictionary.header_cell(first_header, LFA), Some(NO_WORD));
+        assert_eq!(
+            dictionary.entry(second),
+            Some(XtEntry {
+                code: Code::Variable,
+                body: dictionary.here(),
+                header: second_header,
+            })
+        );
+    }
+
+    #[test]
+    fn write_header_clears_the_padding_after_the_name() {
+        let mut dictionary = dictionary_with(&[Cell::MAX]);
+        dictionary.restore(Mark { here: 0, words: 0 });
+        dictionary.write_header("X", Code::Colon, 0).unwrap();
+        let mut expected = [0; CELL_SIZE];
+        expected[0] = b'X';
+        assert_eq!(dictionary.fetch(0).unwrap(), Cell::from_ne_bytes(expected));
     }
 
     #[test]
     fn restore_returns_to_an_unaligned_here() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[]);
-            dictionary.char_comma(1).unwrap();
-            let mark = dictionary.mark();
-            dictionary.comma(2).unwrap();
-            dictionary.restore(mark);
-            assert_eq!(dictionary.mark(), mark);
-        }
+        let mut dictionary = dictionary_with(&[]);
+        dictionary.char_comma(1).unwrap();
+        let mark = dictionary.mark();
+        dictionary.comma(2).unwrap();
+        dictionary.restore(mark);
+        assert_eq!(dictionary.mark(), mark);
     }
 
     #[test]
     fn allot_reserves_and_clears_bytes() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[Cell::MAX]);
-            let start = dictionary.start as Cell;
-            let mark = dictionary.mark();
-            dictionary.restore(Mark {
-                here: dictionary.start as *mut u8,
-                ..mark
-            });
-            dictionary.allot(3).unwrap();
+        let mut dictionary = dictionary_with(&[Cell::MAX]);
+        let mark = dictionary.mark();
+        dictionary.restore(Mark { here: 0, ..mark });
+        dictionary.allot(3).unwrap();
 
-            assert_eq!(dictionary.here(), start + 3);
-            for offset in 0..3 {
-                assert_eq!(dictionary.fetch_byte(start + offset).unwrap(), 0);
-            }
+        assert_eq!(dictionary.here(), 3);
+        for offset in 0..3 {
+            assert_eq!(dictionary.fetch_byte(offset).unwrap(), 0);
         }
     }
 
     #[test]
     fn allot_fills_the_arena_and_then_overflows() {
-        unsafe {
-            let mut dictionary = Dictionary::new(2).unwrap();
-            let here = dictionary.here();
-            let size = (2 * CELL_SIZE) as isize;
+        let mut dictionary = Dictionary::new(2).unwrap();
+        let here = dictionary.here();
+        let size = (2 * CELL_SIZE) as isize;
 
-            assert!(matches!(
-                dictionary.allot(size + 1),
-                Err(ForthError::DictionaryOverflow)
-            ));
-            assert!(matches!(
-                dictionary.allot(isize::MAX),
-                Err(ForthError::DictionaryOverflow)
-            ));
-            assert_eq!(dictionary.here(), here);
+        assert!(matches!(
+            dictionary.allot(size + 1),
+            Err(ForthError::DictionaryOverflow)
+        ));
+        assert!(matches!(
+            dictionary.allot(isize::MAX),
+            Err(ForthError::DictionaryOverflow)
+        ));
+        assert_eq!(dictionary.here(), here);
 
-            dictionary.allot(size).unwrap();
-            assert_eq!(dictionary.here(), dictionary.end as Cell);
-        }
+        dictionary.allot(size).unwrap();
+        assert_eq!(dictionary.here(), end_of(&dictionary));
     }
 
     #[test]
     fn allot_gives_back_the_data_of_a_created_word() {
-        unsafe {
+        for code in [Code::Variable, Code::Does(0)] {
             let mut dictionary = dictionary_with(&[]);
-            dictionary.write_header("X", 0, F_CREATED).unwrap();
+            dictionary.write_header("X", code, 0).unwrap();
             let data = dictionary.here();
             dictionary.allot(5).unwrap();
             dictionary.allot(-3).unwrap();
@@ -979,33 +972,31 @@ mod tests {
 
     #[test]
     fn allot_rejects_going_below_the_data_of_a_created_word() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[]);
-            dictionary.write_header("X", 0, F_CREATED).unwrap();
-            dictionary.allot(2).unwrap();
-            let here = dictionary.here();
+        let mut dictionary = dictionary_with(&[]);
+        dictionary.write_header("X", Code::Variable, 0).unwrap();
+        dictionary.allot(2).unwrap();
+        let here = dictionary.here();
 
-            for bytes in [-3, isize::MIN] {
-                assert!(matches!(
-                    dictionary.allot(bytes),
-                    Err(ForthError::AllotBelowData(b)) if b == bytes
-                ));
-            }
-            assert_eq!(dictionary.here(), here);
+        for bytes in [-3, isize::MIN] {
+            assert!(matches!(
+                dictionary.allot(bytes),
+                Err(ForthError::AllotBelowData(b)) if b == bytes
+            ));
         }
+        assert_eq!(dictionary.here(), here);
     }
 
     #[test]
     fn allot_gives_nothing_back_after_other_words() {
-        unsafe {
-            let mut empty = dictionary_with(&[1]);
-            assert!(matches!(
-                empty.allot(-1),
-                Err(ForthError::AllotBelowData(-1))
-            ));
+        let mut empty = dictionary_with(&[1]);
+        assert!(matches!(
+            empty.allot(-1),
+            Err(ForthError::AllotBelowData(-1))
+        ));
 
+        for code in [Code::Colon, Code::Constant, Code::Primitive(0)] {
             let mut dictionary = dictionary_with(&[]);
-            dictionary.write_header("X", 0, 0).unwrap();
+            dictionary.write_header("X", code, 0).unwrap();
             dictionary.comma(1).unwrap();
             let here = dictionary.here();
             assert!(matches!(
@@ -1018,651 +1009,628 @@ mod tests {
 
     #[test]
     fn fetch_reads_the_first_cell() {
-        unsafe {
-            let dictionary = dictionary_with(&[7]);
-            assert_eq!(dictionary.fetch(dictionary.start as Cell).unwrap(), 7);
-        }
+        let dictionary = dictionary_with(&[7]);
+        assert_eq!(dictionary.fetch(0).unwrap(), 7);
     }
 
     #[test]
-    fn fetch_rejects_addresses_just_below_the_start() {
-        unsafe {
-            let dictionary = dictionary_with(&[7]);
-            let start = dictionary.start as Cell;
-            assert_fetch_rejected(&dictionary, start - 1, ForthError::AddressOutOfBounds);
-            assert_fetch_rejected(
-                &dictionary,
-                start - CELL_SIZE,
-                ForthError::AddressOutOfBounds,
-            );
-        }
+    fn fetch_rejects_negative_addresses() {
+        let dictionary = dictionary_with(&[7]);
+        assert_fetch_rejected(&dictionary, MINUS_ONE, ForthError::AddressOutOfBounds);
+        assert_fetch_rejected(&dictionary, MINUS_ONE_CELL, ForthError::AddressOutOfBounds);
     }
 
     #[test]
     fn fetch_rejects_misaligned_addresses_inside_the_written_cells() {
-        unsafe {
-            // The first Cell is written, so only the alignment check rejects `start + offset`.
-            // A misaligned Cell in the last written Cell ends past HERE, which is checked first.
-            let dictionary = dictionary_with(&[1, 2]);
-            let start = dictionary.start as Cell;
-            for offset in 1..CELL_SIZE {
-                assert_fetch_rejected(&dictionary, start + offset, ForthError::MisalignedAddress);
-                assert_fetch_rejected(
-                    &dictionary,
-                    start + CELL_SIZE + offset,
-                    ForthError::UnwrittenAddress,
-                );
-            }
+        // The first Cell is written, so only the alignment check rejects `offset`. A
+        // misaligned Cell in the last written Cell ends past HERE, which is checked first.
+        let dictionary = dictionary_with(&[1, 2]);
+        for offset in 1..CELL_SIZE {
+            assert_fetch_rejected(&dictionary, offset, ForthError::MisalignedAddress);
+            assert_fetch_rejected(
+                &dictionary,
+                CELL_SIZE + offset,
+                ForthError::UnwrittenAddress,
+            );
         }
     }
 
     #[test]
     fn fetch_rejects_addresses_after_a_restore() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[1]);
-            let mark = dictionary.mark();
-            let addr = dictionary.here as Cell;
-            dictionary.comma(2).unwrap();
-            assert_eq!(dictionary.fetch(addr).unwrap(), 2);
+        let mut dictionary = dictionary_with(&[1]);
+        let mark = dictionary.mark();
+        let addr = dictionary.here();
+        dictionary.comma(2).unwrap();
+        assert_eq!(dictionary.fetch(addr).unwrap(), 2);
 
-            dictionary.restore(mark);
-            assert_fetch_rejected(&dictionary, addr, ForthError::UnwrittenAddress);
-        }
+        dictionary.restore(mark);
+        assert_fetch_rejected(&dictionary, addr, ForthError::UnwrittenAddress);
     }
 
     #[test]
     fn store_writes_the_first_cell() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[1, 2]);
-            let start = dictionary.start as Cell;
-            dictionary.store(start, 9).unwrap();
-            assert_eq!(dictionary.fetch(start).unwrap(), 9);
-        }
+        let mut dictionary = dictionary_with(&[1, 2]);
+        dictionary.store(0, 9).unwrap();
+        assert_eq!(dictionary.fetch(0).unwrap(), 9);
     }
 
     #[test]
     fn store_writes_the_last_written_cell() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[1, 2]);
-            let last = dictionary.start as Cell + CELL_SIZE;
-            dictionary.store(last, 9).unwrap();
-            assert_eq!(dictionary.fetch(last).unwrap(), 9);
-        }
+        let mut dictionary = dictionary_with(&[1, 2]);
+        dictionary.store(CELL_SIZE, 9).unwrap();
+        assert_eq!(dictionary.fetch(CELL_SIZE).unwrap(), 9);
     }
 
     #[test]
     fn store_changes_only_the_target_cell() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[1, 2, 3]);
-            let start = dictionary.start as Cell;
-            dictionary.store(start + CELL_SIZE, 9).unwrap();
-            assert_eq!(dictionary.fetch(start).unwrap(), 1);
-            assert_eq!(dictionary.fetch(start + CELL_SIZE).unwrap(), 9);
-            assert_eq!(dictionary.fetch(start + 2 * CELL_SIZE).unwrap(), 3);
-        }
+        let mut dictionary = dictionary_with(&[1, 2, 3]);
+        dictionary.store(CELL_SIZE, 9).unwrap();
+        assert_eq!(dictionary.fetch(0).unwrap(), 1);
+        assert_eq!(dictionary.fetch(CELL_SIZE).unwrap(), 9);
+        assert_eq!(dictionary.fetch(2 * CELL_SIZE).unwrap(), 3);
     }
 
     #[test]
     fn written_ranges_accept_empty_ranges_at_here_and_the_arena_end() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[1]);
-            let start = dictionary.start as Cell;
-            let here = dictionary.here();
+        let mut dictionary = dictionary_with(&[1]);
+        let here = dictionary.here();
 
-            assert_eq!(dictionary.written_range(start, 0).unwrap(), 0..0);
-            assert_eq!(
-                dictionary.written_range(here, 0).unwrap(),
-                CELL_SIZE..CELL_SIZE
-            );
-            dictionary
-                .allot((TEST_CELLS * CELL_SIZE - CELL_SIZE) as isize)
-                .unwrap();
-            let end = dictionary.end as Cell;
-            assert_eq!(
-                dictionary.written_range(end, 0).unwrap(),
-                TEST_CELLS * CELL_SIZE..TEST_CELLS * CELL_SIZE
-            );
-            assert!(matches!(
-                dictionary.written_range(end, 1),
-                Err(ForthError::AddressOutOfBounds(addr)) if addr == end
-            ));
-        }
+        assert_eq!(dictionary.written_range(0, 0).unwrap(), 0..0);
+        assert_eq!(
+            dictionary.written_range(here, 0).unwrap(),
+            CELL_SIZE..CELL_SIZE
+        );
+        dictionary
+            .allot((TEST_CELLS * CELL_SIZE - CELL_SIZE) as isize)
+            .unwrap();
+        let end = end_of(&dictionary);
+        assert_eq!(
+            dictionary.written_range(end, 0).unwrap(),
+            TEST_CELLS * CELL_SIZE..TEST_CELLS * CELL_SIZE
+        );
+        assert!(matches!(
+            dictionary.written_range(end, 1),
+            Err(ForthError::AddressOutOfBounds(addr)) if addr == end
+        ));
     }
 
     #[test]
     fn written_ranges_reject_overflow_and_ranges_past_here() {
-        unsafe {
-            let dictionary = dictionary_with(&[1, 2]);
-            let start = dictionary.start as Cell;
-            let here = dictionary.here();
+        let dictionary = dictionary_with(&[1, 2]);
+        let here = dictionary.here();
 
-            assert!(matches!(
-                dictionary.written_range(start, Cell::MAX),
-                Err(ForthError::UnwrittenAddress(addr)) if addr == start
-            ));
-            assert!(matches!(
-                dictionary.written_range(here - 1, 2),
-                Err(ForthError::UnwrittenAddress(addr)) if addr == here - 1
-            ));
-            assert!(matches!(
-                dictionary.written_range(1, 0),
-                Err(ForthError::AddressOutOfBounds(1))
-            ));
-        }
+        assert!(matches!(
+            dictionary.written_range(0, Cell::MAX),
+            Err(ForthError::UnwrittenAddress(0))
+        ));
+        assert!(matches!(
+            dictionary.written_range(here - 1, 2),
+            Err(ForthError::UnwrittenAddress(addr)) if addr == here - 1
+        ));
+        assert!(matches!(
+            dictionary.written_range(MINUS_ONE, 0),
+            Err(ForthError::AddressOutOfBounds(MINUS_ONE))
+        ));
     }
 
     #[test]
     fn store_two_checks_both_cells_before_writing() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[1, 2, 3]);
-            let start = dictionary.start as Cell;
-            let here = dictionary.here();
+        let mut dictionary = dictionary_with(&[1, 2, 3]);
+        let here = dictionary.here();
 
-            assert!(matches!(
-                dictionary.store_two(here - CELL_SIZE, 7, 8),
-                Err(ForthError::UnwrittenAddress(addr)) if addr == here - CELL_SIZE
-            ));
-            assert_eq!(dictionary.fetch(start).unwrap(), 1);
-            assert_eq!(dictionary.fetch(start + CELL_SIZE).unwrap(), 2);
-            assert_eq!(dictionary.fetch(start + 2 * CELL_SIZE).unwrap(), 3);
+        assert!(matches!(
+            dictionary.store_two(here - CELL_SIZE, 7, 8),
+            Err(ForthError::UnwrittenAddress(addr)) if addr == here - CELL_SIZE
+        ));
+        assert_eq!(dictionary.fetch(0).unwrap(), 1);
+        assert_eq!(dictionary.fetch(CELL_SIZE).unwrap(), 2);
+        assert_eq!(dictionary.fetch(2 * CELL_SIZE).unwrap(), 3);
 
-            dictionary.store_two(start, 7, 8).unwrap();
-            assert_eq!(dictionary.fetch_two(start).unwrap(), (7, 8));
-            assert!(matches!(
-                dictionary.fetch_two(start + 1),
-                Err(ForthError::MisalignedAddress(_))
-            ));
-        }
+        dictionary.store_two(0, 7, 8).unwrap();
+        assert_eq!(dictionary.fetch_two(0).unwrap(), (7, 8));
+        assert!(matches!(
+            dictionary.fetch_two(1),
+            Err(ForthError::MisalignedAddress(1))
+        ));
     }
 
     #[test]
     fn two_cell_access_needs_both_whole_cells_to_be_written() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[1]);
-            for _ in 0..CELL_SIZE / 2 {
-                dictionary.char_comma(0).unwrap();
-            }
-            let start = dictionary.start as Cell;
-
-            assert!(matches!(
-                dictionary.fetch_two(start),
-                Err(ForthError::UnwrittenAddress(addr)) if addr == start
-            ));
-            assert!(matches!(
-                dictionary.store_two(start, 7, 8),
-                Err(ForthError::UnwrittenAddress(addr)) if addr == start
-            ));
-            assert_eq!(dictionary.fetch(start).unwrap(), 1);
+        let mut dictionary = dictionary_with(&[1]);
+        for _ in 0..CELL_SIZE / 2 {
+            dictionary.char_comma(0).unwrap();
         }
+
+        assert!(matches!(
+            dictionary.fetch_two(0),
+            Err(ForthError::UnwrittenAddress(0))
+        ));
+        assert!(matches!(
+            dictionary.store_two(0, 7, 8),
+            Err(ForthError::UnwrittenAddress(0))
+        ));
+        assert_eq!(dictionary.fetch(0).unwrap(), 1);
     }
 
     #[test]
     fn fill_and_move_allow_empty_ranges_and_overlapping_moves() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[]);
-            let start = dictionary.start as Cell;
-            for offset in 0..8 {
-                dictionary.char_comma((offset + 1) as u8).unwrap();
-            }
-            let here = dictionary.here();
-
-            dictionary.fill(here, 0, 0xAA).unwrap();
-            dictionary.move_bytes(here, here, 0).unwrap();
-            dictionary.move_bytes(start, start + 1, 7).unwrap();
-            let bytes: Vec<u8> = (0..8)
-                .map(|offset| dictionary.fetch_byte(start + offset).unwrap())
-                .collect();
-            assert_eq!(bytes, [1, 1, 2, 3, 4, 5, 6, 7]);
-
-            dictionary.move_bytes(start + 1, start, 7).unwrap();
-            let bytes: Vec<u8> = (0..8)
-                .map(|offset| dictionary.fetch_byte(start + offset).unwrap())
-                .collect();
-            assert_eq!(bytes, [1, 2, 3, 4, 5, 6, 7, 7]);
-            dictionary.fill(start + 1, 3, 0xAB).unwrap();
-            assert_eq!(
-                (0..8)
-                    .map(|offset| dictionary.fetch_byte(start + offset).unwrap())
-                    .collect::<Vec<_>>(),
-                [1, 0xAB, 0xAB, 0xAB, 5, 6, 7, 7]
-            );
+        let mut dictionary = dictionary_with(&[]);
+        for offset in 0..8 {
+            dictionary.char_comma((offset + 1) as u8).unwrap();
         }
+        let here = dictionary.here();
+        let bytes_of = |dictionary: &Dictionary| -> Vec<u8> {
+            (0..8)
+                .map(|offset| dictionary.fetch_byte(offset).unwrap())
+                .collect()
+        };
+
+        dictionary.fill(here, 0, 0xAA).unwrap();
+        dictionary.move_bytes(here, here, 0).unwrap();
+        dictionary.move_bytes(0, 1, 7).unwrap();
+        assert_eq!(bytes_of(&dictionary), [1, 1, 2, 3, 4, 5, 6, 7]);
+
+        dictionary.move_bytes(1, 0, 7).unwrap();
+        assert_eq!(bytes_of(&dictionary), [1, 2, 3, 4, 5, 6, 7, 7]);
+        dictionary.fill(1, 3, 0xAB).unwrap();
+        assert_eq!(bytes_of(&dictionary), [1, 0xAB, 0xAB, 0xAB, 5, 6, 7, 7]);
     }
 
     #[test]
     fn fill_and_move_reject_invalid_ranges_without_writing() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            let start = dictionary.start as Cell;
-            dictionary.comma(0x0403_0201).unwrap();
-            let here = dictionary.here();
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        dictionary.comma(0x0403_0201).unwrap();
+        let here = dictionary.here();
 
-            assert!(matches!(
-                dictionary.fill(start, Cell::MAX, 0xFF),
-                Err(ForthError::UnwrittenAddress(addr)) if addr == start
-            ));
-            assert!(matches!(
-                dictionary.move_bytes(start, here - 1, 2),
-                Err(ForthError::UnwrittenAddress(addr)) if addr == here - 1
-            ));
-            assert_eq!(dictionary.fetch(start).unwrap(), 0x0403_0201);
-        }
+        assert!(matches!(
+            dictionary.fill(0, Cell::MAX, 0xFF),
+            Err(ForthError::UnwrittenAddress(0))
+        ));
+        assert!(matches!(
+            dictionary.move_bytes(0, here - 1, 2),
+            Err(ForthError::UnwrittenAddress(addr)) if addr == here - 1
+        ));
+        assert_eq!(dictionary.fetch(0).unwrap(), 0x0403_0201);
     }
 
     #[test]
-    fn store_rejects_addresses_just_below_the_start() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[7]);
-            let start = dictionary.start as Cell;
-            assert_store_rejected(&mut dictionary, start - 1, ForthError::AddressOutOfBounds);
-            assert_store_rejected(
-                &mut dictionary,
-                start - CELL_SIZE,
-                ForthError::AddressOutOfBounds,
-            );
-        }
+    fn store_rejects_negative_addresses() {
+        let mut dictionary = dictionary_with(&[7]);
+        assert_store_rejected(&mut dictionary, MINUS_ONE, ForthError::AddressOutOfBounds);
+        assert_store_rejected(
+            &mut dictionary,
+            MINUS_ONE_CELL,
+            ForthError::AddressOutOfBounds,
+        );
     }
 
     #[test]
     fn store_rejects_here() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[7]);
-            let here = dictionary.here as Cell;
-            assert_store_rejected(&mut dictionary, here, ForthError::UnwrittenAddress);
-        }
+        let mut dictionary = dictionary_with(&[7]);
+        let here = dictionary.here();
+        assert_store_rejected(&mut dictionary, here, ForthError::UnwrittenAddress);
     }
 
     #[test]
     fn store_rejects_misaligned_addresses_inside_the_written_cells() {
-        unsafe {
-            // The first Cell is written, so only the alignment check rejects `start + offset`.
-            // A misaligned Cell in the last written Cell ends past HERE, which is checked first.
-            let mut dictionary = dictionary_with(&[1, 2]);
-            let start = dictionary.start as Cell;
-            for offset in 1..CELL_SIZE {
-                assert_store_rejected(
-                    &mut dictionary,
-                    start + offset,
-                    ForthError::MisalignedAddress,
-                );
-                assert_store_rejected(
-                    &mut dictionary,
-                    start + CELL_SIZE + offset,
-                    ForthError::UnwrittenAddress,
-                );
-            }
-            assert_eq!(dictionary.fetch(start).unwrap(), 1);
-            assert_eq!(dictionary.fetch(start + CELL_SIZE).unwrap(), 2);
+        // The first Cell is written, so only the alignment check rejects `offset`. A
+        // misaligned Cell in the last written Cell ends past HERE, which is checked first.
+        let mut dictionary = dictionary_with(&[1, 2]);
+        for offset in 1..CELL_SIZE {
+            assert_store_rejected(&mut dictionary, offset, ForthError::MisalignedAddress);
+            assert_store_rejected(
+                &mut dictionary,
+                CELL_SIZE + offset,
+                ForthError::UnwrittenAddress,
+            );
         }
+        assert_eq!(dictionary.fetch(0).unwrap(), 1);
+        assert_eq!(dictionary.fetch(CELL_SIZE).unwrap(), 2);
     }
 
     #[test]
     fn store_rejects_addresses_after_a_restore() {
-        unsafe {
-            let mut dictionary = dictionary_with(&[1]);
-            let mark = dictionary.mark();
-            let addr = dictionary.here as Cell;
-            dictionary.comma(2).unwrap();
-            dictionary.store(addr, 9).unwrap();
+        let mut dictionary = dictionary_with(&[1]);
+        let mark = dictionary.mark();
+        let addr = dictionary.here();
+        dictionary.comma(2).unwrap();
+        dictionary.store(addr, 9).unwrap();
 
-            dictionary.restore(mark);
-            assert_store_rejected(&mut dictionary, addr, ForthError::UnwrittenAddress);
+        dictionary.restore(mark);
+        assert_store_rejected(&mut dictionary, addr, ForthError::UnwrittenAddress);
+    }
+
+    // `!` is deliberately not limited to Parameter Fields. This pins that down, using the
+    // hidden flag because it has a visible effect without corrupting the VM. If `!` gets
+    // restricted later, this test should change with it.
+    #[test]
+    fn store_can_change_a_word_header() {
+        let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+        outer_interpreter(&mut vm, "CREATE X 7 ,").unwrap();
+        let xt = vm.dictionary.find_word("X").unwrap();
+
+        let addr = header_of(&vm.dictionary, xt) + LEN_FLAGS * CELL_SIZE;
+        let flags = 1 | F_HIDDEN; // The length of the name stays the same
+        outer_interpreter(&mut vm, &format!("{} {} !", flags, addr)).unwrap();
+
+        outer_interpreter(&mut vm, &format!("{} @", addr)).unwrap();
+        assert_eq!(vm.data_stack, vec![flags]);
+
+        let error = outer_interpreter(&mut vm, "X").unwrap_err();
+        assert!(matches!(error, ForthError::UnknownWord(name) if name == "X"));
+    }
+
+    #[test]
+    fn find_word_stops_at_a_link_that_does_not_point_back() {
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        dictionary.write_header("A", Code::Colon, 0).unwrap();
+        let b = dictionary.write_header("B", Code::Colon, 0).unwrap();
+        let link = header_of(&dictionary, b) + LFA * CELL_SIZE;
+
+        for target in [header_of(&dictionary, b), Cell::MAX - 1] {
+            dictionary.store(link, target).unwrap();
+            assert_eq!(dictionary.find_word("B"), Some(b));
+            assert_eq!(dictionary.find_word("A"), None);
+            assert_eq!(dictionary.word_names(), ["B"]);
         }
     }
 
-    // `!` is deliberately not limited to Parameter Fields for now. This pins that down, using
-    // the hidden flag because it has a visible effect without corrupting the VM. If `!`
-    // gets restricted later, this test should change with it.
     #[test]
-    fn store_can_change_a_word_header() {
-        unsafe {
-            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            outer_interpreter(&mut vm, "CREATE X 7 ,").unwrap();
-            let header = vm.dictionary.find_word("X").unwrap();
+    fn find_word_skips_a_header_whose_name_is_outside_the_arena() {
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        dictionary.write_header("A", Code::Colon, 0).unwrap();
+        let b = dictionary.write_header("A", Code::Colon, 0).unwrap();
+        let name = header_of(&dictionary, b) + NFA * CELL_SIZE;
 
-            let addr = header.add(LEN_FLAGS) as Cell;
-            let flags = 1 | F_CREATED | F_HIDDEN; // The length of the name stays the same
-            outer_interpreter(&mut vm, &format!("{} {} !", flags, addr)).unwrap();
+        dictionary.store(name, Cell::MAX).unwrap();
+        assert_eq!(dictionary.find_word("A"), Some(0));
+        assert_eq!(dictionary.word_names(), ["A"]);
+    }
 
-            outer_interpreter(&mut vm, &format!("{} @", addr)).unwrap();
-            assert_eq!(vm.data_stack, vec![flags]);
+    #[test]
+    fn find_word_returns_the_xt_in_the_header() {
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let a = dictionary.write_header("A", Code::Colon, 0).unwrap();
+        let xt = header_of(&dictionary, a) + XT * CELL_SIZE;
 
-            let error = outer_interpreter(&mut vm, "X").unwrap_err();
-            assert!(matches!(error, ForthError::UnknownWord(name) if name == "X"));
-        }
+        dictionary.store(xt, 42).unwrap();
+        assert_eq!(dictionary.find_word("A"), Some(42));
     }
 
     #[test]
     fn dictionary_holds_exactly_the_requested_cells() {
-        unsafe {
-            let mut dictionary = Dictionary::new(2).unwrap();
-            dictionary.comma(1).unwrap();
-            dictionary.comma(2).unwrap();
-            assert!(matches!(
-                dictionary.comma(3),
-                Err(ForthError::DictionaryOverflow)
-            ));
-        }
+        let mut dictionary = Dictionary::new(2).unwrap();
+        dictionary.comma(1).unwrap();
+        dictionary.comma(2).unwrap();
+        assert!(matches!(
+            dictionary.comma(3),
+            Err(ForthError::DictionaryOverflow)
+        ));
     }
 
     #[test]
     fn empty_dictionary_is_valid() {
-        unsafe {
-            let mut dictionary = Dictionary::new(0).unwrap();
-            assert!(matches!(
-                dictionary.comma(1),
-                Err(ForthError::DictionaryOverflow)
-            ));
-        }
+        let mut dictionary = Dictionary::new(0).unwrap();
+        assert!(matches!(
+            dictionary.comma(1),
+            Err(ForthError::DictionaryOverflow)
+        ));
+        assert!(matches!(
+            dictionary.fetch(0),
+            Err(ForthError::AddressOutOfBounds(0))
+        ));
     }
 
     #[test]
     fn write_header_must_fit() {
-        unsafe {
-            // This name takes exactly one Cell.
-            let name = "X".repeat(CELL_SIZE);
+        // This name takes exactly one Cell.
+        let name = "X".repeat(CELL_SIZE);
 
-            let mut dictionary = Dictionary::new(HEADER_CELLS + 1).unwrap();
-            assert!(dictionary.write_header(&name, 0, 0).is_ok());
+        let mut dictionary = Dictionary::new(HEADER_CELLS + 1).unwrap();
+        assert!(dictionary.write_header(&name, Code::Colon, 0).is_ok());
 
-            let mut dictionary = Dictionary::new(HEADER_CELLS).unwrap();
-            assert!(matches!(
-                dictionary.write_header(&name, 0, 0),
-                Err(ForthError::DictionaryOverflow)
-            ));
-        }
+        let mut dictionary = Dictionary::new(HEADER_CELLS).unwrap();
+        assert!(matches!(
+            dictionary.write_header(&name, Code::Colon, 0),
+            Err(ForthError::DictionaryOverflow)
+        ));
+        assert_eq!(dictionary.last_xt(), None);
     }
 
     #[test]
     fn find_word_skips_a_pending_word_until_it_is_finished() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            dictionary.write_header("X", 0, F_PENDING).unwrap();
-            assert!(dictionary.find_word("X").is_none());
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let xt = dictionary
+            .write_header("X", Code::Colon, F_PENDING)
+            .unwrap();
+        assert!(dictionary.find_word("X").is_none());
 
-            dictionary.finish_last();
-            assert!(dictionary.find_word("X").is_some());
-        }
+        dictionary.finish_last();
+        assert_eq!(dictionary.find_word("X"), Some(xt));
     }
 
     #[test]
     fn find_word_skips_a_hidden_word() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            dictionary.write_header("X", 0, F_HIDDEN).unwrap();
-            assert!(dictionary.find_word("X").is_none());
-        }
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        dictionary.write_header("X", Code::Colon, F_HIDDEN).unwrap();
+        assert!(dictionary.find_word("X").is_none());
+    }
+
+    #[test]
+    fn find_word_finds_the_newest_definition() {
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        dictionary.write_header("X", Code::Colon, 0).unwrap();
+        let newest = dictionary.write_header("X", Code::Colon, 0).unwrap();
+        assert_eq!(dictionary.find_word("X"), Some(newest));
     }
 
     #[test]
     fn word_names_are_sorted() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            assert_eq!(dictionary.word_names(), Vec::<String>::new());
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        assert_eq!(dictionary.word_names(), Vec::<String>::new());
 
-            dictionary.write_header("B", 0, 0).unwrap();
-            dictionary.write_header("A", 0, 0).unwrap();
-            assert_eq!(dictionary.word_names(), ["A", "B"]);
-        }
+        dictionary.write_header("B", Code::Colon, 0).unwrap();
+        dictionary.write_header("A", Code::Colon, 0).unwrap();
+        assert_eq!(dictionary.word_names(), ["A", "B"]);
     }
 
     #[test]
     fn word_names_holds_a_redefined_word_once() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            dictionary.write_header("X", 0, 0).unwrap();
-            dictionary.write_header("X", 0, 0).unwrap();
-            assert_eq!(dictionary.word_names(), ["X"]);
-        }
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        dictionary.write_header("X", Code::Colon, 0).unwrap();
+        dictionary.write_header("X", Code::Colon, 0).unwrap();
+        assert_eq!(dictionary.word_names(), ["X"]);
     }
 
     #[test]
     fn word_names_skips_what_find_word_skips() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            dictionary.write_header("FOUND", 0, 0).unwrap();
-            dictionary.write_header("HIDDEN", 0, F_HIDDEN).unwrap();
-            dictionary.write_header("PENDING", 0, F_PENDING).unwrap();
-            assert_eq!(dictionary.word_names(), ["FOUND"]);
-        }
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        dictionary.write_header("FOUND", Code::Colon, 0).unwrap();
+        dictionary
+            .write_header("HIDDEN", Code::Colon, F_HIDDEN)
+            .unwrap();
+        dictionary
+            .write_header("PENDING", Code::Colon, F_PENDING)
+            .unwrap();
+        assert_eq!(dictionary.word_names(), ["FOUND"]);
     }
 
     #[test]
     fn word_names_skips_an_empty_name() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            dictionary.write_header("", 0, 0).unwrap();
-            assert_eq!(dictionary.word_names(), Vec::<String>::new());
-        }
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        dictionary.write_header("", Code::Colon, 0).unwrap();
+        assert_eq!(dictionary.word_names(), Vec::<String>::new());
     }
 
     #[test]
     fn word_names_replaces_invalid_utf8() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            let header = dictionary.write_header("X", 0, 0).unwrap();
-            *(*header.add(NFA) as *mut u8) = 0xff;
-            assert_eq!(dictionary.word_names(), ["\u{fffd}"]);
-        }
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let xt = dictionary.write_header("X", Code::Colon, 0).unwrap();
+        let name = dictionary
+            .header_cell(header_of(&dictionary, xt), NFA)
+            .unwrap();
+        dictionary.store_byte(name, 0xff).unwrap();
+        assert_eq!(dictionary.word_names(), ["\u{fffd}"]);
     }
 
     #[test]
     fn finish_last_keeps_the_hidden_flag() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            let header = dictionary
-                .write_header("X", 0, F_HIDDEN | F_PENDING)
-                .unwrap();
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let xt = dictionary
+            .write_header("X", Code::Colon, F_HIDDEN | F_PENDING)
+            .unwrap();
 
-            dictionary.finish_last();
-            assert!(!is_pending(header));
-            assert!(is_hidden(header));
-        }
+        dictionary.finish_last();
+        assert!(!has_flag(&dictionary, xt, F_PENDING));
+        assert!(has_flag(&dictionary, xt, F_HIDDEN));
+    }
+
+    #[test]
+    fn changing_the_flags_of_an_empty_dictionary_does_nothing() {
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        dictionary.finish_last();
+        dictionary.mark_last_immediate();
+        dictionary.set_last_code(Code::Colon);
+        assert_eq!(dictionary.mark(), Mark { here: 0, words: 0 });
+        assert!(!dictionary.is_last_created());
     }
 
     #[test]
     fn execution_tokens_include_finished_and_hidden_words() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            let named = dictionary.write_header("X", 0, 0).unwrap();
-            let hidden = dictionary.write_header("", 0, F_HIDDEN).unwrap();
-            assert!(dictionary.is_execution_token(cfa_of(named) as Cell));
-            assert!(dictionary.is_execution_token(cfa_of(hidden) as Cell));
-        }
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let named = dictionary.write_header("X", Code::Colon, 0).unwrap();
+        let hidden = dictionary.write_header("", Code::Colon, F_HIDDEN).unwrap();
+        assert!(dictionary.is_execution_token(named));
+        assert!(dictionary.is_execution_token(hidden));
     }
 
     #[test]
     fn execution_tokens_exclude_compile_only_words() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            let header = dictionary
-                .write_header("X", 0, F_HIDDEN | F_COMPILE_ONLY)
-                .unwrap();
-            assert!(is_compile_only(header));
-            assert!(!dictionary.is_execution_token(cfa_of(header) as Cell));
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let xt = dictionary
+            .write_header("X", Code::Colon, F_HIDDEN | F_COMPILE_ONLY)
+            .unwrap();
+        assert!(has_flag(&dictionary, xt, F_COMPILE_ONLY));
+        assert!(!dictionary.is_execution_token(xt));
 
-            // The flag stays when the definition ends.
-            let pending = dictionary
-                .write_header("Y", 0, F_COMPILE_ONLY | F_PENDING)
-                .unwrap();
-            dictionary.finish_last();
-            assert!(is_compile_only(pending));
-            assert!(!dictionary.is_execution_token(cfa_of(pending) as Cell));
+        // The flag stays when the definition ends.
+        let pending = dictionary
+            .write_header("Y", Code::Colon, F_COMPILE_ONLY | F_PENDING)
+            .unwrap();
+        dictionary.finish_last();
+        assert!(has_flag(&dictionary, pending, F_COMPILE_ONLY));
+        assert!(!dictionary.is_execution_token(pending));
 
-            let plain = dictionary.write_header("Z", 0, 0).unwrap();
-            assert!(!is_compile_only(plain));
-            assert!(dictionary.is_execution_token(cfa_of(plain) as Cell));
-        }
+        let plain = dictionary.write_header("Z", Code::Colon, 0).unwrap();
+        assert!(!has_flag(&dictionary, plain, F_COMPILE_ONLY));
+        assert!(dictionary.is_execution_token(plain));
     }
 
     #[test]
     fn execution_tokens_exclude_pending_words() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            let header = dictionary.write_header("X", 0, F_PENDING).unwrap();
-            assert!(!dictionary.is_execution_token(cfa_of(header) as Cell));
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let xt = dictionary
+            .write_header("X", Code::Colon, F_PENDING)
+            .unwrap();
+        assert!(!dictionary.is_execution_token(xt));
 
-            dictionary.finish_last();
-            assert!(dictionary.is_execution_token(cfa_of(header) as Cell));
-        }
+        dictionary.finish_last();
+        assert!(dictionary.is_execution_token(xt));
     }
 
     #[test]
-    fn execution_tokens_exclude_other_addresses_and_numbers() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            let header = dictionary.write_header("X", 0, 0).unwrap();
-            assert!(!dictionary.is_execution_token(header as Cell));
-            assert!(!dictionary.is_execution_token(5));
-            assert!(!dictionary.is_execution_token(0));
-        }
+    fn execution_tokens_exclude_numbers_past_the_table() {
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let xt = dictionary.write_header("X", Code::Colon, 0).unwrap();
+        assert!(dictionary.is_execution_token(xt));
+        assert!(!dictionary.is_execution_token(xt + 1));
+        assert!(!dictionary.is_execution_token(Cell::MAX));
+        assert_eq!(dictionary.entry(xt + 1), None);
     }
 
     #[test]
     fn execution_tokens_exclude_words_after_a_restore() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            let mark = dictionary.mark();
-            let header = dictionary.write_header("X", 0, 0).unwrap();
-            let xt = cfa_of(header) as Cell;
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let mark = dictionary.mark();
+        let xt = dictionary.write_header("X", Code::Colon, 0).unwrap();
 
-            dictionary.restore(mark);
-            assert!(!dictionary.is_execution_token(xt));
-        }
+        dictionary.restore(mark);
+        assert!(!dictionary.is_execution_token(xt));
+        assert_eq!(dictionary.entry(xt), None);
+        assert_eq!(dictionary.last_xt(), None);
+    }
+
+    #[test]
+    fn execution_tokens_exclude_a_word_whose_header_was_moved_out_of_the_arena() {
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let xt = dictionary.write_header("X", Code::Colon, 0).unwrap();
+        dictionary.words[xt].header = Cell::MAX;
+        assert!(!dictionary.is_execution_token(xt));
+        assert!(!dictionary.is_immediate(xt));
     }
 
     #[test]
     fn mark_last_immediate_only_marks_the_newest_word() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            let older = dictionary.write_header("A", 0, 0).unwrap();
-            let newest = dictionary.write_header("B", 0, 0).unwrap();
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let older = dictionary.write_header("A", Code::Colon, 0).unwrap();
+        let newest = dictionary.write_header("B", Code::Colon, 0).unwrap();
 
-            dictionary.mark_last_immediate();
-            assert!(is_immediate(newest));
-            assert!(!is_immediate(older));
-        }
+        dictionary.mark_last_immediate();
+        assert!(dictionary.is_immediate(newest));
+        assert!(!dictionary.is_immediate(older));
     }
 
     #[test]
     fn mark_last_immediate_keeps_other_flags() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            let flags = F_HIDDEN | F_PENDING | F_CREATED;
-            let header = dictionary.write_header("X", 0, flags).unwrap();
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let flags = F_HIDDEN | F_PENDING | F_COMPILE_ONLY;
+        let xt = dictionary.write_header("X", Code::Colon, flags).unwrap();
 
-            dictionary.mark_last_immediate();
-            assert!(is_immediate(header));
-            assert!(is_hidden(header));
-            assert!(is_pending(header));
-            assert!(is_created(header));
-        }
+        dictionary.mark_last_immediate();
+        assert_eq!(dictionary.flags(xt), Some(flags | F_IMMEDIATE));
     }
 
     #[test]
     fn mark_last_immediate_can_be_repeated() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            let header = dictionary.write_header("X", 0, 0).unwrap();
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let xt = dictionary.write_header("X", Code::Colon, 0).unwrap();
 
-            dictionary.mark_last_immediate();
-            dictionary.mark_last_immediate();
-            assert_eq!(*header.add(LEN_FLAGS), 1 | F_IMMEDIATE);
+        dictionary.mark_last_immediate();
+        dictionary.mark_last_immediate();
+        assert_eq!(len_flags_of(&dictionary, xt), 1 | F_IMMEDIATE);
+    }
+
+    #[test]
+    fn the_body_directly_follows_the_header() {
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let xt = dictionary.write_header("X", Code::Colon, 0).unwrap();
+        let entry = dictionary.entry(xt).unwrap();
+        assert_eq!(
+            entry.body,
+            header_of(&dictionary, xt) + HEADER_CELLS * CELL_SIZE
+        );
+        assert_eq!(entry.body, dictionary.here());
+    }
+
+    #[test]
+    fn only_created_words_can_change_their_action() {
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        for (code, created) in [
+            (Code::Variable, true),
+            (Code::Does(0), true),
+            (Code::Colon, false),
+            (Code::Constant, false),
+            (Code::Primitive(0), false),
+        ] {
+            dictionary.write_header("X", code, 0).unwrap();
+            assert_eq!(dictionary.is_last_created(), created, "{:?}", code);
         }
     }
 
     #[test]
-    fn pfa_is_the_cell_after_the_code_field() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            let header = dictionary.write_header("X", 0, 0).unwrap();
-            assert_eq!(pfa_of(cfa_of(header)), header.add(CFA + 1) as *const Cell);
-            assert_eq!(pfa_of(cfa_of(header)), dictionary.here as *const Cell);
-        }
-    }
+    fn set_last_code_changes_only_the_newest_word() {
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let older = dictionary.write_header("A", Code::Variable, 0).unwrap();
+        let newest = dictionary.write_header("B", Code::Variable, 0).unwrap();
 
-    #[test]
-    fn is_in_arena_covers_exactly_the_arena() {
-        unsafe {
-            let dictionary = Dictionary::new(2).unwrap();
-            let start = dictionary.start as Cell;
-            assert!(dictionary.is_in_arena(start));
-            assert!(dictionary.is_in_arena(start + CELL_SIZE));
-            assert!(dictionary.is_in_arena(start + 2 * CELL_SIZE - 1));
-            assert!(!dictionary.is_in_arena(start - 1));
-            assert!(!dictionary.is_in_arena(start + 2 * CELL_SIZE));
-        }
-    }
-
-    #[test]
-    fn is_in_arena_excludes_primitives_and_an_empty_arena() {
-        unsafe {
-            let dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            assert!(!dictionary.is_in_arena(io::sink as fn() -> io::Sink as usize));
-
-            let empty = Dictionary::new(0).unwrap();
-            assert!(!empty.is_in_arena(empty.start as Cell));
-        }
+        dictionary.set_last_code(Code::Does(8));
+        assert_eq!(dictionary.entry(newest).unwrap().code, Code::Does(8));
+        assert_eq!(dictionary.entry(older).unwrap().code, Code::Variable);
     }
 
     #[test]
     fn flags_use_their_specified_bits() {
         assert_eq!(F_IMMEDIATE, 1 << 8);
         assert_eq!(F_HIDDEN, 1 << 9);
-        assert_eq!(F_CREATED, 1 << 10);
-        assert_eq!(F_PENDING, 1 << 11);
-        assert_eq!(F_COMPILE_ONLY, 1 << 12);
+        assert_eq!(F_PENDING, 1 << 10);
+        assert_eq!(F_COMPILE_ONLY, 1 << 11);
     }
 
     #[test]
     fn write_header_combines_the_length_and_the_flags() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            let flags = F_HIDDEN | F_CREATED;
-            let header = dictionary.write_header("ABC", 0, flags).unwrap();
-            assert_eq!(*header.add(LEN_FLAGS), 3 | flags);
-        }
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let flags = F_HIDDEN | F_COMPILE_ONLY;
+        let xt = dictionary.write_header("ABC", Code::Colon, flags).unwrap();
+        assert_eq!(len_flags_of(&dictionary, xt), 3 | flags);
     }
 
     #[test]
     fn changing_flags_keeps_the_length() {
-        unsafe {
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            let header = dictionary.write_header("ABC", 0, F_PENDING).unwrap();
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let xt = dictionary
+            .write_header("ABC", Code::Colon, F_PENDING)
+            .unwrap();
 
-            dictionary.finish_last();
-            assert_eq!(*header.add(LEN_FLAGS), 3);
+        dictionary.finish_last();
+        assert_eq!(len_flags_of(&dictionary, xt), 3);
 
-            dictionary.mark_last_immediate();
-            assert_eq!(*header.add(LEN_FLAGS), 3 | F_IMMEDIATE);
-        }
+        dictionary.mark_last_immediate();
+        assert_eq!(len_flags_of(&dictionary, xt), 3 | F_IMMEDIATE);
     }
 
     #[test]
     fn find_word_compares_the_length_without_the_flags() {
-        unsafe {
-            let longest = "X".repeat(LEN_MASK);
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            let flags = F_IMMEDIATE | F_CREATED;
-            let short = dictionary.write_header("A", 0, flags).unwrap();
-            let long = dictionary.write_header(&longest, 0, flags).unwrap();
+        let longest = "X".repeat(LEN_MASK);
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let flags = F_IMMEDIATE | F_COMPILE_ONLY;
+        let short = dictionary.write_header("A", Code::Colon, flags).unwrap();
+        let long = dictionary
+            .write_header(&longest, Code::Colon, flags)
+            .unwrap();
 
-            assert_eq!(dictionary.find_word("A"), Some(short));
-            assert_eq!(dictionary.find_word(&longest), Some(long));
-            assert_eq!(dictionary.find_word(&longest[1..]), None);
-        }
+        assert_eq!(dictionary.find_word("A"), Some(short));
+        assert_eq!(dictionary.find_word(&longest), Some(long));
+        assert_eq!(dictionary.find_word(&longest[1..]), None);
     }
 
     #[test]
     fn write_header_rejects_a_name_that_does_not_fit_the_length_bits() {
-        unsafe {
-            let name = "X".repeat(LEN_MASK + 1);
-            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
-            let mark = dictionary.mark();
+        let name = "X".repeat(LEN_MASK + 1);
+        let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+        let mark = dictionary.mark();
 
-            let result = dictionary.write_header(&name, 0, 0);
-            assert!(matches!(result, Err(ForthError::NameTooLong(256))));
-            assert_eq!(dictionary.mark(), mark);
-        }
+        let result = dictionary.write_header(&name, Code::Colon, 0);
+        assert!(matches!(result, Err(ForthError::NameTooLong(256))));
+        assert_eq!(dictionary.mark(), mark);
     }
 }

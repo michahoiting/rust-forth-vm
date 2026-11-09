@@ -23,11 +23,8 @@ use crate::cell::Cell;
 ///
 /// use rust_forth_vm::{boot, outer_interpreter, ForthError, VmConfig};
 ///
-/// // SAFETY: this VM is only used through the crate's functions.
-/// let result = unsafe {
-///     let mut vm = boot(io::sink(), VmConfig::new(1024))?;
-///     outer_interpreter(&mut vm, "HELLO")
-/// };
+/// let mut vm = boot(io::sink(), VmConfig::new(1024))?;
+/// let result = outer_interpreter(&mut vm, "HELLO");
 ///
 /// match result {
 ///     Err(ForthError::UnknownWord(token)) => assert_eq!(token, "HELLO"),
@@ -85,13 +82,12 @@ pub enum ForthError {
     /// ends above it. This matches SIGBUS, which a signal handler gets for an address that is
     /// there but can't be accessed.
     UnwrittenAddress(Cell),
-    /// `EXECUTE` or `>BODY` was given a Cell, held here, that isn't the code field of a
-    /// finished word.
+    /// `EXECUTE`, `COMPILE,` or `>BODY` was given a Cell, held here, that isn't the execution
+    /// token of a finished word that can run on its own. A thread that holds a number past the
+    /// end of the XT table gives it too.
     InvalidExecutionToken(Cell),
     /// `(` found no closing `)` in the input.
     UnterminatedComment,
-    /// A word, whose execution token is held here, has a null pointer in its code field.
-    NullCodeField(Cell),
     /// The output writer failed.
     Output(io::Error),
     /// `QUIT` ran, which isn't a failure. The VM is ready for new input, and the data stack is
@@ -157,9 +153,6 @@ impl fmt::Display for ForthError {
                 write!(f, "Invalid execution token {:#x}.", xt)
             }
             ForthError::UnterminatedComment => write!(f, "Comment has no closing parenthesis."),
-            ForthError::NullCodeField(xt) => {
-                write!(f, "Null code field at {:#x}.", xt)
-            }
             ForthError::Output(_) => write!(f, "Output error."),
             ForthError::Quit => write!(f, "QUIT was executed."),
             ForthError::Abort => write!(f, "ABORT was executed."),

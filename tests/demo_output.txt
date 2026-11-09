@@ -366,8 +366,8 @@ Input:
     +
 Output: Forth Error: Data stack underflow.
 Input:
-    1 5 !
-Output: Forth Error: Address 0x5 is outside the dictionary.
+    1 100000 !
+Output: Forth Error: Address 0x186a0 is outside the dictionary.
 Input:
     DROP
 Output: Forth Error: Data stack underflow.
@@ -375,8 +375,8 @@ Input:
     9 PICK
 Output: Forth Error: Data stack underflow.
 Input:
-    5 EXECUTE
-Output: Forth Error: Invalid execution token 0x5.
+    100000 EXECUTE
+Output: Forth Error: Invalid execution token 0x186a0.
 Input:
     1 ( never closed
 Output: Forth Error: Comment has no closing parenthesis.

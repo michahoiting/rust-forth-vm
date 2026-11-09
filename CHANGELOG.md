@@ -12,6 +12,13 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 
 ### Added
 
+- Token threading with an XT table. An execution token is an index into the table, whose entry
+  holds what the word does and the address of its body. Addresses are byte offsets into the
+  dictionary, starting at 0, and every access is bounds-checked, also in the inner interpreter.
+  The library has no `unsafe` code left, so `boot`, `outer_interpreter`, `quit_loop` and
+  `Vm::word_names` are safe functions. `EXECUTE`, `COMPILE,` and `>BODY` check an execution
+  token in constant time. Overwriting headers or threads with `!` gives errors instead of
+  crashes, and `ForthError::NullCodeField` is gone.
 - `docs/words.md`, which replaces the word table in the README. It lists every word of the
   FORTH-83 Required Word Set and the ANS Forth CORE and CORE EXT word sets, with the standard of
   each word and whether rust-forth-vm has it, and a test keeps that column in line with the VM.
@@ -34,7 +41,7 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
   20 merges per workload, notes where a series starts again after a new workload source, `rustc`
   or Valgrind, and warns when a gated workload drifted 10% or more over its last 30 merges. The
   report is also kept up to date in one comment on the PR. `make perf-record` appends a result.
-- An indirect-threaded Forth VM with a linked-list dictionary, a text interpreter, and a
+- A token-threaded Forth VM with a linked-list dictionary, a text interpreter, and a
   compiler for colon definitions.
 - A library API: `boot` creates a VM from a `VmConfig` and an output writer, and
   `outer_interpreter` evaluates Forth source in it. Errors are `ForthError` values.

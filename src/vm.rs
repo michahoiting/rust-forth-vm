@@ -4,26 +4,25 @@
 
 use std::io::Write;
 use std::mem;
-use std::ptr;
 
 use crate::cell::Cell;
 use crate::compiler::Compiler;
-use crate::dictionary::{pfa_of, Dictionary};
+use crate::dictionary::{Code, Dictionary};
 use crate::error::ForthError;
 use crate::input::InputSource;
 
-/// Definition of a Forth primitive (machine-code function).
-/// Primitives return to the [`run`] loop instead of calling NEXT themselves, so
-/// threaded code never grows the Rust call stack.
+/// Definition of a Forth primitive. Primitives return to the [`run`] loop instead of calling
+/// NEXT themselves, so threaded code never grows the Rust call stack.
 ///
-/// A primitive reports failure with [`Vm::set_error`], and leaves the VM to stop.
-///
-/// # Safety
-///
-/// Every primitive shares this contract, so they don't repeat it. `vm` must be a booted VM,
-/// with `IP` pointing to the rest of the running thread. Primitives that use `W` also need it
-/// to point to the Code Field of their word, which [`enter_word`] arranges.
-pub(crate) type PrimitiveFn = unsafe fn(vm: &mut Vm);
+/// A primitive reports failure with [`Vm::set_error`], and leaves the VM to stop. `IP` is the
+/// address of the rest of the running thread, or [`NO_IP`] when the text interpreter runs the
+/// primitive directly.
+pub(crate) type PrimitiveFn = fn(vm: &mut Vm);
+
+/// The value of `IP` when no thread is running. It is never a Cell-aligned address in the
+/// arena. The text interpreter puts it on the return stack below the first colon word, so that
+/// the `EXIT` of that word stops [`run`].
+pub(crate) const NO_IP: Cell = Cell::MAX;
 
 /// The data stack limit that [`VmConfig::new`] chooses, in Cells.
 pub const DEFAULT_DATA_STACK_CELLS: usize = 1024;
@@ -51,14 +50,11 @@ pub const DEFAULT_RETURN_STACK_CELLS: usize = 1024;
 ///     ..VmConfig::new(1024)
 /// };
 ///
-/// // SAFETY: this VM is only used through the crate's functions.
-/// unsafe {
-///     let mut vm = boot(io::sink(), config)?;
-///     assert!(matches!(
-///         outer_interpreter(&mut vm, "1 2 3"),
-///         Err(ForthError::DataStackOverflow)
-///     ));
-/// }
+/// let mut vm = boot(io::sink(), config)?;
+/// assert!(matches!(
+///     outer_interpreter(&mut vm, "1 2 3"),
+///     Err(ForthError::DataStackOverflow)
+/// ));
 /// # Ok::<(), ForthError>(())
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -105,20 +101,20 @@ fn reserved_stack<T>(cells: usize) -> Result<Vec<T>, ForthError> {
 //
 // CPU Vm and Stacks conforming to the Forth hardware architecture
 pub struct Vm {
-    /// Instruction Pointer: points to a Cell in a thread.
-    pub(crate) ip: *const Cell,
-    /// Word Register: points to the currently active CFA Cell.
-    pub(crate) w: *const Cell,
+    /// Instruction Pointer: the address of the next Cell in the running thread, or [`NO_IP`].
+    pub(crate) ip: Cell,
     /// Parameter stack (contains raw Cells).
     pub(crate) data_stack: Vec<Cell>,
-    /// Return stack (R-stack) for nested IP pointers.
-    pub(crate) return_stack: Vec<*const Cell>,
+    /// Return stack (R-stack) for nested IP addresses.
+    pub(crate) return_stack: Vec<Cell>,
     /// The most Cells that the data stack can hold.
     pub(crate) data_stack_limit: usize,
     /// The most Cells that the return stack can hold.
     pub(crate) return_stack_limit: usize,
-    /// Word storage, HERE and the head of the word list.
+    /// Word storage, HERE, the head of the word list and the XT table.
     pub(crate) dictionary: Dictionary,
+    /// The primitives, indexed by [`Code::Primitive`].
+    pub(crate) primitives: Vec<PrimitiveFn>,
 
     /// Compilation state.
     pub(crate) compiler: Compiler,
@@ -142,15 +138,12 @@ impl Vm {
     ///
     /// use rust_forth_vm::{boot, outer_interpreter, ForthError, VmConfig};
     ///
-    /// // SAFETY: this VM is only used through the crate's functions.
-    /// unsafe {
-    ///     let mut vm = boot(io::sink(), VmConfig::new(1024))?;
-    ///     assert!(!vm.is_compiling());
-    ///     outer_interpreter(&mut vm, ": THREE 3")?;
-    ///     assert!(vm.is_compiling());
-    ///     outer_interpreter(&mut vm, ";")?;
-    ///     assert!(!vm.is_compiling());
-    /// }
+    /// let mut vm = boot(io::sink(), VmConfig::new(1024))?;
+    /// assert!(!vm.is_compiling());
+    /// outer_interpreter(&mut vm, ": THREE 3")?;
+    /// assert!(vm.is_compiling());
+    /// outer_interpreter(&mut vm, ";")?;
+    /// assert!(!vm.is_compiling());
     /// # Ok::<(), ForthError>(())
     /// ```
     pub fn is_compiling(&self) -> bool {
@@ -159,12 +152,7 @@ impl Vm {
 
     /// Returns the sorted names of the words that Forth input can find, each one once. Hidden
     /// words and an open definition aren't there. A name that `C!` overwrote can come back
-    /// with replacement characters.
-    ///
-    /// # Safety
-    ///
-    /// Every word header must be intact, because links and names are followed as raw
-    /// pointers. `!` can overwrite them.
+    /// with replacement characters, and a header that `!` broke can hide older words.
     ///
     /// # Examples
     ///
@@ -173,38 +161,54 @@ impl Vm {
     ///
     /// use rust_forth_vm::{boot, outer_interpreter, ForthError, VmConfig};
     ///
-    /// // SAFETY: this VM is only used through the crate's functions.
-    /// unsafe {
-    ///     let mut vm = boot(io::sink(), VmConfig::new(1024)).unwrap();
-    ///     outer_interpreter(&mut vm, ": THREE 3 ;")?;
-    ///     assert!(vm.word_names().iter().any(|name| name == "THREE"));
-    /// }
+    /// let mut vm = boot(io::sink(), VmConfig::new(1024))?;
+    /// outer_interpreter(&mut vm, ": THREE 3 ;")?;
+    /// assert!(vm.word_names().iter().any(|name| name == "THREE"));
     /// # Ok::<(), ForthError>(())
     /// ```
-    pub unsafe fn word_names(&self) -> Vec<String> {
+    pub fn word_names(&self) -> Vec<String> {
         self.dictionary.word_names()
     }
 
-    /// Creates a VM with an empty dictionary of `dictionary_cells` Cells.
+    /// Creates a VM with an empty dictionary of `dictionary_cells` Cells, and no primitives.
     ///
     /// # Errors
     ///
     /// Returns [`ForthError::DictionaryTooLarge`] if the dictionary can't be allocated, and
     /// [`ForthError::StackTooLarge`] if a stack can't be.
-    pub(crate) unsafe fn new(output: Box<dyn Write>, config: VmConfig) -> Result<Vm, ForthError> {
+    pub(crate) fn new(output: Box<dyn Write>, config: VmConfig) -> Result<Vm, ForthError> {
         Ok(Vm {
-            ip: ptr::null(),
-            w: ptr::null(),
+            ip: NO_IP,
             data_stack: reserved_stack(config.data_stack_cells)?,
             return_stack: reserved_stack(config.return_stack_cells)?,
             data_stack_limit: config.data_stack_cells,
             return_stack_limit: config.return_stack_cells,
             dictionary: Dictionary::new(config.dictionary_cells)?,
+            primitives: Vec::new(),
             compiler: Compiler::default(),
             output,
             input: InputSource::default(),
             error: None,
         })
+    }
+
+    /// Adds a primitive to the dictionary under `name`, and returns its execution token.
+    ///
+    /// # Errors
+    ///
+    /// See [`Dictionary::write_header`].
+    pub(crate) fn add_primitive(
+        &mut self,
+        name: &str,
+        code: PrimitiveFn,
+        flags: Cell,
+    ) -> Result<Cell, ForthError> {
+        let index = self.primitives.len();
+        let xt = self
+            .dictionary
+            .write_header(name, Code::Primitive(index), flags)?;
+        self.primitives.push(code);
+        Ok(xt)
     }
 
     /// Records an error, unless one is already set, so that the first error wins. The inner
@@ -227,7 +231,7 @@ impl Vm {
 
     /// Pushes a return address, flagging an error and leaving the stack alone when it is full.
     /// Everything outside of tests pushes through here, so that the limit holds.
-    pub(crate) fn push_return(&mut self, address: *const Cell) {
+    pub(crate) fn push_return(&mut self, address: Cell) {
         if self.return_stack.len() < self.return_stack_limit {
             self.return_stack.push(address);
         } else {
@@ -280,106 +284,74 @@ impl Vm {
     }
 }
 
-/// Converts a primitive into the raw Cell stored in a Code Field.
-pub(crate) fn code_cell(code: PrimitiveFn) -> Cell {
-    code as *const () as Cell
-}
-
 // --- THE INNER INTERPRETER (NEXT) ---
 
-/// The heart of the Forth engine. Fetches the CFA, increments IP, and jumps to the code.
-/// A zero Cell in the thread marks its end, and leaves W null.
-///
-/// # Safety
-///
-/// IP must point into a thread that ends in a zero Cell, or that an `EXIT` leaves first.
+/// The heart of the Forth engine. Fetches the execution token at IP, moves IP to the next Cell,
+/// and runs the word.
 #[inline(always)]
-unsafe fn next(vm: &mut Vm) {
-    // W = *IP (Load the address of the current CFA Cell into the W register)
-    vm.w = *vm.ip as *const Cell;
-    if vm.w.is_null() {
-        return;
+fn next(vm: &mut Vm) {
+    match vm.dictionary.fetch(vm.ip) {
+        Ok(xt) => {
+            // The fetch succeeded, so the Cell ends inside the arena and this can't overflow.
+            vm.ip += mem::size_of::<Cell>();
+            execute_xt(vm, xt);
+        }
+        Err(error) => vm.set_error(error),
     }
-
-    // IP++ (Step to the next Cell in the currently executing thread)
-    vm.ip = vm.ip.add(1);
-
-    enter_word(vm);
 }
 
-/// `DODOES`: Runs a word changed by DOES>. Its Code Field holds the address of its action
-/// thread, so unlike the other primitives that drive threaded code, this one is called
-/// directly by [`enter_word`].
-unsafe fn dodoes(vm: &mut Vm) {
-    // 1. Push the address of the word's data onto the stack
-    vm.push(pfa_of(vm.w) as Cell);
-
-    // 2. Save the current IP onto the Return Stack
-    vm.push_return(vm.ip);
-
-    // 3. Jump with the IP to the Forth action code stored behind DOES>
-    vm.ip = *vm.w as *const Cell;
-}
-
-/// Runs the word that W points to.
-///
-/// # Safety
-///
-/// W must point to a Code Field, which must hold the Cell of a primitive, or the address of
-/// an action thread that DOES> stored there. Zero gives [`ForthError::NullCodeField`].
+/// Runs the word with this execution token, from a thread or from `EXECUTE`. An `xt` that isn't
+/// in the XT table gives [`ForthError::InvalidExecutionToken`]. Unlike `EXECUTE`, this doesn't
+/// refuse words that are pending or compile-only, because a thread may call those.
 #[inline(always)]
-pub(crate) unsafe fn enter_word(vm: &mut Vm) {
-    // Fetch the contents of the CFA Cell (the raw bits of the machine-code pointer)
-    let code_bits = *vm.w;
-
-    // A null pointer is undefined behavior, and `!` can write zero here.
-    if code_bits == 0 {
-        vm.set_error(ForthError::NullCodeField(vm.w as Cell));
+pub(crate) fn execute_xt(vm: &mut Vm, xt: Cell) {
+    let Some(entry) = vm.dictionary.entry(xt) else {
+        vm.set_error(ForthError::InvalidExecutionToken(xt));
         return;
-    }
-
-    // Primitives are compiled into the binary, so their address is never in the dictionary,
-    // and DOES> only stores addresses of threads, which always are.
-    if vm.dictionary.is_in_arena(code_bits) {
-        dodoes(vm);
-        return;
-    }
-
-    // Blindly transmute the raw bits into an executable Rust function (like a hardware jump)
-    let code = mem::transmute::<*const (), PrimitiveFn>(code_bits as *const ());
-    code(vm);
-}
-
-/// Runs NEXT until the thread ends or a primitive reports an error.
-///
-/// # Safety
-///
-/// IP must meet the requirements of [`next`].
-pub(crate) unsafe fn run(vm: &mut Vm) {
-    loop {
-        next(vm);
-        if vm.w.is_null() || vm.error.is_some() {
-            return;
+    };
+    match entry.code {
+        Code::Primitive(index) => match vm.primitives.get(index) {
+            Some(&primitive) => primitive(vm),
+            None => vm.set_error(ForthError::InvalidExecutionToken(xt)),
+        },
+        // DOCOL: save the return address, and run the thread at the body.
+        Code::Colon => {
+            vm.push_return(vm.ip);
+            vm.ip = entry.body;
+        }
+        // DOVAR: push the address of the body.
+        Code::Variable => vm.push(entry.body),
+        // DOCON: push the Cell at the body.
+        Code::Constant => {
+            let result = vm.dictionary.fetch(entry.body);
+            if let Some(value) = vm.check(result) {
+                vm.push(value);
+            }
+        }
+        // DODOES: push the address of the body, and run the action thread behind DOES>.
+        Code::Does(action) => {
+            vm.push(entry.body);
+            vm.push_return(vm.ip);
+            vm.ip = action;
         }
     }
 }
 
-/// Runs a single word for the text interpreter, through a trampoline thread. This differs from
-/// the `EXECUTE` word, which enters a word directly from the thread that called it.
-///
-/// # Safety
-///
-/// `cfa` must point to the Code Field of a word in the dictionary.
-pub(crate) unsafe fn trampoline_cfa(vm: &mut Vm, cfa: *mut Cell) {
-    // To safely execute this single binary CFA via NEXT, we construct a mini 'trampoline' thread in RAM:
-    // [ Target CFA Address ] [ Stop / End Marker (0) ]
-    let trampoline: [Cell; 2] = [cfa as Cell, 0];
-    vm.ip = trampoline.as_ptr();
+/// Runs NEXT until no thread is running, or a word reports an error.
+pub(crate) fn run(vm: &mut Vm) {
+    while vm.ip != NO_IP && vm.error.is_none() {
+        next(vm);
+    }
+}
 
-    // Kickstart the Inner Interpreter engine
+/// Runs a single word for the text interpreter. A colon word saves [`NO_IP`] as its return
+/// address, so that its `EXIT` ends the run. This differs from the `EXECUTE` word, which enters
+/// a word directly from the thread that called it.
+pub(crate) fn execute_word(vm: &mut Vm, xt: Cell) {
+    vm.ip = NO_IP;
+    execute_xt(vm, xt);
     run(vm);
-
-    vm.ip = ptr::null(); // The trampoline is about to go out of scope
+    vm.ip = NO_IP; // An error can leave IP inside a thread
 }
 
 #[cfg(test)]
@@ -387,19 +359,29 @@ mod tests {
     use std::io;
 
     use super::*;
-    use crate::dictionary::cfa_of;
     use crate::{boot, outer_interpreter, VmConfig};
 
     const TEST_CELLS: usize = 64 * 1024;
+    const CELL_SIZE: usize = mem::size_of::<Cell>();
 
     // Boots a VM with these stack limits, and a dictionary large enough for every test.
-    unsafe fn limited_vm(data_stack_cells: usize, return_stack_cells: usize) -> Vm {
+    fn limited_vm(data_stack_cells: usize, return_stack_cells: usize) -> Vm {
         let config = VmConfig {
             data_stack_cells,
             return_stack_cells,
             ..VmConfig::new(TEST_CELLS)
         };
         boot(io::sink(), config).unwrap()
+    }
+
+    // Returns the execution token of a word that Forth can find.
+    fn xt_of(vm: &Vm, name: &str) -> Cell {
+        vm.dictionary.find_word(name).unwrap()
+    }
+
+    // Returns the body of a word that Forth can find.
+    fn body_of(vm: &Vm, name: &str) -> Cell {
+        vm.dictionary.entry(xt_of(vm, name)).unwrap().body
     }
 
     #[test]
@@ -416,123 +398,228 @@ mod tests {
 
     #[test]
     fn stacks_are_reserved_up_front() {
-        unsafe {
-            let vm = limited_vm(3, 2);
-            assert!(vm.data_stack.capacity() >= 3);
-            assert!(vm.return_stack.capacity() >= 2);
-        }
+        let vm = limited_vm(3, 2);
+        assert!(vm.data_stack.capacity() >= 3);
+        assert!(vm.return_stack.capacity() >= 2);
     }
 
     #[test]
     fn push_fills_the_data_stack_up_to_its_limit() {
-        unsafe {
-            let mut vm = limited_vm(2, 2);
-            vm.push(1);
-            vm.push(2);
-            assert!(vm.error.is_none(), "got: {:?}", vm.error);
-            assert_eq!(vm.data_stack, [1, 2]);
-        }
+        let mut vm = limited_vm(2, 2);
+        vm.push(1);
+        vm.push(2);
+        assert!(vm.error.is_none(), "got: {:?}", vm.error);
+        assert_eq!(vm.data_stack, [1, 2]);
     }
 
     #[test]
     fn push_past_the_limit_is_an_error_and_keeps_the_data_stack() {
-        unsafe {
-            let mut vm = limited_vm(2, 2);
-            vm.push(1);
-            vm.push(2);
-            vm.push(3);
-            assert!(matches!(vm.error, Some(ForthError::DataStackOverflow)));
-            assert_eq!(vm.data_stack, [1, 2]);
-        }
+        let mut vm = limited_vm(2, 2);
+        vm.push(1);
+        vm.push(2);
+        vm.push(3);
+        assert!(matches!(vm.error, Some(ForthError::DataStackOverflow)));
+        assert_eq!(vm.data_stack, [1, 2]);
     }
 
     #[test]
     fn push_return_fills_the_return_stack_up_to_its_limit() {
-        unsafe {
-            let mut vm = limited_vm(2, 2);
-            let thread: [Cell; 2] = [0, 0];
-            vm.push_return(thread.as_ptr());
-            vm.push_return(thread.as_ptr().add(1));
-            assert!(vm.error.is_none(), "got: {:?}", vm.error);
-            assert_eq!(vm.return_stack, [thread.as_ptr(), thread.as_ptr().add(1)]);
-        }
+        let mut vm = limited_vm(2, 2);
+        vm.push_return(8);
+        vm.push_return(16);
+        assert!(vm.error.is_none(), "got: {:?}", vm.error);
+        assert_eq!(vm.return_stack, [8, 16]);
     }
 
     #[test]
     fn push_return_past_the_limit_is_an_error_and_keeps_the_return_stack() {
-        unsafe {
-            let mut vm = limited_vm(2, 2);
-            let thread: [Cell; 3] = [0, 0, 0];
-            vm.push_return(thread.as_ptr());
-            vm.push_return(thread.as_ptr().add(1));
-            vm.push_return(thread.as_ptr().add(2));
-            assert!(matches!(vm.error, Some(ForthError::ReturnStackOverflow)));
-            assert_eq!(vm.return_stack, [thread.as_ptr(), thread.as_ptr().add(1)]);
-        }
+        let mut vm = limited_vm(2, 2);
+        vm.push_return(8);
+        vm.push_return(16);
+        vm.push_return(24);
+        assert!(matches!(vm.error, Some(ForthError::ReturnStackOverflow)));
+        assert_eq!(vm.return_stack, [8, 16]);
+    }
+
+    #[test]
+    fn no_ip_is_never_an_aligned_address() {
+        assert_ne!(NO_IP % CELL_SIZE, 0);
+    }
+
+    #[test]
+    fn a_colon_word_saves_ip_and_jumps_to_its_body() {
+        let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+        outer_interpreter(&mut vm, ": X ;").unwrap();
+        vm.ip = 40;
+
+        let xt = xt_of(&vm, "X");
+
+        execute_xt(&mut vm, xt);
+        assert!(vm.error.is_none(), "got: {:?}", vm.error);
+        assert!(vm.data_stack.is_empty());
+        assert_eq!(vm.return_stack, [40]);
+        assert_eq!(vm.ip, body_of(&vm, "X"));
+    }
+
+    #[test]
+    fn a_created_word_pushes_its_body() {
+        let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+        outer_interpreter(&mut vm, "CREATE X").unwrap();
+        vm.ip = 40;
+
+        let xt = xt_of(&vm, "X");
+
+        execute_xt(&mut vm, xt);
+        assert!(vm.error.is_none(), "got: {:?}", vm.error);
+        assert_eq!(vm.data_stack, [body_of(&vm, "X")]);
+        assert!(vm.return_stack.is_empty());
+        assert_eq!(vm.ip, 40);
+    }
+
+    #[test]
+    fn a_constant_pushes_the_cell_at_its_body() {
+        let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+        outer_interpreter(&mut vm, "42 CONSTANT X 99 ,").unwrap();
+        vm.data_stack.push(1);
+
+        let xt = xt_of(&vm, "X");
+
+        execute_xt(&mut vm, xt);
+        assert!(vm.error.is_none(), "got: {:?}", vm.error);
+        assert_eq!(vm.data_stack, [1, 42]);
+    }
+
+    #[test]
+    fn a_constant_without_its_value_is_an_error() {
+        let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+        let xt = vm.dictionary.write_header("X", Code::Constant, 0).unwrap();
+        let body = vm.dictionary.entry(xt).unwrap().body;
+
+        execute_xt(&mut vm, xt);
+        assert!(matches!(
+            vm.error,
+            Some(ForthError::UnwrittenAddress(addr)) if addr == body
+        ));
+        assert!(vm.data_stack.is_empty());
     }
 
     #[test]
     fn a_word_changed_by_does_needs_room_on_both_stacks() {
-        unsafe {
-            let mut vm = limited_vm(8, 8);
-            outer_interpreter(&mut vm, ": D CREATE DOES> ; D X").unwrap();
-            let cfa = cfa_of(vm.dictionary.find_word("X").unwrap());
-            let thread: [Cell; 1] = [0];
+        let mut vm = limited_vm(8, 8);
+        outer_interpreter(&mut vm, ": D CREATE DOES> ; D X").unwrap();
+        let xt = xt_of(&vm, "X");
 
-            vm.data_stack_limit = 0;
-            vm.w = cfa;
-            vm.ip = thread.as_ptr();
-            enter_word(&mut vm);
-            assert!(matches!(vm.error, Some(ForthError::DataStackOverflow)));
+        vm.data_stack_limit = 0;
+        execute_xt(&mut vm, xt);
+        assert!(matches!(vm.error, Some(ForthError::DataStackOverflow)));
 
-            vm.error = None;
-            vm.return_stack.clear();
-            vm.data_stack_limit = 8;
-            vm.return_stack_limit = 0;
-            vm.w = cfa;
-            vm.ip = thread.as_ptr();
-            enter_word(&mut vm);
-            assert!(matches!(vm.error, Some(ForthError::ReturnStackOverflow)));
-        }
+        vm.error = None;
+        vm.return_stack.clear();
+        vm.data_stack_limit = 8;
+        vm.return_stack_limit = 0;
+        execute_xt(&mut vm, xt);
+        assert!(matches!(vm.error, Some(ForthError::ReturnStackOverflow)));
     }
 
     #[test]
-    fn a_word_changed_by_does_pushes_its_pfa_and_jumps_to_its_action() {
-        unsafe {
-            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            outer_interpreter(&mut vm, ": D CREATE DOES> ; D X").unwrap();
-            let cfa = cfa_of(vm.dictionary.find_word("X").unwrap());
-            let thread: [Cell; 1] = [0];
+    fn a_word_changed_by_does_pushes_its_body_and_jumps_to_its_action() {
+        let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+        outer_interpreter(&mut vm, ": D CREATE DOES> ; D X").unwrap();
+        let Code::Does(action) = vm.dictionary.entry(xt_of(&vm, "X")).unwrap().code else {
+            panic!("X has no DOES> action");
+        };
+        vm.ip = 40;
 
-            vm.w = cfa;
-            vm.ip = thread.as_ptr();
-            enter_word(&mut vm);
+        let xt = xt_of(&vm, "X");
 
-            assert!(vm.error.is_none(), "got: {:?}", vm.error);
-            assert_eq!(vm.data_stack, [pfa_of(cfa) as Cell]);
-            assert_eq!(vm.return_stack, [thread.as_ptr()]);
-            assert_eq!(vm.ip, *cfa as *const Cell);
-        }
+        execute_xt(&mut vm, xt);
+        assert!(vm.error.is_none(), "got: {:?}", vm.error);
+        assert_eq!(vm.data_stack, [body_of(&vm, "X")]);
+        assert_eq!(vm.return_stack, [40]);
+        assert_eq!(vm.ip, action);
+        // The action thread follows `DOES>` in the thread of D.
+        assert_eq!(action, body_of(&vm, "D") + 2 * CELL_SIZE);
     }
 
     #[test]
-    fn a_zero_code_field_is_an_error() {
-        unsafe {
-            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-            outer_interpreter(&mut vm, "CREATE X").unwrap();
-            let cfa = cfa_of(vm.dictionary.find_word("X").unwrap());
-            *cfa = 0;
-            vm.data_stack.push(7);
+    fn an_execution_token_past_the_table_is_an_error() {
+        let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+        vm.data_stack.push(7);
+        let xt = vm.dictionary.last_xt().unwrap() + 1;
 
-            vm.w = cfa;
-            enter_word(&mut vm);
+        execute_xt(&mut vm, xt);
+        assert!(matches!(
+            vm.error,
+            Some(ForthError::InvalidExecutionToken(bad)) if bad == xt
+        ));
+        assert_eq!(vm.data_stack, [7]);
+        assert!(vm.return_stack.is_empty());
+    }
 
-            assert!(matches!(
-                vm.error,
-                Some(ForthError::NullCodeField(xt)) if xt == cfa as Cell
-            ));
-            assert_eq!(vm.data_stack, [7]);
-            assert!(vm.return_stack.is_empty());
-        }
+    #[test]
+    fn a_primitive_index_past_the_table_is_an_error() {
+        let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+        let index = vm.primitives.len();
+        let xt = vm
+            .dictionary
+            .write_header("BAD", Code::Primitive(index), 0)
+            .unwrap();
+
+        execute_xt(&mut vm, xt);
+        assert!(matches!(
+            vm.error,
+            Some(ForthError::InvalidExecutionToken(bad)) if bad == xt
+        ));
+    }
+
+    #[test]
+    fn next_reports_an_ip_outside_the_written_dictionary() {
+        let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+        let here = vm.dictionary.here();
+        vm.ip = here;
+
+        run(&mut vm);
+        assert!(matches!(
+            vm.error,
+            Some(ForthError::UnwrittenAddress(addr)) if addr == here
+        ));
+    }
+
+    #[test]
+    fn execute_word_runs_a_colon_word_to_its_end() {
+        let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+        outer_interpreter(&mut vm, ": X 1 2 ;").unwrap();
+
+        let xt = xt_of(&vm, "X");
+
+        execute_word(&mut vm, xt);
+        assert!(vm.error.is_none(), "got: {:?}", vm.error);
+        assert_eq!(vm.data_stack, [1, 2]);
+        assert!(vm.return_stack.is_empty());
+        assert_eq!(vm.ip, NO_IP);
+    }
+
+    #[test]
+    fn execute_word_leaves_no_ip_after_an_error() {
+        let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+        outer_interpreter(&mut vm, ": X DROP ;").unwrap();
+
+        let xt = xt_of(&vm, "X");
+
+        execute_word(&mut vm, xt);
+        assert!(matches!(vm.error, Some(ForthError::DataStackUnderflow)));
+        assert_eq!(vm.ip, NO_IP);
+    }
+
+    #[test]
+    fn add_primitive_gives_consecutive_indexes() {
+        let mut vm = Vm::new(Box::new(io::sink()), VmConfig::new(TEST_CELLS)).unwrap();
+        fn noop(_: &mut Vm) {}
+        let first = vm.add_primitive("A", noop, 0).unwrap();
+        let second = vm.add_primitive("B", noop, 0).unwrap();
+
+        assert_eq!((first, second), (0, 1));
+        assert_eq!(vm.primitives.len(), 2);
+        assert_eq!(vm.dictionary.entry(1).unwrap().code, Code::Primitive(1));
     }
 }

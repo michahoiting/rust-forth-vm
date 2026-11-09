@@ -4,7 +4,7 @@ Instructions for coding agents working on this project.
 
 ## Project
 
-A clean-room Forth virtual machine in Rust: indirect threaded, with a linked-list dictionary and no dependencies in the library. The only dependency is `rustyline`, for line editing at the `forth-vm` prompt, behind the default `readline` feature. It stays at version 17 until `rust-version` allows a newer one.
+A clean-room Forth virtual machine in Rust: token threaded, with an XT table and a linked-list dictionary and no dependencies in the library. The only dependency is `rustyline`, for line editing at the `forth-vm` prompt, behind the default `readline` feature. It stays at version 17 until `rust-version` allows a newer one.
 
 The FORTH-83 standard is the reference for how words behave. Later ANS Forth words are fine where they're useful.
 
@@ -111,7 +111,7 @@ Every new word or feature includes:
 3. Create or use a GitHub issue, stating the problem, the acceptance criteria, and the files it expects to touch. Before picking an issue, check `gh pr list` and the `solo` label. A `solo` issue changes code throughout the project, so start it only with no other PR open, and start nothing else until it merges.
 4. Work on a branch, never directly on `main`.
 5. Update `CHANGELOG.md`, and run `make ci`. A test compares the demo with `tests/demo_output.txt`. If a demo change is intended, run `make demo-expected`, and check that the diff of that file shows only the intended changes. After a merge conflict in that file, run it again.
-6. For behavior changes, temporarily break the code to confirm the tests catch it. `make mutants` skips every `unsafe fn`, which includes all primitives, so it doesn't replace this step. Use `--no-fail-fast` and check the exit code, because a crash in a test binary prints no `FAILED` lines.
+6. For behavior changes, temporarily break the code to confirm the tests catch it. `make mutants` runs weekly and on the diff of a PR, so it doesn't replace this step. Use `--no-fail-fast` and check the exit code, because a crash in a test binary prints no `FAILED` lines.
 7. Open a PR that closes the issue. The project owner reviews and merges, so never merge or arm auto-merge. Don't wait for CI: start the next issue in a new worktree. Check back with `gh pr checks <number>` and `gh pr view <number> --comments`, and fix failures or review comments on the same branch.
 8. After the merge, sync `main`, and delete the branch once asked. The PR head can differ from the last local commit, because of review suggestions.
 

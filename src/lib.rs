@@ -1,7 +1,7 @@
 // Copyright (c) 2026 M.W.R. Hoiting
 
-//! A clean-room Forth virtual machine: indirect threaded, with a linked-list dictionary and
-//! no dependencies.
+//! A clean-room Forth virtual machine: token threaded, with a linked-list dictionary and
+//! no dependencies. It has no `unsafe` code.
 //!
 //! [`boot`] creates a VM from a [`VmConfig`], and [`outer_interpreter`] evaluates Forth source in it. All the
 //! state lives in [`Vm`], and carries over from one call to the next. Errors are
@@ -38,22 +38,15 @@
 //!
 //! let output = Output::default();
 //!
-//! // SAFETY: this VM is only used through the crate's functions.
-//! unsafe {
-//!     let mut vm = boot(output.clone(), VmConfig::new(1024))?;
-//!     outer_interpreter(&mut vm, ": DOUBLE DUP + ;")?;
-//!     outer_interpreter(&mut vm, "21 DOUBLE .")?;
-//! }
+//! let mut vm = boot(output.clone(), VmConfig::new(1024))?;
+//! outer_interpreter(&mut vm, ": DOUBLE DUP + ;")?;
+//! outer_interpreter(&mut vm, "21 DOUBLE .")?;
 //!
 //! assert_eq!(output.0.borrow().as_slice(), b"42 ");
 //! # Ok::<(), ForthError>(())
 //! ```
-//!
-//! # Safety
-//!
-//! [`boot`] and [`outer_interpreter`] are `unsafe` because the VM runs threaded code through
-//! raw pointers. Bad Forth input normally gives a [`ForthError`], and the README lists the
-//! known exceptions.
+
+#![forbid(unsafe_code)]
 
 use std::io::Write;
 
@@ -82,11 +75,6 @@ pub use vm::{Vm, VmConfig, DEFAULT_DATA_STACK_CELLS, DEFAULT_RETURN_STACK_CELLS}
 /// [`ForthError::StackTooLarge`] if a stack can't be, and
 /// [`ForthError::DictionaryOverflow`] if the dictionary is too small to hold the primitives.
 ///
-/// # Safety
-///
-/// The returned VM holds raw pointers into its own dictionary. It must only be
-/// driven through this crate's functions.
-///
 /// # Examples
 ///
 /// ```
@@ -94,13 +82,10 @@ pub use vm::{Vm, VmConfig, DEFAULT_DATA_STACK_CELLS, DEFAULT_RETURN_STACK_CELLS}
 ///
 /// use rust_forth_vm::{boot, ForthError, VmConfig};
 ///
-/// // SAFETY: neither VM is used for anything else.
-/// unsafe {
-///     assert!(boot(io::stdout(), VmConfig::new(1024)).is_ok());
-///     assert!(matches!(boot(io::sink(), VmConfig::new(1)), Err(ForthError::DictionaryOverflow)));
-/// }
+/// assert!(boot(io::stdout(), VmConfig::new(1024)).is_ok());
+/// assert!(matches!(boot(io::sink(), VmConfig::new(1)), Err(ForthError::DictionaryOverflow)));
 /// ```
-pub unsafe fn boot(output: impl Write + 'static, config: VmConfig) -> Result<Vm, ForthError> {
+pub fn boot(output: impl Write + 'static, config: VmConfig) -> Result<Vm, ForthError> {
     let mut vm = Vm::new(Box::new(output), config)?;
     primitives::install(&mut vm)?;
     Ok(vm)

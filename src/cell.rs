@@ -3,7 +3,8 @@
 //! The foundation: the Forth Cell.
 
 /// A Cell is the universal basic unit of Forth (64-bit on a 64-bit CPU).
-/// It blindly holds data, flags, offsets, or raw memory pointers.
+/// It blindly holds data, flags, execution tokens, or addresses, which are byte offsets into
+/// the dictionary.
 ///
 /// Forth has no types, so a Cell means whatever the word using it says. Negative numbers
 /// are stored in two's complement, and `.` prints a Cell as a signed number.

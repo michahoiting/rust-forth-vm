@@ -52,12 +52,12 @@ impl Write for FailingWriter {
 }
 
 // Boots a VM with a dictionary that is large enough for every test.
-unsafe fn test_vm(output: impl Write + 'static) -> Vm {
+fn test_vm(output: impl Write + 'static) -> Vm {
     boot(output, VmConfig::new(TEST_CELLS)).unwrap()
 }
 
 // Returns the size of the smallest dictionary that can hold the primitives.
-unsafe fn smallest_cells() -> usize {
+fn smallest_cells() -> usize {
     (0..TEST_CELLS)
         .find(|cells| boot(io::sink(), VmConfig::new(*cells)).is_ok())
         .unwrap()
@@ -65,14 +65,12 @@ unsafe fn smallest_cells() -> usize {
 
 // Evaluates the lines in order, and returns everything they wrote.
 fn output_of(lines: &[&str]) -> String {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        for line in lines {
-            outer_interpreter(&mut vm, line).unwrap();
-        }
-        output.text()
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    for line in lines {
+        outer_interpreter(&mut vm, line).unwrap();
     }
+    output.text()
 }
 
 // Asserts that the lines print exactly two Cells, and that those are equal.
@@ -235,108 +233,100 @@ fn pairs_and_memory_words_work_interpreted_and_compiled() {
 
 #[test]
 fn division_by_zero_is_reported_without_panicking_and_vm_recovers() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        for expression in ["8 0 /", "8 0 MOD", "8 0 /MOD"] {
-            assert_error!(&mut vm, expression, ForthError::DivisionByZero);
-            outer_interpreter(&mut vm, "6 2 / .").unwrap();
-        }
-        assert_eq!(output.text(), "3 3 3 ");
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    for expression in ["8 0 /", "8 0 MOD", "8 0 /MOD"] {
+        assert_error!(&mut vm, expression, ForthError::DivisionByZero);
+        outer_interpreter(&mut vm, "6 2 / .").unwrap();
     }
+    assert_eq!(output.text(), "3 3 3 ");
 }
 
 #[test]
 fn new_words_report_api_underflow_and_leave_the_vm_usable() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        for word in [
-            "1+", "1-", "2*", "2/", "NEGATE", "ABS", "0=", "0<", "INVERT", "CELL+", "2@",
-        ] {
-            let error = outer_interpreter(&mut vm, word).unwrap_err();
-            assert!(
-                matches!(&error, ForthError::DataStackUnderflow),
-                "{word}: {error}"
-            );
-        }
-        for word in [
-            "-", "*", "/", "MOD", "/MOD", "MIN", "MAX", "=", "<", ">", "U<", "AND", "OR", "XOR",
-            "LSHIFT", "RSHIFT", "+!",
-        ] {
-            let source = format!("1 {word}");
-            let error = outer_interpreter(&mut vm, &source).unwrap_err();
-            assert!(
-                matches!(&error, ForthError::DataStackUnderflow),
-                "{word}: {error}"
-            );
-        }
-        for word in ["2!", "FILL", "MOVE"] {
-            let source = format!("1 2 {word}");
-            let error = outer_interpreter(&mut vm, &source).unwrap_err();
-            assert!(
-                matches!(&error, ForthError::DataStackUnderflow),
-                "{word}: {error}"
-            );
-        }
-        for word in ["2DROP", "2DUP"] {
-            let source = format!("1 {word}");
-            let error = outer_interpreter(&mut vm, &source).unwrap_err();
-            assert!(
-                matches!(&error, ForthError::DataStackUnderflow),
-                "{word}: {error}"
-            );
-        }
-        for word in ["2OVER", "2SWAP"] {
-            let source = format!("1 2 3 {word}");
-            let error = outer_interpreter(&mut vm, &source).unwrap_err();
-            assert!(
-                matches!(&error, ForthError::DataStackUnderflow),
-                "{word}: {error}"
-            );
-        }
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    for word in [
+        "1+", "1-", "2*", "2/", "NEGATE", "ABS", "0=", "0<", "INVERT", "CELL+", "2@",
+    ] {
+        let error = outer_interpreter(&mut vm, word).unwrap_err();
+        assert!(
+            matches!(&error, ForthError::DataStackUnderflow),
+            "{word}: {error}"
+        );
     }
+    for word in [
+        "-", "*", "/", "MOD", "/MOD", "MIN", "MAX", "=", "<", ">", "U<", "AND", "OR", "XOR",
+        "LSHIFT", "RSHIFT", "+!",
+    ] {
+        let source = format!("1 {word}");
+        let error = outer_interpreter(&mut vm, &source).unwrap_err();
+        assert!(
+            matches!(&error, ForthError::DataStackUnderflow),
+            "{word}: {error}"
+        );
+    }
+    for word in ["2!", "FILL", "MOVE"] {
+        let source = format!("1 2 {word}");
+        let error = outer_interpreter(&mut vm, &source).unwrap_err();
+        assert!(
+            matches!(&error, ForthError::DataStackUnderflow),
+            "{word}: {error}"
+        );
+    }
+    for word in ["2DROP", "2DUP"] {
+        let source = format!("1 {word}");
+        let error = outer_interpreter(&mut vm, &source).unwrap_err();
+        assert!(
+            matches!(&error, ForthError::DataStackUnderflow),
+            "{word}: {error}"
+        );
+    }
+    for word in ["2OVER", "2SWAP"] {
+        let source = format!("1 2 3 {word}");
+        let error = outer_interpreter(&mut vm, &source).unwrap_err();
+        assert!(
+            matches!(&error, ForthError::DataStackUnderflow),
+            "{word}: {error}"
+        );
+    }
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
 fn bulk_memory_words_allow_empty_ranges_and_leave_data_unchanged_on_errors() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, "CREATE BYTES 4 ALLOT BYTES 4 65 FILL").unwrap();
-        let here = here_of(&mut vm, &output);
-        output.0.borrow_mut().clear();
-        outer_interpreter(&mut vm, &format!("{here} 0 1 FILL")).unwrap();
-        outer_interpreter(&mut vm, &format!("{here} {here} 0 MOVE")).unwrap();
-        outer_interpreter(&mut vm, "BYTES BYTES 4 MOVE").unwrap();
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, "CREATE BYTES 4 ALLOT BYTES 4 65 FILL").unwrap();
+    let here = here_of(&mut vm, &output);
+    output.0.borrow_mut().clear();
+    outer_interpreter(&mut vm, &format!("{here} 0 1 FILL")).unwrap();
+    outer_interpreter(&mut vm, &format!("{here} {here} 0 MOVE")).unwrap();
+    outer_interpreter(&mut vm, "BYTES BYTES 4 MOVE").unwrap();
 
-        assert_error!(
-            &mut vm,
-            "BYTES HERE 2 90 FILL",
-            ForthError::UnwrittenAddress(_)
-        );
-        assert_error!(
-            &mut vm,
-            &format!("BYTES HERE {} MOVE", Cell::MAX),
-            ForthError::UnwrittenAddress(_)
-        );
-        outer_interpreter(&mut vm, "BYTES C@ . BYTES CHAR+ C@ .").unwrap();
-        assert_eq!(output.text(), "65 65 ");
-    }
+    assert_error!(
+        &mut vm,
+        "BYTES HERE 2 90 FILL",
+        ForthError::UnwrittenAddress(_)
+    );
+    assert_error!(
+        &mut vm,
+        &format!("BYTES HERE {} MOVE", Cell::MAX),
+        ForthError::UnwrittenAddress(_)
+    );
+    outer_interpreter(&mut vm, "BYTES C@ . BYTES CHAR+ C@ .").unwrap();
+    assert_eq!(output.text(), "65 65 ");
 }
 
 #[test]
 fn two_store_checks_the_full_range_before_writing() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, "CREATE ONE 7 ,").unwrap();
-        assert_error!(&mut vm, "1 2 ONE 2!", ForthError::UnwrittenAddress(_));
-        outer_interpreter(&mut vm, "ONE @ .").unwrap();
-        assert_eq!(output.text(), "7 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, "CREATE ONE 7 ,").unwrap();
+    assert_error!(&mut vm, "1 2 ONE 2!", ForthError::UnwrittenAddress(_));
+    outer_interpreter(&mut vm, "ONE @ .").unwrap();
+    assert_eq!(output.text(), "7 ");
 }
 
 #[test]
@@ -346,15 +336,13 @@ fn create_comma_fetch() {
 
 #[test]
 fn name_is_owned_by_the_dictionary() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        let line = String::from("CREATE X 1 ,");
-        outer_interpreter(&mut vm, &line).unwrap();
-        drop(line);
-        outer_interpreter(&mut vm, "X @ .").unwrap();
-        assert_eq!(output.text(), "1 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    let line = String::from("CREATE X 1 ,");
+    outer_interpreter(&mut vm, &line).unwrap();
+    drop(line);
+    outer_interpreter(&mut vm, "X @ .").unwrap();
+    assert_eq!(output.text(), "1 ");
 }
 
 #[test]
@@ -375,15 +363,13 @@ fn redefinition_calls_the_previous_word() {
 
 #[test]
 fn exit_leaves_a_definition_early() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, ": A 1 EXIT 2 ;").unwrap();
-        outer_interpreter(&mut vm, "A .").unwrap();
-        assert_eq!(output.text(), "1 ");
-        // The 2 behind EXIT was never pushed.
-        assert_error!(&mut vm, ".", ForthError::DataStackUnderflow);
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, ": A 1 EXIT 2 ;").unwrap();
+    outer_interpreter(&mut vm, "A .").unwrap();
+    assert_eq!(output.text(), "1 ");
+    // The 2 behind EXIT was never pushed.
+    assert_error!(&mut vm, ".", ForthError::DataStackUnderflow);
 }
 
 #[test]
@@ -399,54 +385,44 @@ fn does_gives_each_child_its_own_data() {
 
 #[test]
 fn does_requires_a_definition() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        assert_error!(&mut vm, "CREATE X DOES>", ForthError::DoesOutsideDefinition);
-    }
+    let mut vm = test_vm(io::sink());
+    assert_error!(&mut vm, "CREATE X DOES>", ForthError::DoesOutsideDefinition);
 }
 
 #[test]
 fn does_requires_a_created_word() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        outer_interpreter(&mut vm, ": BAD 1 DOES> ;").unwrap();
-        assert_error!(&mut vm, "BAD", ForthError::DoesWithoutCreate);
-    }
+    let mut vm = test_vm(io::sink());
+    outer_interpreter(&mut vm, ": BAD 1 DOES> ;").unwrap();
+    assert_error!(&mut vm, "BAD", ForthError::DoesWithoutCreate);
 }
 
 #[test]
 fn failed_definition_leaves_a_usable_vm() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(&mut vm, ": BROKEN 1 NOPE ;", ForthError::UnknownWord(name) if name == "NOPE");
-        assert_error!(&mut vm, "BROKEN", ForthError::UnknownWord(name) if name == "BROKEN");
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(&mut vm, ": BROKEN 1 NOPE ;", ForthError::UnknownWord(name) if name == "NOPE");
+    assert_error!(&mut vm, "BROKEN", ForthError::UnknownWord(name) if name == "BROKEN");
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
 fn stack_underflow_is_reported() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        assert_error!(&mut vm, "1 +", ForthError::DataStackUnderflow);
-        assert_error!(&mut vm, ".", ForthError::DataStackUnderflow);
-        assert_error!(&mut vm, "@", ForthError::DataStackUnderflow);
-        assert_error!(&mut vm, ",", ForthError::DataStackUnderflow);
-        assert_error!(&mut vm, "EXIT", ForthError::ReturnStackUnderflow);
-    }
+    let mut vm = test_vm(io::sink());
+    assert_error!(&mut vm, "1 +", ForthError::DataStackUnderflow);
+    assert_error!(&mut vm, ".", ForthError::DataStackUnderflow);
+    assert_error!(&mut vm, "@", ForthError::DataStackUnderflow);
+    assert_error!(&mut vm, ",", ForthError::DataStackUnderflow);
+    assert_error!(&mut vm, "EXIT", ForthError::ReturnStackUnderflow);
 }
 
 #[test]
 fn misused_words_are_rejected() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        assert_error!(&mut vm, ";", ForthError::NotCompiling(";"));
-        assert_error!(&mut vm, ":", ForthError::MissingName(":"));
-        assert_error!(&mut vm, "CREATE", ForthError::MissingName("CREATE"));
-        assert_error!(&mut vm, "LIT", ForthError::UnknownWord(name) if name == "LIT");
-    }
+    let mut vm = test_vm(io::sink());
+    assert_error!(&mut vm, ";", ForthError::NotCompiling(";"));
+    assert_error!(&mut vm, ":", ForthError::MissingName(":"));
+    assert_error!(&mut vm, "CREATE", ForthError::MissingName("CREATE"));
+    assert_error!(&mut vm, "LIT", ForthError::UnknownWord(name) if name == "LIT");
 }
 
 #[test]
@@ -472,10 +448,8 @@ fn information_words_work_from_a_definition() {
 #[test]
 fn information_words_report_output_errors() {
     for word in ["HELP", "COPYRIGHT", "LICENSE"] {
-        unsafe {
-            let mut vm = test_vm(FailingWriter);
-            assert_error!(&mut vm, word, ForthError::Output(_));
-        }
+        let mut vm = test_vm(FailingWriter);
+        assert_error!(&mut vm, word, ForthError::Output(_));
     }
 }
 
@@ -486,198 +460,166 @@ fn output_keeps_its_order() {
 
 #[test]
 fn output_before_an_error_is_kept() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(BufWriter::new(output.clone()));
-        assert_error!(&mut vm, "1 . +", ForthError::DataStackUnderflow);
-        assert_eq!(output.text(), "1 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(BufWriter::new(output.clone()));
+    assert_error!(&mut vm, "1 . +", ForthError::DataStackUnderflow);
+    assert_eq!(output.text(), "1 ");
 }
 
 #[test]
 fn underflow_in_dot_writes_nothing() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(&mut vm, ".", ForthError::DataStackUnderflow);
-        assert_eq!(output.text(), "");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(&mut vm, ".", ForthError::DataStackUnderflow);
+    assert_eq!(output.text(), "");
 }
 
 #[test]
 fn failing_writer_is_reported() {
-    unsafe {
-        let mut vm = test_vm(FailingWriter);
-        assert_error!(&mut vm, "1 .", ForthError::Output(_));
-        outer_interpreter(&mut vm, "1 2 +").unwrap();
-    }
+    let mut vm = test_vm(FailingWriter);
+    assert_error!(&mut vm, "1 .", ForthError::Output(_));
+    outer_interpreter(&mut vm, "1 2 +").unwrap();
 }
 
 #[test]
 fn failing_flush_is_reported() {
-    unsafe {
-        let mut vm = test_vm(BufWriter::new(FailingWriter));
-        assert_error!(&mut vm, "1 .", ForthError::Output(_));
-    }
+    let mut vm = test_vm(BufWriter::new(FailingWriter));
+    assert_error!(&mut vm, "1 .", ForthError::Output(_));
 }
 
 #[test]
 fn buffered_output_is_flushed_at_the_end_of_a_line() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(BufWriter::new(output.clone()));
-        outer_interpreter(&mut vm, "7 .").unwrap();
-        assert_eq!(output.text(), "7 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(BufWriter::new(output.clone()));
+    outer_interpreter(&mut vm, "7 .").unwrap();
+    assert_eq!(output.text(), "7 ");
 }
 
 #[test]
 fn output_error_keeps_its_cause() {
-    unsafe {
-        let mut vm = test_vm(FailingWriter);
-        let error = outer_interpreter(&mut vm, "1 .").unwrap_err();
-        assert_eq!(error.source().unwrap().to_string(), "write failed");
-    }
+    let mut vm = test_vm(FailingWriter);
+    let error = outer_interpreter(&mut vm, "1 .").unwrap_err();
+    assert_eq!(error.source().unwrap().to_string(), "write failed");
 }
 
 #[test]
 fn quit_stops_the_input_and_keeps_the_data_stack() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
 
-        let error = outer_interpreter(&mut vm, "7 1 . QUIT 2 .").unwrap_err();
-        assert!(matches!(error, ForthError::Quit));
+    let error = outer_interpreter(&mut vm, "7 1 . QUIT 2 .").unwrap_err();
+    assert!(matches!(error, ForthError::Quit));
 
-        outer_interpreter(&mut vm, ".").unwrap();
-        assert_eq!(output.text(), "1 7 ");
-    }
+    outer_interpreter(&mut vm, ".").unwrap();
+    assert_eq!(output.text(), "1 7 ");
 }
 
 #[test]
 fn quit_leaves_nested_definitions_and_clears_the_return_stack() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, ": INNER 2 . QUIT 3 . ;").unwrap();
-        outer_interpreter(&mut vm, ": OUTER INNER 4 . ;").unwrap();
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, ": INNER 2 . QUIT 3 . ;").unwrap();
+    outer_interpreter(&mut vm, ": OUTER INNER 4 . ;").unwrap();
 
-        let error = outer_interpreter(&mut vm, "8 OUTER 5 .").unwrap_err();
-        assert!(matches!(error, ForthError::Quit));
+    let error = outer_interpreter(&mut vm, "8 OUTER 5 .").unwrap_err();
+    assert!(matches!(error, ForthError::Quit));
 
-        outer_interpreter(&mut vm, ".").unwrap();
-        assert_eq!(output.text(), "2 8 ");
+    outer_interpreter(&mut vm, ".").unwrap();
+    assert_eq!(output.text(), "2 8 ");
 
-        let error = outer_interpreter(&mut vm, "EXIT").unwrap_err();
-        assert!(matches!(error, ForthError::ReturnStackUnderflow));
-    }
+    let error = outer_interpreter(&mut vm, "EXIT").unwrap_err();
+    assert!(matches!(error, ForthError::ReturnStackUnderflow));
 }
 
 #[test]
 fn quit_rolls_back_an_open_definition() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        outer_interpreter(&mut vm, ": BAIL QUIT ; IMMEDIATE").unwrap();
+    let mut vm = test_vm(io::sink());
+    outer_interpreter(&mut vm, ": BAIL QUIT ; IMMEDIATE").unwrap();
 
-        let error = outer_interpreter(&mut vm, ": UNFINISHED 1 BAIL").unwrap_err();
-        assert!(matches!(error, ForthError::Quit));
-        assert!(!vm.is_compiling());
+    let error = outer_interpreter(&mut vm, ": UNFINISHED 1 BAIL").unwrap_err();
+    assert!(matches!(error, ForthError::Quit));
+    assert!(!vm.is_compiling());
 
-        let error = outer_interpreter(&mut vm, "UNFINISHED").unwrap_err();
-        assert!(matches!(error, ForthError::UnknownWord(name) if name == "UNFINISHED"));
-    }
+    let error = outer_interpreter(&mut vm, "UNFINISHED").unwrap_err();
+    assert!(matches!(error, ForthError::UnknownWord(name) if name == "UNFINISHED"));
 }
 
 #[test]
 fn abort_stops_the_input_and_clears_the_data_stack() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
 
-        let error = outer_interpreter(&mut vm, "7 1 . ABORT 2 .").unwrap_err();
-        assert!(matches!(error, ForthError::Abort));
+    let error = outer_interpreter(&mut vm, "7 1 . ABORT 2 .").unwrap_err();
+    assert!(matches!(error, ForthError::Abort));
 
-        outer_interpreter(&mut vm, "DEPTH .").unwrap();
-        assert_eq!(output.text(), "1 0 ");
-    }
+    outer_interpreter(&mut vm, "DEPTH .").unwrap();
+    assert_eq!(output.text(), "1 0 ");
 }
 
 #[test]
 fn abort_leaves_nested_definitions_and_clears_the_return_stack() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, ": INNER 2 . ABORT 3 . ;").unwrap();
-        outer_interpreter(&mut vm, ": OUTER INNER 4 . ;").unwrap();
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, ": INNER 2 . ABORT 3 . ;").unwrap();
+    outer_interpreter(&mut vm, ": OUTER INNER 4 . ;").unwrap();
 
-        let error = outer_interpreter(&mut vm, "8 OUTER 5 .").unwrap_err();
-        assert!(matches!(error, ForthError::Abort));
+    let error = outer_interpreter(&mut vm, "8 OUTER 5 .").unwrap_err();
+    assert!(matches!(error, ForthError::Abort));
 
-        outer_interpreter(&mut vm, "DEPTH .").unwrap();
-        assert_eq!(output.text(), "2 0 ");
+    outer_interpreter(&mut vm, "DEPTH .").unwrap();
+    assert_eq!(output.text(), "2 0 ");
 
-        let error = outer_interpreter(&mut vm, "EXIT").unwrap_err();
-        assert!(matches!(error, ForthError::ReturnStackUnderflow));
-    }
+    let error = outer_interpreter(&mut vm, "EXIT").unwrap_err();
+    assert!(matches!(error, ForthError::ReturnStackUnderflow));
 }
 
 #[test]
 fn abort_rolls_back_an_open_definition() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        outer_interpreter(&mut vm, ": BAIL ABORT ; IMMEDIATE").unwrap();
+    let mut vm = test_vm(io::sink());
+    outer_interpreter(&mut vm, ": BAIL ABORT ; IMMEDIATE").unwrap();
 
-        let error = outer_interpreter(&mut vm, ": UNFINISHED 1 BAIL").unwrap_err();
-        assert!(matches!(error, ForthError::Abort));
-        assert!(!vm.is_compiling());
+    let error = outer_interpreter(&mut vm, ": UNFINISHED 1 BAIL").unwrap_err();
+    assert!(matches!(error, ForthError::Abort));
+    assert!(!vm.is_compiling());
 
-        let error = outer_interpreter(&mut vm, "UNFINISHED").unwrap_err();
-        assert!(matches!(error, ForthError::UnknownWord(name) if name == "UNFINISHED"));
-    }
+    let error = outer_interpreter(&mut vm, "UNFINISHED").unwrap_err();
+    assert!(matches!(error, ForthError::UnknownWord(name) if name == "UNFINISHED"));
 }
 
 #[test]
 fn bye_stops_interpretation_and_preserves_output() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        let error = outer_interpreter(&mut vm, "40 2 + . BYE 99 .").unwrap_err();
-        assert!(matches!(error, ForthError::Bye(0)));
-        assert_eq!(output.text(), "42 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    let error = outer_interpreter(&mut vm, "40 2 + . BYE 99 .").unwrap_err();
+    assert!(matches!(error, ForthError::Bye(0)));
+    assert_eq!(output.text(), "42 ");
 }
 
 #[test]
 fn bye_with_code_stops_a_colon_definition() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        outer_interpreter(&mut vm, ": STOP 3 (BYE) 4 ;").unwrap();
-        let error = outer_interpreter(&mut vm, "STOP").unwrap_err();
-        assert!(matches!(error, ForthError::Bye(3)));
-    }
+    let mut vm = test_vm(io::sink());
+    outer_interpreter(&mut vm, ": STOP 3 (BYE) 4 ;").unwrap();
+    let error = outer_interpreter(&mut vm, "STOP").unwrap_err();
+    assert!(matches!(error, ForthError::Bye(3)));
 }
 
 #[test]
 fn bye_with_code_underflow_leaves_the_vm_usable() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(&mut vm, "(BYE)", ForthError::DataStackUnderflow);
-        outer_interpreter(&mut vm, "1 .").unwrap();
-        assert_eq!(output.text(), "1 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(&mut vm, "(BYE)", ForthError::DataStackUnderflow);
+    outer_interpreter(&mut vm, "1 .").unwrap();
+    assert_eq!(output.text(), "1 ");
 }
 
 #[test]
 fn is_compiling_follows_an_open_definition() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        assert!(!vm.is_compiling());
-        outer_interpreter(&mut vm, ": X").unwrap();
-        assert!(vm.is_compiling());
-        outer_interpreter(&mut vm, ";").unwrap();
-        assert!(!vm.is_compiling());
-    }
+    let mut vm = test_vm(io::sink());
+    assert!(!vm.is_compiling());
+    outer_interpreter(&mut vm, ": X").unwrap();
+    assert!(vm.is_compiling());
+    outer_interpreter(&mut vm, ";").unwrap();
+    assert!(!vm.is_compiling());
 }
 
 #[test]
@@ -746,7 +688,6 @@ fn errors_have_stable_messages() {
             ForthError::InvalidExecutionToken(0x2a),
             "Invalid execution token 0x2a.",
         ),
-        (ForthError::NullCodeField(0x2a), "Null code field at 0x2a."),
         (
             ForthError::UnterminatedComment,
             "Comment has no closing parenthesis.",
@@ -763,27 +704,24 @@ fn errors_have_stable_messages() {
 
 #[test]
 fn fetch_rejects_addresses_outside_the_dictionary() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        assert_error!(&mut vm, "0 @", ForthError::AddressOutOfBounds(0));
-        assert_error!(&mut vm, "5 @", ForthError::AddressOutOfBounds(5));
-        assert_error!(&mut vm, "-1 @", ForthError::AddressOutOfBounds(Cell::MAX));
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    let (_, end) = fill_dictionary(&mut vm, &output);
+    assert_error!(&mut vm, &format!("{end} @"), ForthError::AddressOutOfBounds(a) if *a == end);
+    assert_error!(&mut vm, "-1 @", ForthError::AddressOutOfBounds(Cell::MAX));
 }
 
 #[test]
 fn fetch_rejects_misaligned_addresses() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        for offset in 1..mem::size_of::<Cell>() {
-            let line = format!("CREATE X 7 , 8 , X {} + @", offset);
-            assert_error!(&mut vm, &line, ForthError::MisalignedAddress(_));
-        }
+    let mut vm = test_vm(io::sink());
+    for offset in 1..mem::size_of::<Cell>() {
+        let line = format!("CREATE X 7 , 8 , X {} + @", offset);
+        assert_error!(&mut vm, &line, ForthError::MisalignedAddress(_));
     }
 }
 
 // Returns HERE as an address.
-unsafe fn here_of(vm: &mut Vm, output: &Capture) -> Cell {
+fn here_of(vm: &mut Vm, output: &Capture) -> Cell {
     let before = output.text().len();
     outer_interpreter(vm, "HERE .").unwrap();
     let text = output.text();
@@ -792,7 +730,7 @@ unsafe fn here_of(vm: &mut Vm, output: &Capture) -> Cell {
 
 // Writes zeros up to the last byte of the dictionary, so HERE is its end. The dictionary
 // holds `TEST_CELLS` Cells, which gives its start too. Returns the start and the end.
-unsafe fn fill_dictionary(vm: &mut Vm, output: &Capture) -> (Cell, Cell) {
+fn fill_dictionary(vm: &mut Vm, output: &Capture) -> (Cell, Cell) {
     for chunk in (0..16).rev().map(|shift| 1usize << shift) {
         while outer_interpreter(vm, &format!("{chunk} ALLOT")).is_ok() {}
     }
@@ -802,131 +740,122 @@ unsafe fn fill_dictionary(vm: &mut Vm, output: &Capture) -> (Cell, Cell) {
 
 #[test]
 fn memory_words_check_the_start_of_the_dictionary() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        let (start, _) = fill_dictionary(&mut vm, &output);
-        let size = mem::size_of::<Cell>();
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    let (start, _) = fill_dictionary(&mut vm, &output);
+    let size = mem::size_of::<Cell>();
+    assert_eq!(start, 0);
 
-        outer_interpreter(&mut vm, &format!("{start} @ DROP {start} C@ DROP")).unwrap();
-        for below in [start - 1, start - size] {
-            for word in ["@", "C@"] {
-                let line = format!("{below} {word}");
-                assert_error!(&mut vm, &line, ForthError::AddressOutOfBounds(a) if *a == below);
-            }
-            for word in ["!", "C!"] {
-                let line = format!("1 {below} {word}");
-                assert_error!(&mut vm, &line, ForthError::AddressOutOfBounds(a) if *a == below);
-            }
+    outer_interpreter(&mut vm, &format!("{start} @ DROP {start} C@ DROP")).unwrap();
+    for below in [start.wrapping_sub(1), start.wrapping_sub(size)] {
+        for word in ["@", "C@"] {
+            let line = format!("{below} {word}");
+            assert_error!(&mut vm, &line, ForthError::AddressOutOfBounds(a) if *a == below);
+        }
+        for word in ["!", "C!"] {
+            let line = format!("1 {below} {word}");
+            assert_error!(&mut vm, &line, ForthError::AddressOutOfBounds(a) if *a == below);
         }
     }
 }
 
 #[test]
 fn memory_words_check_the_end_of_the_dictionary() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        let (_, end) = fill_dictionary(&mut vm, &output);
-        let size = mem::size_of::<Cell>();
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    let (_, end) = fill_dictionary(&mut vm, &output);
+    let size = mem::size_of::<Cell>();
 
-        // The last written byte and Cell are fine, and HERE is the end of the arena.
-        let line = format!(
-            "{} @ DROP {} C@ DROP 1 {} ! 1 {} C!",
-            end - size,
-            end - 1,
-            end - size,
-            end - 1
-        );
-        outer_interpreter(&mut vm, &line).unwrap();
-        for past in [end, end + 1, end + size] {
-            for word in ["@", "C@"] {
-                let line = format!("{past} {word}");
-                assert_error!(&mut vm, &line, ForthError::AddressOutOfBounds(a) if *a == past);
-            }
-            for word in ["!", "C!"] {
-                let line = format!("1 {past} {word}");
-                assert_error!(&mut vm, &line, ForthError::AddressOutOfBounds(a) if *a == past);
-            }
+    // The last written byte and Cell are fine, and HERE is the end of the arena.
+    let line = format!(
+        "{} @ DROP {} C@ DROP 1 {} ! 1 {} C!",
+        end - size,
+        end - 1,
+        end - size,
+        end - 1
+    );
+    outer_interpreter(&mut vm, &line).unwrap();
+    for past in [end, end + 1, end + size] {
+        for word in ["@", "C@"] {
+            let line = format!("{past} {word}");
+            assert_error!(&mut vm, &line, ForthError::AddressOutOfBounds(a) if *a == past);
+        }
+        for word in ["!", "C!"] {
+            let line = format!("1 {past} {word}");
+            assert_error!(&mut vm, &line, ForthError::AddressOutOfBounds(a) if *a == past);
         }
     }
 }
 
 #[test]
 fn memory_words_check_here() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, "ALIGN").unwrap();
-        let here = here_of(&mut vm, &output);
-        let size = mem::size_of::<Cell>();
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, "ALIGN").unwrap();
+    let here = here_of(&mut vm, &output);
+    let size = mem::size_of::<Cell>();
 
-        // Just below HERE is written, HERE and everything above it isn't. An unaligned address
-        // at HERE or above is unwritten, because that check comes first.
-        let line = format!(
-            "{} @ DROP {} C@ DROP 1 {} ! 1 {} C!",
-            here - size,
-            here - 1,
-            here - size,
-            here - 1
-        );
-        outer_interpreter(&mut vm, &line).unwrap();
-        for addr in [here, here + 1, here + size, here + size + 1] {
-            for word in ["@", "C@"] {
-                let line = format!("{addr} {word}");
-                assert_error!(&mut vm, &line, ForthError::UnwrittenAddress(a) if *a == addr);
-            }
-            for word in ["!", "C!"] {
-                let line = format!("1 {addr} {word}");
-                assert_error!(&mut vm, &line, ForthError::UnwrittenAddress(a) if *a == addr);
-            }
+    // Just below HERE is written, HERE and everything above it isn't. An unaligned address
+    // at HERE or above is unwritten, because that check comes first.
+    let line = format!(
+        "{} @ DROP {} C@ DROP 1 {} ! 1 {} C!",
+        here - size,
+        here - 1,
+        here - size,
+        here - 1
+    );
+    outer_interpreter(&mut vm, &line).unwrap();
+    for addr in [here, here + 1, here + size, here + size + 1] {
+        for word in ["@", "C@"] {
+            let line = format!("{addr} {word}");
+            assert_error!(&mut vm, &line, ForthError::UnwrittenAddress(a) if *a == addr);
+        }
+        for word in ["!", "C!"] {
+            let line = format!("1 {addr} {word}");
+            assert_error!(&mut vm, &line, ForthError::UnwrittenAddress(a) if *a == addr);
         }
     }
 }
 
 #[test]
 fn a_cell_that_crosses_here_is_unwritten() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, "ALIGN 1 C,").unwrap();
-        let here = here_of(&mut vm, &output);
-        let size = mem::size_of::<Cell>();
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, "ALIGN 1 C,").unwrap();
+    let here = here_of(&mut vm, &output);
+    let size = mem::size_of::<Cell>();
 
-        // This Cell starts at the byte that C, wrote, and ends past HERE.
-        let addr = here - 1;
-        let line = format!("{addr} @");
-        assert_error!(&mut vm, &line, ForthError::UnwrittenAddress(a) if *a == addr);
-        // A byte at that address is written.
-        outer_interpreter(&mut vm, &format!("{addr} C@ DROP")).unwrap();
-        let line = format!("1 {addr} !");
-        assert_error!(&mut vm, &line, ForthError::UnwrittenAddress(a) if *a == addr);
+    // This Cell starts at the byte that C, wrote, and ends past HERE.
+    let addr = here - 1;
+    let line = format!("{addr} @");
+    assert_error!(&mut vm, &line, ForthError::UnwrittenAddress(a) if *a == addr);
+    // A byte at that address is written.
+    outer_interpreter(&mut vm, &format!("{addr} C@ DROP")).unwrap();
+    let line = format!("1 {addr} !");
+    assert_error!(&mut vm, &line, ForthError::UnwrittenAddress(a) if *a == addr);
 
-        // So is an unaligned Cell that starts in the last written Cell.
-        outer_interpreter(&mut vm, "ALIGN 0 ,").unwrap();
-        let last = here_of(&mut vm, &output) - size;
-        let line = format!("{} @", last + 1);
-        assert_error!(&mut vm, &line, ForthError::UnwrittenAddress(a) if *a == last + 1);
-    }
+    // So is an unaligned Cell that starts in the last written Cell.
+    outer_interpreter(&mut vm, "ALIGN 0 ,").unwrap();
+    let last = here_of(&mut vm, &output) - size;
+    let line = format!("{} @", last + 1);
+    assert_error!(&mut vm, &line, ForthError::UnwrittenAddress(a) if *a == last + 1);
 }
 
 #[test]
 fn only_a_cell_in_the_written_dictionary_can_be_misaligned() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, "ALIGN 1 , 2 ,").unwrap();
-        let first = here_of(&mut vm, &output) - 2 * mem::size_of::<Cell>();
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, "ALIGN 1 , 2 ,").unwrap();
+    let first = here_of(&mut vm, &output) - 2 * mem::size_of::<Cell>();
 
-        let line = format!("{} @", first + 1);
-        assert_error!(&mut vm, &line, ForthError::MisalignedAddress(a) if *a == first + 1);
-        let line = format!("1 {} !", first + 1);
-        assert_error!(&mut vm, &line, ForthError::MisalignedAddress(a) if *a == first + 1);
+    let line = format!("{} @", first + 1);
+    assert_error!(&mut vm, &line, ForthError::MisalignedAddress(a) if *a == first + 1);
+    let line = format!("1 {} !", first + 1);
+    assert_error!(&mut vm, &line, ForthError::MisalignedAddress(a) if *a == first + 1);
 
-        // Bytes have no alignment.
-        let line = format!("{} C@ DROP 1 {} C!", first + 1, first + 1);
-        outer_interpreter(&mut vm, &line).unwrap();
-    }
+    // Bytes have no alignment.
+    let line = format!("{} C@ DROP 1 {} C!", first + 1, first + 1);
+    outer_interpreter(&mut vm, &line).unwrap();
 }
 
 #[test]
@@ -937,23 +866,19 @@ fn fetch_reads_aligned_cells_behind_the_first() {
 
 #[test]
 fn fetch_rejects_here() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        assert_error!(&mut vm, "CREATE X X @", ForthError::UnwrittenAddress(_));
-    }
+    let mut vm = test_vm(io::sink());
+    assert_error!(&mut vm, "CREATE X X @", ForthError::UnwrittenAddress(_));
 }
 
 #[test]
 fn failed_definition_invalidates_its_addresses() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        outer_interpreter(&mut vm, "CREATE X 7 ,").unwrap();
-        assert_error!(&mut vm, ": BROKEN NOPE ;", ForthError::UnknownWord(_));
+    let mut vm = test_vm(io::sink());
+    outer_interpreter(&mut vm, "CREATE X 7 ,").unwrap();
+    assert_error!(&mut vm, ": BROKEN NOPE ;", ForthError::UnknownWord(_));
 
-        // The definition wrote behind the data of X, and is gone again.
-        let line = format!("X {} + @", mem::size_of::<Cell>());
-        assert_error!(&mut vm, &line, ForthError::UnwrittenAddress(_));
-    }
+    // The definition wrote behind the data of X, and is gone again.
+    let line = format!("X {} + @", mem::size_of::<Cell>());
+    assert_error!(&mut vm, &line, ForthError::UnwrittenAddress(_));
 }
 
 #[test]
@@ -963,20 +888,18 @@ fn fetch_reads_the_last_written_cell() {
 
 #[test]
 fn fetch_reads_headers() {
-    // The Cell in front of the Parameter Field is the Code Field.
-    let line = format!("CREATE X 7 , X -{} + @ . ' X @ .", mem::size_of::<Cell>());
+    // The Cell in front of the Parameter Field holds the execution token.
+    let line = format!("CREATE X 7 , X -{} + @ . ' X .", mem::size_of::<Cell>());
     assert_same_cells(&[&line]);
 }
 
 #[test]
 fn invalid_address_leaves_a_usable_vm() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(&mut vm, "5 @", ForthError::AddressOutOfBounds(5));
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(&mut vm, "-1 @", ForthError::AddressOutOfBounds(Cell::MAX));
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
@@ -999,128 +922,107 @@ fn store_changes_a_does_child() {
 
 #[test]
 fn store_rejects_addresses_outside_the_dictionary() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        assert_error!(&mut vm, "1 0 !", ForthError::AddressOutOfBounds(0));
-        assert_error!(&mut vm, "1 5 !", ForthError::AddressOutOfBounds(5));
-        assert_error!(&mut vm, "1 -1 !", ForthError::AddressOutOfBounds(Cell::MAX));
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    let (_, end) = fill_dictionary(&mut vm, &output);
+    assert_error!(&mut vm, &format!("1 {end} !"), ForthError::AddressOutOfBounds(a) if *a == end);
+    assert_error!(&mut vm, "1 -1 !", ForthError::AddressOutOfBounds(Cell::MAX));
 }
 
 #[test]
 fn store_rejects_misaligned_addresses() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        for offset in 1..mem::size_of::<Cell>() {
-            let line = format!("CREATE X 7 , 8 , 9 X {} + !", offset);
-            assert_error!(&mut vm, &line, ForthError::MisalignedAddress(_));
-        }
+    let mut vm = test_vm(io::sink());
+    for offset in 1..mem::size_of::<Cell>() {
+        let line = format!("CREATE X 7 , 8 , 9 X {} + !", offset);
+        assert_error!(&mut vm, &line, ForthError::MisalignedAddress(_));
     }
 }
 
 #[test]
 fn store_rejects_here() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        assert_error!(&mut vm, "CREATE X 5 X !", ForthError::UnwrittenAddress(_));
-    }
+    let mut vm = test_vm(io::sink());
+    assert_error!(&mut vm, "CREATE X 5 X !", ForthError::UnwrittenAddress(_));
 }
 
 #[test]
 fn store_needs_two_stack_items() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, "CREATE X 7 ,").unwrap();
-        assert_error!(&mut vm, "X !", ForthError::DataStackUnderflow);
-        outer_interpreter(&mut vm, "X @ .").unwrap();
-        assert_eq!(output.text(), "7 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, "CREATE X 7 ,").unwrap();
+    assert_error!(&mut vm, "X !", ForthError::DataStackUnderflow);
+    outer_interpreter(&mut vm, "X @ .").unwrap();
+    assert_eq!(output.text(), "7 ");
 }
 
 #[test]
 fn failed_definition_invalidates_its_addresses_for_store() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        outer_interpreter(&mut vm, "CREATE X 7 ,").unwrap();
-        assert_error!(&mut vm, ": BROKEN NOPE ;", ForthError::UnknownWord(_));
+    let mut vm = test_vm(io::sink());
+    outer_interpreter(&mut vm, "CREATE X 7 ,").unwrap();
+    assert_error!(&mut vm, ": BROKEN NOPE ;", ForthError::UnknownWord(_));
 
-        // The definition wrote behind the data of X, and is gone again.
-        let line = format!("9 X {} + !", mem::size_of::<Cell>());
-        assert_error!(&mut vm, &line, ForthError::UnwrittenAddress(_));
-    }
+    // The definition wrote behind the data of X, and is gone again.
+    let line = format!("9 X {} + !", mem::size_of::<Cell>());
+    assert_error!(&mut vm, &line, ForthError::UnwrittenAddress(_));
 }
 
 #[test]
 fn invalid_store_leaves_a_usable_vm() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(&mut vm, "1 5 !", ForthError::AddressOutOfBounds(5));
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(&mut vm, "1 -1 !", ForthError::AddressOutOfBounds(Cell::MAX));
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
 fn larger_dictionary_holds_more_cells() {
-    unsafe {
-        let mut vm = boot(io::sink(), VmConfig::new(FILL_TEST_CELLS * 4)).unwrap();
-        let cells = "1 , ".repeat(FILL_TEST_CELLS * 2);
-        outer_interpreter(&mut vm, &cells).unwrap();
-    }
+    let mut vm = boot(io::sink(), VmConfig::new(FILL_TEST_CELLS * 4)).unwrap();
+    let cells = "1 , ".repeat(FILL_TEST_CELLS * 2);
+    outer_interpreter(&mut vm, &cells).unwrap();
 }
 
 #[test]
 fn smaller_dictionary_overflows_sooner() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = boot(output.clone(), VmConfig::new(smallest_cells() + 2)).unwrap();
-        outer_interpreter(&mut vm, "1 , 2 ,").unwrap();
-        assert_error!(&mut vm, "3 ,", ForthError::DictionaryOverflow);
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = boot(output.clone(), VmConfig::new(smallest_cells() + 2)).unwrap();
+    outer_interpreter(&mut vm, "1 , 2 ,").unwrap();
+    assert_error!(&mut vm, "3 ,", ForthError::DictionaryOverflow);
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
 fn boot_rejects_an_empty_dictionary() {
-    unsafe {
-        assert!(matches!(
-            boot(io::sink(), VmConfig::new(0)),
-            Err(ForthError::DictionaryOverflow)
-        ));
-    }
+    assert!(matches!(
+        boot(io::sink(), VmConfig::new(0)),
+        Err(ForthError::DictionaryOverflow)
+    ));
 }
 
 #[test]
 fn smallest_dictionary_boots_and_runs_forth() {
-    unsafe {
-        let smallest = smallest_cells();
-        assert!(matches!(
-            boot(io::sink(), VmConfig::new(smallest - 1)),
-            Err(ForthError::DictionaryOverflow)
-        ));
+    let smallest = smallest_cells();
+    assert!(matches!(
+        boot(io::sink(), VmConfig::new(smallest - 1)),
+        Err(ForthError::DictionaryOverflow)
+    ));
 
-        let output = Capture::default();
-        let mut vm = boot(output.clone(), VmConfig::new(smallest)).unwrap();
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = boot(output.clone(), VmConfig::new(smallest)).unwrap();
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
 fn boot_rejects_a_dictionary_too_large_to_allocate() {
-    unsafe {
-        assert!(matches!(
-            boot(io::sink(), VmConfig::new(Cell::MAX)),
-            Err(ForthError::DictionaryTooLarge(Cell::MAX))
-        ));
-    }
+    assert!(matches!(
+        boot(io::sink(), VmConfig::new(Cell::MAX)),
+        Err(ForthError::DictionaryTooLarge(Cell::MAX))
+    ));
 }
 
 // Boots a VM with these stack limits, and a dictionary large enough for every test.
-unsafe fn limited_vm(
+fn limited_vm(
     output: impl Write + 'static,
     data_stack_cells: usize,
     return_stack_cells: usize,
@@ -1135,7 +1037,7 @@ unsafe fn limited_vm(
 
 // Defines the words L1 to L`levels`, where each one but L1 calls the one before it, so that
 // running L`levels` nests that many colon words.
-unsafe fn define_nested_words(vm: &mut Vm, levels: usize) {
+fn define_nested_words(vm: &mut Vm, levels: usize) {
     outer_interpreter(vm, ": L1 ;").unwrap();
     for level in 2..=levels {
         let definition = format!(": L{} L{} ;", level, level - 1);
@@ -1156,27 +1058,23 @@ fn default_limits_are_the_limits_of_a_new_config() {
 
 #[test]
 fn data_stack_holds_exactly_its_limit() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = limited_vm(output.clone(), 3, 1);
-        outer_interpreter(&mut vm, "1 2 3").unwrap();
-        outer_interpreter(&mut vm, "DROP DEPTH . . .").unwrap();
-        assert_eq!(output.text(), "2 2 1 ");
-    }
+    let output = Capture::default();
+    let mut vm = limited_vm(output.clone(), 3, 1);
+    outer_interpreter(&mut vm, "1 2 3").unwrap();
+    outer_interpreter(&mut vm, "DROP DEPTH . . .").unwrap();
+    assert_eq!(output.text(), "2 2 1 ");
 }
 
 #[test]
 fn a_literal_past_the_limit_overflows_and_clears_the_stacks() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = limited_vm(output.clone(), 3, 1);
-        assert!(matches!(
-            outer_interpreter(&mut vm, "1 2 3 4 5 6"),
-            Err(ForthError::DataStackOverflow)
-        ));
-        outer_interpreter(&mut vm, "DEPTH .").unwrap();
-        assert_eq!(output.text(), "0 ");
-    }
+    let output = Capture::default();
+    let mut vm = limited_vm(output.clone(), 3, 1);
+    assert!(matches!(
+        outer_interpreter(&mut vm, "1 2 3 4 5 6"),
+        Err(ForthError::DataStackOverflow)
+    ));
+    outer_interpreter(&mut vm, "DEPTH .").unwrap();
+    assert_eq!(output.text(), "0 ");
 }
 
 #[test]
@@ -1195,128 +1093,112 @@ fn every_word_that_grows_the_stack_overflows_at_the_limit() {
         ":NONAME ;",
     ];
     for word in cases {
-        unsafe {
-            let mut vm = limited_vm(io::sink(), 8, 2);
-            outer_interpreter(
-                &mut vm,
-                "VARIABLE X 5 CONSTANT C : M CREATE DOES> ; M D : T 7 ;",
-            )
-            .unwrap();
-            outer_interpreter(&mut vm, "1 1 1 1 1 1 1 1").unwrap();
-            let result = outer_interpreter(&mut vm, word);
-            assert!(
-                matches!(result, Err(ForthError::DataStackOverflow)),
-                "{}: {:?}",
-                word,
-                result
-            );
-        }
+        let mut vm = limited_vm(io::sink(), 8, 2);
+        outer_interpreter(
+            &mut vm,
+            "VARIABLE X 5 CONSTANT C : M CREATE DOES> ; M D : T 7 ;",
+        )
+        .unwrap();
+        outer_interpreter(&mut vm, "1 1 1 1 1 1 1 1").unwrap();
+        let result = outer_interpreter(&mut vm, word);
+        assert!(
+            matches!(result, Err(ForthError::DataStackOverflow)),
+            "{}: {:?}",
+            word,
+            result
+        );
     }
 }
 
 #[test]
 fn return_stack_holds_exactly_its_limit() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = limited_vm(output.clone(), 8, 4);
-        define_nested_words(&mut vm, 4);
-        outer_interpreter(&mut vm, "L4 1 .").unwrap();
-        assert_eq!(output.text(), "1 ");
-    }
+    let output = Capture::default();
+    let mut vm = limited_vm(output.clone(), 8, 4);
+    define_nested_words(&mut vm, 4);
+    outer_interpreter(&mut vm, "L4 1 .").unwrap();
+    assert_eq!(output.text(), "1 ");
 }
 
 #[test]
 fn nesting_past_the_limit_overflows_the_return_stack() {
-    unsafe {
-        let mut vm = limited_vm(io::sink(), 8, 4);
-        define_nested_words(&mut vm, 5);
-        assert!(matches!(
-            outer_interpreter(&mut vm, "L5"),
-            Err(ForthError::ReturnStackOverflow)
-        ));
-    }
+    let mut vm = limited_vm(io::sink(), 8, 4);
+    define_nested_words(&mut vm, 5);
+    assert!(matches!(
+        outer_interpreter(&mut vm, "L5"),
+        Err(ForthError::ReturnStackOverflow)
+    ));
 }
 
 #[test]
 fn runaway_recursion_gives_an_error_and_leaves_the_vm_usable() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert!(matches!(
-            outer_interpreter(&mut vm, RUNAWAY_RECURSION),
-            Err(ForthError::ReturnStackOverflow)
-        ));
-        outer_interpreter(&mut vm, "DEPTH . 1 2 + . : T 4 ; T .").unwrap();
-        assert_eq!(output.text(), "0 3 4 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert!(matches!(
+        outer_interpreter(&mut vm, RUNAWAY_RECURSION),
+        Err(ForthError::ReturnStackOverflow)
+    ));
+    outer_interpreter(&mut vm, "DEPTH . 1 2 + . : T 4 ; T .").unwrap();
+    assert_eq!(output.text(), "0 3 4 ");
 }
 
 #[test]
 fn runaway_recursion_with_a_growing_data_stack_overflows_it() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = limited_vm(output.clone(), 16, 1024);
-        assert!(matches!(
-            outer_interpreter(
-                &mut vm,
-                "VARIABLE V :NONAME 1 V @ EXECUTE ; DUP V ! EXECUTE"
-            ),
-            Err(ForthError::DataStackOverflow)
-        ));
-        outer_interpreter(&mut vm, "DEPTH .").unwrap();
-        assert_eq!(output.text(), "0 ");
-    }
+    let output = Capture::default();
+    let mut vm = limited_vm(output.clone(), 16, 1024);
+    assert!(matches!(
+        outer_interpreter(
+            &mut vm,
+            "VARIABLE V :NONAME 1 V @ EXECUTE ; DUP V ! EXECUTE"
+        ),
+        Err(ForthError::DataStackOverflow)
+    ));
+    outer_interpreter(&mut vm, "DEPTH .").unwrap();
+    assert_eq!(output.text(), "0 ");
 }
 
 #[test]
 fn a_stack_limit_of_zero_is_allowed() {
-    unsafe {
-        let mut vm = limited_vm(io::sink(), 0, 0);
-        assert!(matches!(
-            outer_interpreter(&mut vm, "1"),
-            Err(ForthError::DataStackOverflow)
-        ));
-        outer_interpreter(&mut vm, ": T ;").unwrap();
-        assert!(matches!(
-            outer_interpreter(&mut vm, "T"),
-            Err(ForthError::ReturnStackOverflow)
-        ));
-    }
+    let mut vm = limited_vm(io::sink(), 0, 0);
+    assert!(matches!(
+        outer_interpreter(&mut vm, "1"),
+        Err(ForthError::DataStackOverflow)
+    ));
+    outer_interpreter(&mut vm, ": T ;").unwrap();
+    assert!(matches!(
+        outer_interpreter(&mut vm, "T"),
+        Err(ForthError::ReturnStackOverflow)
+    ));
 }
 
 #[test]
 fn each_vm_keeps_its_own_limits() {
-    unsafe {
-        let mut small = limited_vm(io::sink(), 1, 1);
-        let mut large = limited_vm(io::sink(), 2, 1);
-        assert!(outer_interpreter(&mut large, "1 2").is_ok());
-        assert!(matches!(
-            outer_interpreter(&mut small, "1 2"),
-            Err(ForthError::DataStackOverflow)
-        ));
-    }
+    let mut small = limited_vm(io::sink(), 1, 1);
+    let mut large = limited_vm(io::sink(), 2, 1);
+    assert!(outer_interpreter(&mut large, "1 2").is_ok());
+    assert!(matches!(
+        outer_interpreter(&mut small, "1 2"),
+        Err(ForthError::DataStackOverflow)
+    ));
 }
 
 #[test]
 fn boot_rejects_stacks_too_large_to_allocate() {
-    unsafe {
-        let data = VmConfig {
-            data_stack_cells: Cell::MAX,
-            ..VmConfig::new(TEST_CELLS)
-        };
-        let returns = VmConfig {
-            return_stack_cells: Cell::MAX,
-            ..VmConfig::new(TEST_CELLS)
-        };
-        assert!(matches!(
-            boot(io::sink(), data),
-            Err(ForthError::StackTooLarge(Cell::MAX))
-        ));
-        assert!(matches!(
-            boot(io::sink(), returns),
-            Err(ForthError::StackTooLarge(Cell::MAX))
-        ));
-    }
+    let data = VmConfig {
+        data_stack_cells: Cell::MAX,
+        ..VmConfig::new(TEST_CELLS)
+    };
+    let returns = VmConfig {
+        return_stack_cells: Cell::MAX,
+        ..VmConfig::new(TEST_CELLS)
+    };
+    assert!(matches!(
+        boot(io::sink(), data),
+        Err(ForthError::StackTooLarge(Cell::MAX))
+    ));
+    assert!(matches!(
+        boot(io::sink(), returns),
+        Err(ForthError::StackTooLarge(Cell::MAX))
+    ));
 }
 
 #[test]
@@ -1383,73 +1265,63 @@ fn constant_can_be_redefined_by_a_forth_word() {
 
 #[test]
 fn does_cannot_change_a_constant() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, ": MAKE 7 CONSTANT DOES> 8 ;").unwrap();
-        assert_error!(&mut vm, "MAKE X", ForthError::DoesWithoutCreate);
-        outer_interpreter(&mut vm, "X .").unwrap();
-        assert_eq!(output.text(), "7 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, ": MAKE 7 CONSTANT DOES> 8 ;").unwrap();
+    assert_error!(&mut vm, "MAKE X", ForthError::DoesWithoutCreate);
+    outer_interpreter(&mut vm, "X .").unwrap();
+    assert_eq!(output.text(), "7 ");
 }
 
 #[test]
 fn constant_needs_a_value_and_a_name() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(&mut vm, "CONSTANT X", ForthError::DataStackUnderflow);
-        assert_error!(&mut vm, "CONSTANT", ForthError::DataStackUnderflow);
-        assert_error!(&mut vm, "X", ForthError::UnknownWord(_));
-        assert_error!(&mut vm, "5 CONSTANT", ForthError::MissingName("CONSTANT"));
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(&mut vm, "CONSTANT X", ForthError::DataStackUnderflow);
+    assert_error!(&mut vm, "CONSTANT", ForthError::DataStackUnderflow);
+    assert_error!(&mut vm, "X", ForthError::UnknownWord(_));
+    assert_error!(&mut vm, "5 CONSTANT", ForthError::MissingName("CONSTANT"));
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
 fn constant_that_does_not_fit_leaves_no_word() {
-    unsafe {
-        // The last size that fails has room for the header, but not for the value.
-        let smallest = smallest_cells();
-        for cells in smallest..TEST_CELLS {
-            let output = Capture::default();
-            let mut vm = boot(output.clone(), VmConfig::new(cells)).unwrap();
-            match outer_interpreter(&mut vm, "1 CONSTANT X") {
-                Ok(()) => {
-                    assert!(cells > smallest);
-                    outer_interpreter(&mut vm, "X .").unwrap();
-                    assert_eq!(output.text(), "1 ");
-                    return;
-                }
-                Err(error) => {
-                    assert!(matches!(error, ForthError::DictionaryOverflow));
-                    assert_error!(&mut vm, "X", ForthError::UnknownWord(_));
-                }
+    // The last size that fails has room for the header, but not for the value.
+    let smallest = smallest_cells();
+    for cells in smallest..TEST_CELLS {
+        let output = Capture::default();
+        let mut vm = boot(output.clone(), VmConfig::new(cells)).unwrap();
+        match outer_interpreter(&mut vm, "1 CONSTANT X") {
+            Ok(()) => {
+                assert!(cells > smallest);
+                outer_interpreter(&mut vm, "X .").unwrap();
+                assert_eq!(output.text(), "1 ");
+                return;
+            }
+            Err(error) => {
+                assert!(matches!(error, ForthError::DictionaryOverflow));
+                assert_error!(&mut vm, "X", ForthError::UnknownWord(_));
             }
         }
-        panic!("no dictionary size was large enough");
     }
+    panic!("no dictionary size was large enough");
 }
 
 #[test]
 fn variable_needs_a_name() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        assert_error!(&mut vm, "VARIABLE", ForthError::MissingName("VARIABLE"));
-        assert_error!(&mut vm, "CREATE", ForthError::MissingName("CREATE"));
-    }
+    let mut vm = test_vm(io::sink());
+    assert_error!(&mut vm, "VARIABLE", ForthError::MissingName("VARIABLE"));
+    assert_error!(&mut vm, "CREATE", ForthError::MissingName("CREATE"));
 }
 
 #[test]
 fn variable_overflows_a_full_dictionary() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = boot(output.clone(), VmConfig::new(smallest_cells())).unwrap();
-        assert_error!(&mut vm, "VARIABLE X", ForthError::DictionaryOverflow);
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = boot(output.clone(), VmConfig::new(smallest_cells())).unwrap();
+    assert_error!(&mut vm, "VARIABLE X", ForthError::DictionaryOverflow);
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
@@ -1531,54 +1403,44 @@ fn stack_words_can_add_to_a_variable() {
 
 #[test]
 fn stack_words_report_underflow() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        for word in ["DUP", "?DUP", "DROP", "SWAP", "OVER", "ROT", "PICK", "ROLL"] {
-            assert_error!(&mut vm, word, ForthError::DataStackUnderflow);
-        }
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    for word in ["DUP", "?DUP", "DROP", "SWAP", "OVER", "ROT", "PICK", "ROLL"] {
+        assert_error!(&mut vm, word, ForthError::DataStackUnderflow);
     }
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
 fn stack_words_report_underflow_when_one_cell_short() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        for line in ["1 SWAP", "1 OVER", "1 2 ROT"] {
-            assert_error!(&mut vm, line, ForthError::DataStackUnderflow);
-        }
+    let mut vm = test_vm(io::sink());
+    for line in ["1 SWAP", "1 OVER", "1 2 ROT"] {
+        assert_error!(&mut vm, line, ForthError::DataStackUnderflow);
     }
 }
 
 #[test]
 fn pick_and_roll_reject_an_n_equal_to_the_depth() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        assert_error!(&mut vm, "1 2 2 PICK", ForthError::DataStackUnderflow);
-        assert_error!(&mut vm, "1 2 2 ROLL", ForthError::DataStackUnderflow);
-    }
+    let mut vm = test_vm(io::sink());
+    assert_error!(&mut vm, "1 2 2 PICK", ForthError::DataStackUnderflow);
+    assert_error!(&mut vm, "1 2 2 ROLL", ForthError::DataStackUnderflow);
 }
 
 #[test]
 fn pick_and_roll_reject_a_negative_n() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        assert_error!(&mut vm, "1 -1 PICK", ForthError::DataStackUnderflow);
-        assert_error!(&mut vm, "1 -1 ROLL", ForthError::DataStackUnderflow);
-    }
+    let mut vm = test_vm(io::sink());
+    assert_error!(&mut vm, "1 -1 PICK", ForthError::DataStackUnderflow);
+    assert_error!(&mut vm, "1 -1 ROLL", ForthError::DataStackUnderflow);
 }
 
 #[test]
 fn word_is_only_found_after_its_definition_ends() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(&mut vm, ": X X ;", ForthError::UnknownWord(name) if name == "X");
-        outer_interpreter(&mut vm, ": X 7 ; X .").unwrap();
-        assert_eq!(output.text(), "7 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(&mut vm, ": X X ;", ForthError::UnknownWord(name) if name == "X");
+    outer_interpreter(&mut vm, ": X 7 ; X .").unwrap();
+    assert_eq!(output.text(), "7 ");
 }
 
 #[test]
@@ -1644,55 +1506,49 @@ fn replacing_an_xt_changes_behavior_at_runtime() {
     assert_eq!(output_of(&lines), "1 2 ");
 }
 
-// Adds the size of a Cell to an execution token, which gives the first Cell of its thread. For
-// a word like `:NONAME 5 ;` that is the CFA of LIT.
-fn lit_cfa_of_noname() -> String {
-    format!(":NONAME 5 ; {} + @", mem::size_of::<Cell>())
+// Reads the first Cell of the body of a colon word, which is the first Cell of its thread. For
+// a word like `:NONAME 5 ;` that is the execution token of LIT.
+fn lit_xt_of_noname() -> String {
+    ":NONAME 5 ; >BODY @".to_string()
 }
 
 #[test]
 fn execute_refuses_lit_from_the_text_interpreter() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        let line = format!("{} EXECUTE", lit_cfa_of_noname());
-        assert_error!(&mut vm, &line, ForthError::InvalidExecutionToken(_));
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    let line = format!("{} EXECUTE", lit_xt_of_noname());
+    assert_error!(&mut vm, &line, ForthError::InvalidExecutionToken(_));
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
 fn execute_refuses_lit_from_a_colon_word() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        let lines = [
-            "VARIABLE V".to_string(),
-            format!("{} V !", lit_cfa_of_noname()),
-            ": C V @ EXECUTE 99 ;".to_string(),
-        ];
-        for line in &lines {
-            outer_interpreter(&mut vm, line).unwrap();
-        }
-        assert_error!(&mut vm, "C", ForthError::InvalidExecutionToken(_));
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    let lines = [
+        "VARIABLE V".to_string(),
+        format!("{} V !", lit_xt_of_noname()),
+        ": C V @ EXECUTE 99 ;".to_string(),
+    ];
+    for line in &lines {
+        outer_interpreter(&mut vm, line).unwrap();
     }
+    assert_error!(&mut vm, "C", ForthError::InvalidExecutionToken(_));
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
 fn to_body_refuses_lit() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        let line = format!("{} >BODY", lit_cfa_of_noname());
-        assert_error!(&mut vm, &line, ForthError::InvalidExecutionToken(_));
-    }
+    let mut vm = test_vm(io::sink());
+    let line = format!("{} >BODY", lit_xt_of_noname());
+    assert_error!(&mut vm, &line, ForthError::InvalidExecutionToken(_));
 }
 
 // Checks that `lines` give a `DefinitionOpen` error for `word`, that the open definition is
 // gone with no trace, and that the VM still works.
-unsafe fn assert_refused_in_definition(lines: &[&str], word: &str, trace: &[&str]) {
+fn assert_refused_in_definition(lines: &[&str], word: &str, trace: &[&str]) {
     let output = Capture::default();
     let mut vm = test_vm(output.clone());
     let (last, setup) = lines.split_last().unwrap();
@@ -1719,42 +1575,36 @@ unsafe fn assert_refused_in_definition(lines: &[&str], word: &str, trace: &[&str
 
 #[test]
 fn comma_is_refused_in_a_definition_opened_by_a_word() {
-    unsafe {
-        // The steps of #15: D opens FOO, and then writes a number into its thread.
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, ": D : 5 , ;").unwrap();
-        assert_error!(&mut vm, "D FOO ;", ForthError::DefinitionOpen(","));
-        assert!(!vm.is_compiling());
-        assert_error!(&mut vm, "FOO", ForthError::UnknownWord(_));
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    // The steps of #15: D opens FOO, and then writes a number into its thread.
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, ": D : 5 , ;").unwrap();
+    assert_error!(&mut vm, "D FOO ;", ForthError::DefinitionOpen(","));
+    assert!(!vm.is_compiling());
+    assert_error!(&mut vm, "FOO", ForthError::UnknownWord(_));
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
 fn comma_is_refused_in_an_immediate_word_that_runs_while_compiling() {
-    unsafe {
-        let lines = [": W 5 , ; IMMEDIATE", ": X W ;"];
-        assert_refused_in_definition(&lines, ",", &["X"]);
-    }
+    let lines = [": W 5 , ; IMMEDIATE", ": X W ;"];
+    assert_refused_in_definition(&lines, ",", &["X"]);
 }
 
 #[test]
 fn defining_words_are_refused_in_an_immediate_word_that_runs_while_compiling() {
-    unsafe {
-        let cases = [
-            ("CREATE", ": Z CREATE ; IMMEDIATE"),
-            ("VARIABLE", ": Z VARIABLE ; IMMEDIATE"),
-            ("CONSTANT", ": Z 5 CONSTANT ; IMMEDIATE"),
-            (":", ": Z : ; IMMEDIATE"),
-            (":NONAME", ": Z :NONAME ; IMMEDIATE"),
-        ];
-        for (word, immediate) in cases {
-            // FOO would be written into the open definition Y, and Y would never be found.
-            let lines = [immediate, ": Y Z FOO ;"];
-            assert_refused_in_definition(&lines, word, &["Y", "FOO"]);
-        }
+    let cases = [
+        ("CREATE", ": Z CREATE ; IMMEDIATE"),
+        ("VARIABLE", ": Z VARIABLE ; IMMEDIATE"),
+        ("CONSTANT", ": Z 5 CONSTANT ; IMMEDIATE"),
+        (":", ": Z : ; IMMEDIATE"),
+        (":NONAME", ": Z :NONAME ; IMMEDIATE"),
+    ];
+    for (word, immediate) in cases {
+        // FOO would be written into the open definition Y, and Y would never be found.
+        let lines = [immediate, ": Y Z FOO ;"];
+        assert_refused_in_definition(&lines, word, &["Y", "FOO"]);
     }
 }
 
@@ -1792,61 +1642,55 @@ fn compile_comma_compiles_a_call_to_a_primitive() {
 
 #[test]
 fn compile_comma_needs_an_open_definition() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(
-            &mut vm,
-            "' DUP COMPILE,",
-            ForthError::NotCompiling("COMPILE,")
-        );
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(
+        &mut vm,
+        "' DUP COMPILE,",
+        ForthError::NotCompiling("COMPILE,")
+    );
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
 fn compile_comma_refuses_a_number_and_lit_and_rolls_back() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, ": NUMBER 5 COMPILE, ; IMMEDIATE").unwrap();
-        assert_error!(
-            &mut vm,
-            ": T NUMBER ;",
-            ForthError::InvalidExecutionToken(5)
-        );
-        assert!(!vm.is_compiling());
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, ": NUMBER 1000000 COMPILE, ; IMMEDIATE").unwrap();
+    assert_error!(
+        &mut vm,
+        ": T NUMBER ;",
+        ForthError::InvalidExecutionToken(1000000)
+    );
+    assert!(!vm.is_compiling());
 
-        // LIT would swallow the next Cell of the thread, which is the EXIT that `;` compiles.
-        let lines = [
-            "VARIABLE V".to_string(),
-            format!("{} V !", lit_cfa_of_noname()),
-            ": LIT-IT V @ COMPILE, ; IMMEDIATE".to_string(),
-        ];
-        for line in &lines {
-            outer_interpreter(&mut vm, line).unwrap();
-        }
-        assert_error!(
-            &mut vm,
-            ": T LIT-IT 99 ;",
-            ForthError::InvalidExecutionToken(_)
-        );
-        assert!(!vm.is_compiling());
-        assert!(!vm.word_names().contains(&"T".to_string()));
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
+    // LIT would swallow the next Cell of the thread, which is the EXIT that `;` compiles.
+    let lines = [
+        "VARIABLE V".to_string(),
+        format!("{} V !", lit_xt_of_noname()),
+        ": LIT-IT V @ COMPILE, ; IMMEDIATE".to_string(),
+    ];
+    for line in &lines {
+        outer_interpreter(&mut vm, line).unwrap();
     }
+    assert_error!(
+        &mut vm,
+        ": T LIT-IT 99 ;",
+        ForthError::InvalidExecutionToken(_)
+    );
+    assert!(!vm.is_compiling());
+    assert!(!vm.word_names().contains(&"T".to_string()));
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
 fn compile_comma_needs_an_execution_token_on_the_stack() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        outer_interpreter(&mut vm, ": EMPTY COMPILE, ; IMMEDIATE").unwrap();
-        assert_error!(&mut vm, ": T EMPTY ;", ForthError::DataStackUnderflow);
-        assert!(!vm.is_compiling());
-    }
+    let mut vm = test_vm(io::sink());
+    outer_interpreter(&mut vm, ": EMPTY COMPILE, ; IMMEDIATE").unwrap();
+    assert_error!(&mut vm, ": T EMPTY ;", ForthError::DataStackUnderflow);
+    assert!(!vm.is_compiling());
 }
 
 #[test]
@@ -1862,75 +1706,66 @@ fn noname_can_span_lines() {
 
 #[test]
 fn failed_noname_clears_the_xt_and_leaves_a_usable_vm() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(&mut vm, ":NONAME NOPE ;", ForthError::UnknownWord(_));
-        outer_interpreter(&mut vm, "DEPTH . 1 2 + .").unwrap();
-        assert_eq!(output.text(), "0 3 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(&mut vm, ":NONAME NOPE ;", ForthError::UnknownWord(_));
+    outer_interpreter(&mut vm, "DEPTH . 1 2 + .").unwrap();
+    assert_eq!(output.text(), "0 3 ");
 }
 
 #[test]
 fn execute_rejects_cells_that_are_not_execution_tokens() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        assert_error!(&mut vm, "0 EXECUTE", ForthError::InvalidExecutionToken(0));
-        assert_error!(&mut vm, "5 EXECUTE", ForthError::InvalidExecutionToken(5));
-        assert_error!(
-            &mut vm,
-            "-1 EXECUTE",
-            ForthError::InvalidExecutionToken(Cell::MAX)
-        );
-    }
+    let mut vm = test_vm(io::sink());
+    assert_error!(
+        &mut vm,
+        "1000000 EXECUTE",
+        ForthError::InvalidExecutionToken(1000000)
+    );
+    assert_error!(
+        &mut vm,
+        "-1 EXECUTE",
+        ForthError::InvalidExecutionToken(Cell::MAX)
+    );
 }
 
 #[test]
 fn execute_reports_underflow() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        assert_error!(&mut vm, "EXECUTE", ForthError::DataStackUnderflow);
-    }
+    let mut vm = test_vm(io::sink());
+    assert_error!(&mut vm, "EXECUTE", ForthError::DataStackUnderflow);
 }
 
 #[test]
 fn execute_rejects_a_pending_definition() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, ": N :NONAME EXECUTE ;").unwrap();
-        assert_error!(&mut vm, "N", ForthError::InvalidExecutionToken(_));
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, ": N :NONAME EXECUTE ;").unwrap();
+    assert_error!(&mut vm, "N", ForthError::InvalidExecutionToken(_));
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
 fn immediate_word_runs_during_compilation_and_is_not_compiled() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, ": A 99 . ; IMMEDIATE").unwrap();
-        outer_interpreter(&mut vm, ": B A 1 ;").unwrap();
-        assert_eq!(output.text(), "99 ");
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, ": A 99 . ; IMMEDIATE").unwrap();
+    outer_interpreter(&mut vm, ": B A 1 ;").unwrap();
+    assert_eq!(output.text(), "99 ");
 
-        outer_interpreter(&mut vm, "B .").unwrap();
-        assert_eq!(output.text(), "99 1 ");
-    }
+    outer_interpreter(&mut vm, "B .").unwrap();
+    assert_eq!(output.text(), "99 1 ");
 }
 
 #[test]
 fn normal_word_runs_only_when_called() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, ": A 99 . ;").unwrap();
-        outer_interpreter(&mut vm, ": B A 1 ;").unwrap();
-        assert_eq!(output.text(), "");
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, ": A 99 . ;").unwrap();
+    outer_interpreter(&mut vm, ": B A 1 ;").unwrap();
+    assert_eq!(output.text(), "");
 
-        outer_interpreter(&mut vm, "B .").unwrap();
-        assert_eq!(output.text(), "99 1 ");
-    }
+    outer_interpreter(&mut vm, "B .").unwrap();
+    assert_eq!(output.text(), "99 1 ");
 }
 
 #[test]
@@ -1953,14 +1788,12 @@ fn immediate_applies_to_created_words() {
 
 #[test]
 fn immediate_applies_to_the_newest_word_after_a_failed_definition() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, ": A 5 . ;").unwrap();
-        assert_error!(&mut vm, ": B NOPE ;", ForthError::UnknownWord(_));
-        outer_interpreter(&mut vm, "IMMEDIATE : C A ;").unwrap();
-        assert_eq!(output.text(), "5 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, ": A 5 . ;").unwrap();
+    assert_error!(&mut vm, ": B NOPE ;", ForthError::UnknownWord(_));
+    outer_interpreter(&mut vm, "IMMEDIATE : C A ;").unwrap();
+    assert_eq!(output.text(), "5 ");
 }
 
 #[test]
@@ -1983,15 +1816,13 @@ fn immediate_word_can_count_at_compile_time() {
 
 #[test]
 fn error_in_an_immediate_word_rolls_back_the_definition() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, ": BAD + ; IMMEDIATE").unwrap();
-        assert_error!(&mut vm, ": C BAD ;", ForthError::DataStackUnderflow);
-        assert_error!(&mut vm, "C", ForthError::UnknownWord(name) if name == "C");
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, ": BAD + ; IMMEDIATE").unwrap();
+    assert_error!(&mut vm, ": C BAD ;", ForthError::DataStackUnderflow);
+    assert_error!(&mut vm, "C", ForthError::UnknownWord(name) if name == "C");
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
@@ -2027,31 +1858,27 @@ fn empty_paren_comment_is_allowed() {
 
 #[test]
 fn comment_words_need_whitespace_after_them() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        assert_error!(
-            &mut vm,
-            "(comment)",
-            ForthError::UnknownWord(name) if name == "(comment)"
-        );
-        assert_error!(
-            &mut vm,
-            r"\comment",
-            ForthError::UnknownWord(name) if name == r"\comment"
-        );
-    }
+    let mut vm = test_vm(io::sink());
+    assert_error!(
+        &mut vm,
+        "(comment)",
+        ForthError::UnknownWord(name) if name == "(comment)"
+    );
+    assert_error!(
+        &mut vm,
+        r"\comment",
+        ForthError::UnknownWord(name) if name == r"\comment"
+    );
 }
 
 #[test]
 fn paren_comment_ends_at_the_first_closing_parenthesis() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        assert_error!(
-            &mut vm,
-            "( outer ( inner ) rest )",
-            ForthError::UnknownWord(name) if name == "rest"
-        );
-    }
+    let mut vm = test_vm(io::sink());
+    assert_error!(
+        &mut vm,
+        "( outer ( inner ) rest )",
+        ForthError::UnknownWord(name) if name == "rest"
+    );
 }
 
 #[test]
@@ -2108,36 +1935,30 @@ X @ .              \ prints 42
 
 #[test]
 fn error_discards_the_rest_of_a_multi_line_string() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(&mut vm, "1 .\nNOPE 2 .\n3 .", ForthError::UnknownWord(_));
-        assert_eq!(output.text(), "1 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(&mut vm, "1 .\nNOPE 2 .\n3 .", ForthError::UnknownWord(_));
+    assert_eq!(output.text(), "1 ");
 }
 
 #[test]
 fn unterminated_comment_is_an_error() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(&mut vm, "1 ( never closed", ForthError::UnterminatedComment);
-        outer_interpreter(&mut vm, "DEPTH . 1 2 + .").unwrap();
-        assert_eq!(output.text(), "0 3 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(&mut vm, "1 ( never closed", ForthError::UnterminatedComment);
+    outer_interpreter(&mut vm, "DEPTH . 1 2 + .").unwrap();
+    assert_eq!(output.text(), "0 3 ");
 }
 
 #[test]
 fn unterminated_comment_rolls_back_an_open_definition() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        assert_error!(
-            &mut vm,
-            ": A 1 ( never closed",
-            ForthError::UnterminatedComment
-        );
-        assert_error!(&mut vm, "A", ForthError::UnknownWord(name) if name == "A");
-    }
+    let mut vm = test_vm(io::sink());
+    assert_error!(
+        &mut vm,
+        ": A 1 ( never closed",
+        ForthError::UnterminatedComment
+    );
+    assert_error!(&mut vm, "A", ForthError::UnknownWord(name) if name == "A");
 }
 
 #[test]
@@ -2170,21 +1991,24 @@ fn to_body_of_a_colon_word_is_the_first_cell_of_its_thread() {
 }
 
 #[test]
-fn to_body_of_a_primitive_is_the_cell_after_its_code_field() {
-    let line = format!("' DUP >BODY . ' DUP {} + .", mem::size_of::<Cell>());
+fn to_body_of_a_primitive_is_the_cell_after_its_header() {
+    // The last Cell of the header holds the execution token.
+    let line = format!("' DUP >BODY -{} + @ . ' DUP .", mem::size_of::<Cell>());
     assert_same_cells(&[&line]);
 }
 
 #[test]
 fn to_body_rejects_what_is_not_an_execution_token() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(&mut vm, "5 >BODY", ForthError::InvalidExecutionToken(5));
-        assert_error!(&mut vm, ">BODY", ForthError::DataStackUnderflow);
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(
+        &mut vm,
+        "1000000 >BODY",
+        ForthError::InvalidExecutionToken(1000000)
+    );
+    assert_error!(&mut vm, ">BODY", ForthError::DataStackUnderflow);
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
@@ -2206,18 +2030,20 @@ fn c_store_keeps_the_low_byte() {
 
 #[test]
 fn c_fetch_and_c_store_reject_addresses_outside_the_written_dictionary() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(&mut vm, "1 C@", ForthError::AddressOutOfBounds(1));
-        assert_error!(&mut vm, "HERE C@", ForthError::UnwrittenAddress(_));
-        assert_error!(&mut vm, "1 1 C!", ForthError::AddressOutOfBounds(1));
-        assert_error!(&mut vm, "1 HERE C!", ForthError::UnwrittenAddress(_));
-        assert_error!(&mut vm, "C@", ForthError::DataStackUnderflow);
-        assert_error!(&mut vm, "1 C!", ForthError::DataStackUnderflow);
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(&mut vm, "-1 C@", ForthError::AddressOutOfBounds(Cell::MAX));
+    assert_error!(&mut vm, "HERE C@", ForthError::UnwrittenAddress(_));
+    assert_error!(
+        &mut vm,
+        "1 -1 C!",
+        ForthError::AddressOutOfBounds(Cell::MAX)
+    );
+    assert_error!(&mut vm, "1 HERE C!", ForthError::UnwrittenAddress(_));
+    assert_error!(&mut vm, "C@", ForthError::DataStackUnderflow);
+    assert_error!(&mut vm, "1 C!", ForthError::DataStackUnderflow);
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
@@ -2262,41 +2088,37 @@ fn a_negative_allot_gives_back_the_newest_created_data() {
 
 #[test]
 fn a_negative_allot_stops_at_the_data_of_the_newest_word() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(&mut vm, "-1 ALLOT", ForthError::AllotBelowData(-1));
-        assert_error!(
-            &mut vm,
-            "CREATE B 2 ALLOT -3 ALLOT",
-            ForthError::AllotBelowData(-3)
-        );
-        assert_error!(&mut vm, ": X 5 ; -1 ALLOT", ForthError::AllotBelowData(-1));
-        assert_error!(
-            &mut vm,
-            "7 CONSTANT K -1 ALLOT",
-            ForthError::AllotBelowData(-1)
-        );
-        outer_interpreter(&mut vm, "X . K .").unwrap();
-        assert_eq!(output.text(), "5 7 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(&mut vm, "-1 ALLOT", ForthError::AllotBelowData(-1));
+    assert_error!(
+        &mut vm,
+        "CREATE B 2 ALLOT -3 ALLOT",
+        ForthError::AllotBelowData(-3)
+    );
+    assert_error!(&mut vm, ": X 5 ; -1 ALLOT", ForthError::AllotBelowData(-1));
+    assert_error!(
+        &mut vm,
+        "7 CONSTANT K -1 ALLOT",
+        ForthError::AllotBelowData(-1)
+    );
+    outer_interpreter(&mut vm, "X . K .").unwrap();
+    assert_eq!(output.text(), "5 7 ");
 }
 
 #[test]
 fn allot_and_c_comma_report_a_full_dictionary() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = boot(output.clone(), VmConfig::new(smallest_cells())).unwrap();
-        assert_error!(&mut vm, "1 C,", ForthError::DictionaryOverflow);
-        assert_error!(&mut vm, "1 ALLOT", ForthError::DictionaryOverflow);
-        assert_error!(
-            &mut vm,
-            &format!("{} ALLOT", isize::MAX),
-            ForthError::DictionaryOverflow
-        );
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = boot(output.clone(), VmConfig::new(smallest_cells())).unwrap();
+    assert_error!(&mut vm, "1 C,", ForthError::DictionaryOverflow);
+    assert_error!(&mut vm, "1 ALLOT", ForthError::DictionaryOverflow);
+    assert_error!(
+        &mut vm,
+        &format!("{} ALLOT", isize::MAX),
+        ForthError::DictionaryOverflow
+    );
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
@@ -2322,10 +2144,8 @@ fn cells_indexes_a_table() {
 
 #[test]
 fn cells_reports_underflow() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        assert_error!(&mut vm, "CELLS", ForthError::DataStackUnderflow);
-    }
+    let mut vm = test_vm(io::sink());
+    assert_error!(&mut vm, "CELLS", ForthError::DataStackUnderflow);
 }
 
 #[test]
@@ -2370,55 +2190,49 @@ fn new_words_work_after_an_unaligned_here() {
 
 #[test]
 fn a_failed_definition_restores_an_unaligned_here() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, "1 C, HERE .").unwrap();
-        assert_error!(&mut vm, ": X NOPE", ForthError::UnknownWord(_));
-        outer_interpreter(&mut vm, "HERE .").unwrap();
-        let text = output.text();
-        let cells: Vec<&str> = text.split_whitespace().collect();
-        assert_eq!(cells[0], cells[1]);
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, "1 C, HERE .").unwrap();
+    assert_error!(&mut vm, ": X NOPE", ForthError::UnknownWord(_));
+    outer_interpreter(&mut vm, "HERE .").unwrap();
+    let text = output.text();
+    let cells: Vec<&str> = text.split_whitespace().collect();
+    assert_eq!(cells[0], cells[1]);
 }
 
 #[test]
 fn fetch_and_store_reject_a_cell_that_ends_past_here() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(
-            &mut vm,
-            "ALIGN HERE 1 C, @",
-            ForthError::UnwrittenAddress(_)
-        );
-        assert_error!(
-            &mut vm,
-            "ALIGN HERE 1 C, 2 SWAP !",
-            ForthError::UnwrittenAddress(_)
-        );
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(
+        &mut vm,
+        "ALIGN HERE 1 C, @",
+        ForthError::UnwrittenAddress(_)
+    );
+    assert_error!(
+        &mut vm,
+        "ALIGN HERE 1 C, 2 SWAP !",
+        ForthError::UnwrittenAddress(_)
+    );
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
 fn c_comma_and_allot_are_refused_in_an_open_definition() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, ": BYTE 1 C, ; IMMEDIATE").unwrap();
-        outer_interpreter(&mut vm, ": ROOM 3 ALLOT ; IMMEDIATE").unwrap();
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, ": BYTE 1 C, ; IMMEDIATE").unwrap();
+    outer_interpreter(&mut vm, ": ROOM 3 ALLOT ; IMMEDIATE").unwrap();
 
-        assert_error!(&mut vm, ": X BYTE ;", ForthError::DefinitionOpen("C,"));
-        assert_error!(&mut vm, ": X ROOM ;", ForthError::DefinitionOpen("ALLOT"));
-        assert_error!(&mut vm, "X", ForthError::UnknownWord(name) if name == "X");
-        assert!(!vm.is_compiling());
+    assert_error!(&mut vm, ": X BYTE ;", ForthError::DefinitionOpen("C,"));
+    assert_error!(&mut vm, ": X ROOM ;", ForthError::DefinitionOpen("ALLOT"));
+    assert_error!(&mut vm, "X", ForthError::UnknownWord(name) if name == "X");
+    assert!(!vm.is_compiling());
 
-        // Outside a definition, the same words run.
-        outer_interpreter(&mut vm, "CREATE B BYTE ROOM B C@ .").unwrap();
-        assert_eq!(output.text(), "1 ");
-    }
+    // Outside a definition, the same words run.
+    outer_interpreter(&mut vm, "CREATE B BYTE ROOM B C@ .").unwrap();
+    assert_eq!(output.text(), "1 ");
 }
 
 #[test]
@@ -2437,15 +2251,13 @@ fn tick_gives_an_execution_token() {
 
 #[test]
 fn tick_rejects_bad_names() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(&mut vm, "'", ForthError::MissingName("'"));
-        assert_error!(&mut vm, "' NOPE", ForthError::UnknownWord(name) if name == "NOPE");
-        assert_error!(&mut vm, "' LIT", ForthError::UnknownWord(name) if name == "LIT");
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(&mut vm, "'", ForthError::MissingName("'"));
+    assert_error!(&mut vm, "' NOPE", ForthError::UnknownWord(name) if name == "NOPE");
+    assert_error!(&mut vm, "' LIT", ForthError::UnknownWord(name) if name == "LIT");
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
@@ -2465,28 +2277,24 @@ fn bracket_tick_does_not_run_an_immediate_word() {
 
 #[test]
 fn bracket_tick_only_works_in_a_definition() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(&mut vm, "['] DUP", ForthError::NotCompiling("[']"));
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(&mut vm, "['] DUP", ForthError::NotCompiling("[']"));
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
 fn bracket_tick_rejects_bad_names_and_rolls_back_the_definition() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        assert_error!(&mut vm, ": X [']", ForthError::MissingName("[']"));
-        assert_error!(&mut vm, ": X ['] NOPE ;", ForthError::UnknownWord(name) if name == "NOPE");
-        assert_error!(&mut vm, ": X ['] LIT ;", ForthError::UnknownWord(name) if name == "LIT");
-        assert_error!(&mut vm, ": X ['] X ;", ForthError::UnknownWord(name) if name == "X");
-        assert_error!(&mut vm, "X", ForthError::UnknownWord(name) if name == "X");
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    assert_error!(&mut vm, ": X [']", ForthError::MissingName("[']"));
+    assert_error!(&mut vm, ": X ['] NOPE ;", ForthError::UnknownWord(name) if name == "NOPE");
+    assert_error!(&mut vm, ": X ['] LIT ;", ForthError::UnknownWord(name) if name == "LIT");
+    assert_error!(&mut vm, ": X ['] X ;", ForthError::UnknownWord(name) if name == "X");
+    assert_error!(&mut vm, "X", ForthError::UnknownWord(name) if name == "X");
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
@@ -2503,34 +2311,30 @@ fn names_can_be_255_bytes_long() {
 
 #[test]
 fn longer_names_are_rejected() {
-    unsafe {
-        let name = "X".repeat(256);
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        for word in [":", "CREATE", "VARIABLE"] {
-            let line = format!("{} {}", word, name);
-            assert_error!(&mut vm, &line, ForthError::NameTooLong(256));
-            assert_error!(&mut vm, &name, ForthError::UnknownWord(_));
-        }
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
+    let name = "X".repeat(256);
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    for word in [":", "CREATE", "VARIABLE"] {
+        let line = format!("{} {}", word, name);
+        assert_error!(&mut vm, &line, ForthError::NameTooLong(256));
+        assert_error!(&mut vm, &name, ForthError::UnknownWord(_));
     }
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
 fn does_through_execute_from_the_text_interpreter_is_rejected() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, "CREATE X").unwrap();
-        assert_error!(
-            &mut vm,
-            "' DOES> EXECUTE",
-            ForthError::DoesOutsideDefinition
-        );
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, "CREATE X").unwrap();
+    assert_error!(
+        &mut vm,
+        "' DOES> EXECUTE",
+        ForthError::DoesOutsideDefinition
+    );
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
@@ -2552,157 +2356,173 @@ fn does_can_change_the_action_again_from_the_action() {
 
 #[test]
 fn failed_create_leaves_no_word() {
-    unsafe {
-        let smallest = smallest_cells();
-        let mut failures = 0;
-        for extra in 0..TEST_CELLS {
-            let mut vm = boot(io::sink(), VmConfig::new(smallest + extra)).unwrap();
-            if outer_interpreter(&mut vm, "CREATE X").is_ok() {
-                outer_interpreter(&mut vm, "X").unwrap();
-                break;
-            }
-            failures += 1;
-            assert_error!(&mut vm, "X", ForthError::UnknownWord(_));
+    let smallest = smallest_cells();
+    let mut failures = 0;
+    for extra in 0..TEST_CELLS {
+        let mut vm = boot(io::sink(), VmConfig::new(smallest + extra)).unwrap();
+        if outer_interpreter(&mut vm, "CREATE X").is_ok() {
+            outer_interpreter(&mut vm, "X").unwrap();
+            break;
         }
-        assert!(failures > 0);
+        failures += 1;
+        assert_error!(&mut vm, "X", ForthError::UnknownWord(_));
     }
+    assert!(failures > 0);
 }
 
 #[test]
 fn failed_variable_leaves_no_word_and_gives_its_space_back() {
-    unsafe {
-        let smallest = smallest_cells();
-        let fits = (0..TEST_CELLS)
-            .find(|extra| {
-                let mut vm = boot(io::sink(), VmConfig::new(smallest + *extra)).unwrap();
-                outer_interpreter(&mut vm, "VARIABLE X").is_ok()
-            })
-            .unwrap();
+    let smallest = smallest_cells();
+    let fits = (0..TEST_CELLS)
+        .find(|extra| {
+            let mut vm = boot(io::sink(), VmConfig::new(smallest + *extra)).unwrap();
+            outer_interpreter(&mut vm, "VARIABLE X").is_ok()
+        })
+        .unwrap();
 
-        // One Cell less fits the header but not the value.
-        let mut vm = boot(io::sink(), VmConfig::new(smallest + fits - 1)).unwrap();
-        assert_error!(&mut vm, "VARIABLE X", ForthError::DictionaryOverflow);
-        assert_error!(&mut vm, "X", ForthError::UnknownWord(_));
-        outer_interpreter(&mut vm, "CREATE X").unwrap();
-    }
+    // One Cell less fits the header but not the value.
+    let mut vm = boot(io::sink(), VmConfig::new(smallest + fits - 1)).unwrap();
+    assert_error!(&mut vm, "VARIABLE X", ForthError::DictionaryOverflow);
+    assert_error!(&mut vm, "X", ForthError::UnknownWord(_));
+    outer_interpreter(&mut vm, "CREATE X").unwrap();
 }
 
 #[test]
 fn does_works_on_a_word_in_the_last_cells_of_the_dictionary() {
-    unsafe {
-        let smallest = smallest_cells();
-        let source = ": Z DOES> ; CREATE X";
-        let fits = (0..TEST_CELLS)
-            .find(|extra| {
-                let mut vm = boot(io::sink(), VmConfig::new(smallest + *extra)).unwrap();
-                outer_interpreter(&mut vm, source).is_ok()
-            })
-            .unwrap();
+    let smallest = smallest_cells();
+    let source = ": Z DOES> ; CREATE X";
+    let fits = (0..TEST_CELLS)
+        .find(|extra| {
+            let mut vm = boot(io::sink(), VmConfig::new(smallest + *extra)).unwrap();
+            outer_interpreter(&mut vm, source).is_ok()
+        })
+        .unwrap();
 
-        let output = Capture::default();
-        let mut vm = boot(output.clone(), VmConfig::new(smallest + fits)).unwrap();
-        outer_interpreter(&mut vm, source).unwrap();
-        outer_interpreter(&mut vm, "Z X DEPTH .").unwrap();
-        assert_eq!(output.text(), "1 ");
+    let output = Capture::default();
+    let mut vm = boot(output.clone(), VmConfig::new(smallest + fits)).unwrap();
+    outer_interpreter(&mut vm, source).unwrap();
+    outer_interpreter(&mut vm, "Z X DEPTH .").unwrap();
+    assert_eq!(output.text(), "1 ");
 
-        // The data of X would start at HERE, which is past the end of the dictionary.
-        assert_error!(&mut vm, "X @", ForthError::AddressOutOfBounds(_));
-    }
+    // The data of X would start at HERE, which is past the end of the dictionary.
+    assert_error!(&mut vm, "X @", ForthError::AddressOutOfBounds(_));
 }
 
+// A thread is ordinary memory, so `!` can put a Cell that isn't an execution token in it.
 #[test]
-fn zero_code_field_is_an_error() {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        outer_interpreter(&mut vm, "CREATE X 0 ' X !").unwrap();
-        assert_error!(&mut vm, "X", ForthError::NullCodeField(_));
-        assert_error!(&mut vm, "' X EXECUTE", ForthError::NullCodeField(_));
-        outer_interpreter(&mut vm, "1 2 + .").unwrap();
-        assert_eq!(output.text(), "3 ");
-    }
+fn a_thread_changed_by_store_gives_an_error() {
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, ": X 1 . ; -1 ' X >BODY !").unwrap();
+    assert_error!(&mut vm, "X", ForthError::InvalidExecutionToken(xt) if *xt == Cell::MAX);
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
+}
+
+// A word that calls itself through a changed thread runs out of return stack, instead of running
+// forever or growing the Rust stack.
+#[test]
+fn a_thread_that_calls_its_own_word_overflows_the_return_stack() {
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, ": X 1 ; ' X ' X >BODY !").unwrap();
+    assert_error!(&mut vm, "X", ForthError::ReturnStackOverflow);
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
+}
+
+// The header of a word starts 4 Cells in front of its body, with the link to the previous header.
+// A link that doesn't point to an older header ends the search, so it can't loop.
+#[test]
+fn a_link_changed_by_store_ends_the_search() {
+    let mut vm = test_vm(io::sink());
+    let size = mem::size_of::<Cell>();
+    let line = format!("CREATE A CREATE B ' B >BODY {} - DUP !", 4 * size);
+    outer_interpreter(&mut vm, &line).unwrap();
+    assert_error!(&mut vm, "A", ForthError::UnknownWord(name) if name == "A");
+    assert_eq!(vm.word_names(), ["B"]);
+}
+
+// The Cell in front of the body of a word holds its execution token, which `!` can change.
+#[test]
+fn an_execution_token_changed_by_store_is_an_error() {
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    outer_interpreter(&mut vm, "CREATE X -1 ' X >BODY 1 CELLS - !").unwrap();
+    assert_error!(&mut vm, "X", ForthError::InvalidExecutionToken(xt) if *xt == Cell::MAX);
+    assert_error!(&mut vm, "' X EXECUTE", ForthError::InvalidExecutionToken(xt) if *xt == Cell::MAX);
+    outer_interpreter(&mut vm, "1 2 + .").unwrap();
+    assert_eq!(output.text(), "3 ");
 }
 
 #[test]
 fn word_names_holds_primitives_and_new_definitions() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        let before = vm.word_names();
-        assert!(before.iter().any(|name| name == "DUP"));
-        assert!(!before.iter().any(|name| name == "GREET"));
+    let mut vm = test_vm(io::sink());
+    let before = vm.word_names();
+    assert!(before.iter().any(|name| name == "DUP"));
+    assert!(!before.iter().any(|name| name == "GREET"));
 
-        outer_interpreter(&mut vm, ": GREET ;").unwrap();
-        assert!(vm.word_names().iter().any(|name| name == "GREET"));
-    }
+    outer_interpreter(&mut vm, ": GREET ;").unwrap();
+    assert!(vm.word_names().iter().any(|name| name == "GREET"));
 }
 
 #[test]
 fn word_names_leaves_out_hidden_words() {
-    unsafe {
-        let vm = test_vm(io::sink());
-        assert!(!vm.word_names().iter().any(|name| name == "LIT"));
-    }
+    let vm = test_vm(io::sink());
+    assert!(!vm.word_names().iter().any(|name| name == "LIT"));
 }
 
 #[test]
 fn word_names_leaves_out_an_open_definition() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        outer_interpreter(&mut vm, ": OPEN").unwrap();
-        assert!(!vm.word_names().iter().any(|name| name == "OPEN"));
+    let mut vm = test_vm(io::sink());
+    outer_interpreter(&mut vm, ": OPEN").unwrap();
+    assert!(!vm.word_names().iter().any(|name| name == "OPEN"));
 
-        outer_interpreter(&mut vm, ";").unwrap();
-        assert!(vm.word_names().iter().any(|name| name == "OPEN"));
-    }
+    outer_interpreter(&mut vm, ";").unwrap();
+    assert!(vm.word_names().iter().any(|name| name == "OPEN"));
 }
 
 #[test]
 fn word_names_holds_a_redefined_word_once() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        outer_interpreter(&mut vm, ": TWICE ; : TWICE ;").unwrap();
-        let names = vm.word_names();
-        assert_eq!(names.iter().filter(|name| *name == "TWICE").count(), 1);
-    }
+    let mut vm = test_vm(io::sink());
+    outer_interpreter(&mut vm, ": TWICE ; : TWICE ;").unwrap();
+    let names = vm.word_names();
+    assert_eq!(names.iter().filter(|name| *name == "TWICE").count(), 1);
 }
 
 #[test]
 fn word_names_are_sorted() {
-    unsafe {
-        let vm = test_vm(io::sink());
-        let names = vm.word_names();
-        let mut sorted = names.clone();
-        sorted.sort();
-        assert_eq!(names, sorted);
-    }
+    let vm = test_vm(io::sink());
+    let names = vm.word_names();
+    let mut sorted = names.clone();
+    sorted.sort();
+    assert_eq!(names, sorted);
 }
 
 // Runs `lines` through `quit_loop`. Returns the result of BYE, the output, a label for the
 // result of each line, and the depth of the data stack after the loop.
 fn run_loop(lines: &[&str]) -> (Option<Cell>, String, Vec<String>, usize) {
-    unsafe {
-        let output = Capture::default();
-        let mut vm = test_vm(output.clone());
-        let mut lines = lines.iter().map(|line| line.to_string());
-        let mut labels = Vec::new();
-        let code = quit_loop(
-            &mut vm,
-            |_| lines.next(),
-            |_, result| {
-                labels.push(match result {
-                    LineResult::Ok => "ok".to_string(),
-                    LineResult::Quit => "quit".to_string(),
-                    LineResult::Abort => "abort".to_string(),
-                    LineResult::Error(error) => format!("error: {}", error),
-                });
-            },
-        );
-        let printed = output.text();
-        let before = printed.len();
-        outer_interpreter(&mut vm, "DEPTH .").unwrap();
-        let depth = output.text()[before..].trim().parse().unwrap();
-        (code, printed, labels, depth)
-    }
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    let mut lines = lines.iter().map(|line| line.to_string());
+    let mut labels = Vec::new();
+    let code = quit_loop(
+        &mut vm,
+        |_| lines.next(),
+        |_, result| {
+            labels.push(match result {
+                LineResult::Ok => "ok".to_string(),
+                LineResult::Quit => "quit".to_string(),
+                LineResult::Abort => "abort".to_string(),
+                LineResult::Error(error) => format!("error: {}", error),
+            });
+        },
+    );
+    let printed = output.text();
+    let before = printed.len();
+    outer_interpreter(&mut vm, "DEPTH .").unwrap();
+    let depth = output.text()[before..].trim().parse().unwrap();
+    (code, printed, labels, depth)
 }
 
 #[test]
@@ -2741,17 +2561,15 @@ fn quit_loop_error_ends_only_its_line() {
 
 #[test]
 fn quit_loop_bye_ends_it_with_its_code() {
-    unsafe {
-        let mut vm = test_vm(io::sink());
-        let mut lines = ["1 .", "3 (BYE) 2 .", "never"]
-            .into_iter()
-            .map(String::from);
-        let mut count = 0;
-        let code = quit_loop(&mut vm, |_| lines.next(), |_, _| count += 1);
-        assert_eq!(code, Some(3));
-        assert_eq!(count, 1);
-        assert_eq!(lines.next().as_deref(), Some("never"));
-    }
+    let mut vm = test_vm(io::sink());
+    let mut lines = ["1 .", "3 (BYE) 2 .", "never"]
+        .into_iter()
+        .map(String::from);
+    let mut count = 0;
+    let code = quit_loop(&mut vm, |_| lines.next(), |_, _| count += 1);
+    assert_eq!(code, Some(3));
+    assert_eq!(count, 1);
+    assert_eq!(lines.next().as_deref(), Some("never"));
 }
 
 #[test]

@@ -10,6 +10,8 @@
 //!
 //! With `--version`, it prints what it was built from, and exits.
 
+#![forbid(unsafe_code)]
+
 #[cfg(feature = "readline")]
 mod line_editor;
 
@@ -356,10 +358,10 @@ const ERROR_TESTS: [&str; 12] = [
     ": BROKEN 1 NO-SUCH-WORD ;",
     "BROKEN",
     "+",
-    "1 5 !",
+    "1 100000 !",
     "DROP",
     "9 PICK",
-    "5 EXECUTE",
+    "100000 EXECUTE",
     "1 ( never closed",
     ": W 5 , ; IMMEDIATE",
     ": X W ;",
@@ -389,22 +391,14 @@ fn section(number: usize) -> (&'static str, &'static [&'static str]) {
 }
 
 /// Boots a VM that writes to stdout.
-///
-/// # Safety
-///
-/// The result has the same requirements as the result of [`boot`].
-unsafe fn new_vm(config: VmConfig) -> Vm {
+fn new_vm(config: VmConfig) -> Vm {
     boot(io::stdout(), config).expect("the dictionary must be able to hold the primitives")
 }
 
 /// Evaluates some Forth source and ends the output line with the result. That's `ok` if all of
 /// it ran, unless a definition is still open. After `QUIT` and `ABORT`, the standard allows no
 /// message.
-///
-/// # Safety
-///
-/// `vm` must come from [`boot`].
-unsafe fn interpret(vm: &mut Vm, input: &str) -> Result<(), ExitCode> {
+fn interpret(vm: &mut Vm, input: &str) -> Result<(), ExitCode> {
     match outer_interpreter(vm, input) {
         Ok(()) if vm.is_compiling() => {}
         Ok(()) => println!("ok"),
@@ -417,11 +411,7 @@ unsafe fn interpret(vm: &mut Vm, input: &str) -> Result<(), ExitCode> {
 
 /// Echoes a block of Forth source and evaluates it. Output from Forth words follows on one
 /// line, which ends with the result.
-///
-/// # Safety
-///
-/// `vm` must come from [`boot`].
-unsafe fn evaluate(vm: &mut Vm, input: &str) -> Result<(), ExitCode> {
+fn evaluate(vm: &mut Vm, input: &str) -> Result<(), ExitCode> {
     println!("Input:");
     for line in input.trim().lines() {
         println!("{}", format!("    {}", line).trim_end());
@@ -434,15 +424,12 @@ unsafe fn evaluate(vm: &mut Vm, input: &str) -> Result<(), ExitCode> {
 fn run_section(number: usize) -> Result<(), ExitCode> {
     let (title, blocks) = section(number);
     println!("--- TEST RUN {}: {} ---", number, title);
-    // SAFETY: `vm` comes from `boot`, through `new_vm`.
-    unsafe {
-        let mut vm = new_vm(VmConfig {
-            data_stack_cells: DEMO_DATA_STACK_CELLS,
-            ..VmConfig::new(DEMO_DICTIONARY_CELLS)
-        });
-        for source in blocks {
-            evaluate(&mut vm, source)?;
-        }
+    let mut vm = new_vm(VmConfig {
+        data_stack_cells: DEMO_DATA_STACK_CELLS,
+        ..VmConfig::new(DEMO_DICTIONARY_CELLS)
+    });
+    for source in blocks {
+        evaluate(&mut vm, source)?;
     }
     println!("-------------------------------------\n");
     Ok(())
@@ -537,26 +524,23 @@ fn demo_menu(mut input: impl BufRead) -> ExitCode {
 /// the program. `read_line` gets the VM, for what it can complete.
 fn interactive(mut read_line: impl FnMut(&Vm) -> Result<String, ExitCode>) -> ExitCode {
     let mut end = ExitCode::SUCCESS;
-    // SAFETY: `vm` comes from `boot`, through `new_vm`.
-    let bye = unsafe {
-        let mut vm = new_vm(VmConfig::new(DICTIONARY_CELLS));
-        quit_loop(
-            &mut vm,
-            |vm| match read_line(vm) {
-                Ok(line) => Some(line),
-                Err(code) => {
-                    end = code;
-                    None
-                }
-            },
-            |vm, result| match result {
-                LineResult::Ok if vm.is_compiling() => {}
-                LineResult::Ok => println!("ok"),
-                LineResult::Quit | LineResult::Abort => println!(),
-                LineResult::Error(error) => println!("Forth Error: {}", error),
-            },
-        )
-    };
+    let mut vm = new_vm(VmConfig::new(DICTIONARY_CELLS));
+    let bye = quit_loop(
+        &mut vm,
+        |vm| match read_line(vm) {
+            Ok(line) => Some(line),
+            Err(code) => {
+                end = code;
+                None
+            }
+        },
+        |vm, result| match result {
+            LineResult::Ok if vm.is_compiling() => {}
+            LineResult::Ok => println!("ok"),
+            LineResult::Quit | LineResult::Abort => println!(),
+            LineResult::Error(error) => println!("Forth Error: {}", error),
+        },
+    );
     match bye {
         Some(code) => ExitCode::from(code as u8),
         None => end,
@@ -569,9 +553,7 @@ fn prompt() -> ExitCode {
     #[cfg(feature = "readline")]
     if io::stdin().is_terminal() && io::stdout().is_terminal() {
         match LineEditor::new() {
-            // SAFETY: the VM's word headers are as intact as `interpret` needs them to be for
-            // the words of each line, which it finds through the same pointers.
-            Ok(mut editor) => return interactive(|vm| unsafe { editor.read_line(vm) }),
+            Ok(mut editor) => return interactive(|vm| editor.read_line(vm)),
             Err(error) => eprintln!("Cannot edit lines: {}", error),
         }
     }

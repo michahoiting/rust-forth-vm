@@ -156,11 +156,9 @@ fn implemented_words_are_exactly_the_words_of_the_vm() {
         .map(|row| word_of(row).to_string())
         .collect();
 
-    // SAFETY: this VM is only used through the crate's functions.
-    let names = unsafe {
-        let vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-        vm.word_names()
-    };
+    let names = boot(io::sink(), VmConfig::new(TEST_CELLS))
+        .unwrap()
+        .word_names();
     let actual: BTreeSet<String> = names.into_iter().collect();
 
     let not_marked: Vec<_> = actual.difference(&marked).collect();

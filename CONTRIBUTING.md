@@ -74,8 +74,8 @@ Pull requests run the incremental suite as a non-required check. The Actions sum
 its mutation-testing time and results; same-repository PRs also get a comment for each run.
 Fork PRs don't get a comment. A failed advisory check doesn't block merging. The incremental
 suite doesn't replace the weekly run: it ignores changes outside the diff and can miss lost
-coverage caused by changes to tests. The configured exclusions still apply, and cargo-mutants
-skips `unsafe fn`, including the primitives.
+coverage caused by changes to tests. The configured exclusions still apply. The
+primitives are ordinary functions, so they are mutated too.
 
 ## Measuring performance
 

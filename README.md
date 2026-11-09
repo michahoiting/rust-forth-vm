@@ -4,8 +4,8 @@
 [![Lint](https://github.com/michahoiting/rust-forth-vm/actions/workflows/lint.yml/badge.svg?branch=main&event=push)](https://github.com/michahoiting/rust-forth-vm/actions/workflows/lint.yml?query=branch%3Amain+event%3Apush)
 [![Mutation testing](https://github.com/michahoiting/rust-forth-vm/actions/workflows/mutants.yml/badge.svg?branch=main)](https://github.com/michahoiting/rust-forth-vm/actions/workflows/mutants.yml?query=branch%3Amain)
 
-A clean-room implementation of a Forth virtual machine in Rust. It is an
-indirect-threaded VM with a linked-list dictionary, a text interpreter, and a
+A clean-room implementation of a Forth virtual machine in Rust. It is a
+token-threaded VM with a linked-list dictionary, a text interpreter, and a
 compiler for colon definitions.
 
 The program is an interactive Forth prompt, and also has a scripted demo. There is
@@ -148,45 +148,50 @@ rust-forth-vm has it yet. It also has the words that rust-forth-vm adds, such as
 
 ## How it works
 
-Every dictionary entry has the same header. The name bytes are stored in the
-dictionary directly in front of it.
+The VM is token threaded. The dictionary is an arena of bytes, and every address that
+Forth sees is a byte offset into it, so the first byte of the dictionary is address 0.
+Every access to the arena is bounds-checked, and no Cell in it holds a native pointer.
+
+Every word has an entry in the XT table, and its execution token (xt) is the index of that
+entry. The entry holds what the word does, and the address of its body. The body is the
+Parameter Field, and stays in the dictionary.
+
+Every word also has the same header in the dictionary. The name bytes are stored directly
+in front of it, and the body directly follows it.
 
 ```
-LFA        Link Field Address (LFA) Link to the previous word
-NFA        Name Field Address (NFA) Pointer to the name bytes
-LEN_FLAGS  Length of the name, and F_IMMEDIATE, F_HIDDEN, F_CREATED, F_PENDING
-CFA        Code Field Address (CFA) Pointer to the machine code
-...        Parameter Field
+LFA        Link Field Address (LFA) Address of the previous header
+NFA        Name Field Address (NFA) Address of the name bytes
+LEN_FLAGS  Length of the name, and F_IMMEDIATE, F_HIDDEN, F_PENDING, F_COMPILE_ONLY
+XT         The word's execution token, which leads to its entry in the XT table
+...        Parameter Field, the body
 ```
 
-The Parameter Field Address (PFA) always starts at `CFA + 1`, which `>BODY` gives from an execution
-token. What it holds depends on how the word was defined:
+`>BODY` gives the body from an execution token. What it holds depends on how the word was
+defined:
 
 - **Primitives** have no Parameter Field, so `>BODY` gives whatever comes next in the
   dictionary.
-- **Colon words** hold a thread of CFAs, ending in `EXIT`. Literals are compiled
-  as `LIT` followed by the value.
+- **Colon words** hold a thread of xts, ending in `EXIT`. Literals are compiled
+  as `LIT` followed by the value. `LIT` and `EXIT` are the first two primitives, so their xts
+  are always 0 and 1.
 - **`CREATE`d words** hold their data.
 - **`CONSTANT` words** hold their value.
 
-An execution token (xt) identifies a word, and is that word's CFA. `'`, `[']` and
-`:NONAME` give one, and `EXECUTE` runs it. `EXECUTE` and `>BODY` reject anything that
-isn't the xt of a finished word. They also reject `LIT`, and every future word with an inline
-operand, because such a word only works in a thread that supplies the operand. These words
-have the flag `F_COMPILE_ONLY`.
+`'`, `[']` and `:NONAME` give an xt, and `EXECUTE` runs it. `EXECUTE`, `COMPILE,` and `>BODY`
+reject anything that isn't the xt of a finished word, which takes constant time. They also
+reject `LIT`, and every future word with an inline operand, because such a word only works in
+a thread that supplies the operand. These words have the flag `F_COMPILE_ONLY`.
 
-A thread is a list of xts. The inner interpreter takes each one and runs the machine
-code that its Code Field points to. For a primitive, that code is the whole word. For a
-colon word, it is `DOCOL`, which continues with the thread in the Parameter Field. For a
-`CREATE`d word, it is `DOVAR`, which pushes the PFA. For a `CONSTANT` word, it is
-`DOCON`, which pushes the value in the Parameter Field.
-
-`DOES>` changes the CFA of a `CREATE`d word to the address of the thread behind
-`DOES>`. That address is in the dictionary and machine code never is, so `enter_word`
-can tell them apart with a range check, and run the thread through `DODOES`.
+A thread is a list of xts. The inner interpreter takes each one, and does what its entry in
+the XT table says. A primitive runs its Rust function. A colon word saves the return address
+and continues with the thread in its body. A `CREATE`d word pushes the address of its body, and
+a `CONSTANT` word pushes the value there. `DOES>` changes the entry of a `CREATE`d word, so that
+it pushes the address of its body and then runs the thread behind `DOES>`.
 
 Primitives return to the `run` loop instead of calling `next` themselves, so
-threaded code does not grow the Rust call stack. A zero Cell ends a thread.
+threaded code does not grow the Rust call stack. The text interpreter runs a word with no
+thread to return to, and the `EXIT` that ends the word stops the loop.
 
 A word being defined stays pending until `;`, so a redefinition can call the
 previous word of the same name. This also means a word cannot call itself.
@@ -209,8 +214,9 @@ stacks, and rolls back any unfinished colon definition.
   stacks like any other error.
 - The interactive prompt evaluates each line by itself, so a `(` comment must end on
   the line where it starts.
-- `!`, `C!`, `+!`, `2!`, `FILL` and `MOVE` can overwrite word headers and compiled code, which
-  can crash the process.
+- `!`, `C!`, `+!`, `2!`, `FILL` and `MOVE` can overwrite word headers and compiled code. That
+  gives errors or wrong results, such as words that can no longer be found, but it can't crash
+  the process or reach memory outside the dictionary. The XT table can't be overwritten.
 - A negative `ALLOT` can only give back data of the newest word, and only if `CREATE` made
   it.
 

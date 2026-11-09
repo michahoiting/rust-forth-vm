@@ -313,11 +313,7 @@ impl From<ForthError> for Failure {
 }
 
 /// Evaluates the setup and the measured part of `workload`.
-///
-/// # Safety
-///
-/// `vm` must come from [`boot`], and is only used through the crate's functions.
-unsafe fn measure(vm: &mut Vm, workload: &Workload, size: Size) -> Result<(), ForthError> {
+fn measure(vm: &mut Vm, workload: &Workload, size: Size) -> Result<(), ForthError> {
     let (setup, lines) = workload
         .source
         .split_once(MEASURE)
@@ -350,30 +346,27 @@ fn run(workload: &Workload, size: Size, pad_words: usize) -> Result<(), Failure>
         _ => DICTIONARY_CELLS,
     };
 
-    // SAFETY: these VMs are only used through the crate's functions.
-    unsafe {
-        if let Size::Boots(count) = size {
-            for _ in 1..count {
-                boot(io::sink(), VmConfig::new(dictionary_cells))?;
-            }
+    if let Size::Boots(count) = size {
+        for _ in 1..count {
+            boot(io::sink(), VmConfig::new(dictionary_cells))?;
         }
-        let mut vm = boot(output.clone(), VmConfig::new(dictionary_cells))?;
-        for _ in 0..pad_words {
-            outer_interpreter(&mut vm, ": PAD ;")?;
-        }
-        measure(&mut vm, workload, size)?;
-
-        let bytes = output.0.borrow().bytes;
-        let expected_bytes = workload.bytes_per_run * size.runs();
-        if bytes != expected_bytes {
-            return Err(Failure::WrongResult(format!(
-                "printed {bytes} bytes instead of {expected_bytes}"
-            )));
-        }
-
-        output.0.borrow_mut().keep = true;
-        outer_interpreter(&mut vm, workload.check)?;
     }
+    let mut vm = boot(output.clone(), VmConfig::new(dictionary_cells))?;
+    for _ in 0..pad_words {
+        outer_interpreter(&mut vm, ": PAD ;")?;
+    }
+    measure(&mut vm, workload, size)?;
+
+    let bytes = output.0.borrow().bytes;
+    let expected_bytes = workload.bytes_per_run * size.runs();
+    if bytes != expected_bytes {
+        return Err(Failure::WrongResult(format!(
+            "printed {bytes} bytes instead of {expected_bytes}"
+        )));
+    }
+
+    output.0.borrow_mut().keep = true;
+    outer_interpreter(&mut vm, workload.check)?;
 
     let text = String::from_utf8_lossy(&output.0.borrow().text).into_owned();
     let expected = (workload.expected)(size.runs());
