@@ -142,96 +142,9 @@ it.
 
 ## Words
 
-| Word     | Stack effect | Description                                       |
-|----------|--------------|---------------------------------------------------|
-| `+`      | `( a b -- n )` | Adds two Cells, wrapping on overflow            |
-| `-`      | `( a b -- n )` | Subtracts two Cells, wrapping on overflow       |
-| `*`      | `( a b -- n )` | Multiplies two Cells, wrapping on overflow      |
-| `/`      | `( n1 n2 -- n3 )` | Divides signed numbers, rounding down         |
-| `MOD`    | `( n1 n2 -- n3 )` | Gives the floored remainder of signed division |
-| `/MOD`   | `( n1 n2 -- n3 n4 )` | Gives the remainder `n3` and quotient `n4`    |
-| `1+`     | `( n1 -- n2 )` | Adds one, wrapping on overflow                  |
-| `1-`     | `( n1 -- n2 )` | Subtracts one, wrapping on overflow             |
-| `2*`     | `( n1 -- n2 )` | Doubles a signed number, wrapping on overflow   |
-| `2/`     | `( n1 -- n2 )` | Divides a signed number by two, rounding down   |
-| `NEGATE` | `( n1 -- n2 )` | Negates a signed number, wrapping on overflow   |
-| `ABS`    | `( n1 -- n2 )` | Gives the absolute value, wrapping on overflow  |
-| `MIN`    | `( n1 n2 -- n3 )` | Gives the lesser signed number               |
-| `MAX`    | `( n1 n2 -- n3 )` | Gives the greater signed number              |
-| `=`      | `( n1 n2 -- flag )` | Gives true if two Cells are equal             |
-| `<`      | `( n1 n2 -- flag )` | Gives true if `n1` is less than `n2` signed    |
-| `>`      | `( n1 n2 -- flag )` | Gives true if `n1` is greater than `n2` signed |
-| `U<`     | `( u1 u2 -- flag )` | Gives true if `u1` is less than `u2` unsigned  |
-| `0=`     | `( n -- flag )` | Gives true if `n` is zero                      |
-| `0<`     | `( n -- flag )` | Gives true if `n` is negative                  |
-| `AND`    | `( x1 x2 -- x3 )` | Gives the bitwise AND of two Cells            |
-| `OR`     | `( x1 x2 -- x3 )` | Gives the bitwise OR of two Cells             |
-| `XOR`    | `( x1 x2 -- x3 )` | Gives the bitwise exclusive OR of two Cells   |
-| `INVERT` | `( x1 -- x2 )` | Inverts every bit in a Cell                    |
-| `LSHIFT` | `( x1 u -- x2 )` | Shifts left logically; large shifts give zero  |
-| `RSHIFT` | `( x1 u -- x2 )` | Shifts right logically; large shifts give zero |
-| `+!`     | `( n addr -- )` | Adds `n` to the Cell at `addr`, wrapping        |
-| `CELL+`  | `( addr1 -- addr2 )` | Advances an address by one Cell               |
-| `2!`     | `( x1 x2 addr -- )` | Stores two adjacent Cells                    |
-| `2@`     | `( addr -- x1 x2 )` | Fetches two adjacent Cells                    |
-| `2DROP`  | `( x1 x2 -- )` | Removes the top two Cells                       |
-| `2DUP`   | `( x1 x2 -- x1 x2 x1 x2 )` | Copies the top two Cells             |
-| `2OVER`  | `( x1 x2 x3 x4 -- x1 x2 x3 x4 x1 x2 )` | Copies the third and fourth Cells |
-| `2SWAP`  | `( x1 x2 x3 x4 -- x3 x4 x1 x2 )` | Exchanges the top two pairs of Cells |
-| `FILL`   | `( c-addr u char -- )` | Fills `u` bytes with the low byte of `char` |
-| `MOVE`   | `( addr1 addr2 u -- )` | Moves `u` bytes, allowing overlapping ranges |
-| `BL`     | `( -- char )` | Pushes the value of the space character         |
-| `.`      | `( n -- )`   | Prints a Cell as a signed number                  |
-| `@`      | `( addr -- x )` | Fetches the Cell at a dictionary address below `HERE` |
-| `!`      | `( x addr -- )` | Stores a Cell at a dictionary address below `HERE` |
-| `,`      | `( x -- )`   | Aligns `HERE`, stores a Cell there and advances it. It can't be used while a definition is open |
-| `COMPILE,` | `( xt -- )` | Appends a call to the word with this execution token to the open definition |
-| `C@`     | `( c-addr -- char )` | Fetches the byte at a dictionary address below `HERE` |
-| `C!`     | `( char c-addr -- )` | Stores the low byte of a Cell at a dictionary address below `HERE` |
-| `C,`     | `( char -- )` | Stores the low byte of a Cell at `HERE` and advances it, which can leave `HERE` unaligned |
-| `HERE`   | `( -- addr )` | Pushes the address of the next free byte in the dictionary |
-| `ALLOT`  | `( n -- )`   | Reserves and clears `n` bytes at `HERE`. A negative `n` gives back data of the newest word, if `CREATE` made it |
-| `ALIGN`  | `( -- )`     | Moves `HERE` to the next cell-aligned address     |
-| `ALIGNED` | `( addr -- a-addr )` | Rounds an address up to a cell-aligned address |
-| `CHAR+`  | `( c-addr1 -- c-addr2 )` | Adds the size of a character to an address |
-| `CHARS`  | `( n1 -- n2 )` | Gives the size of `n1` characters in bytes. A character is one byte |
-| `CELLS`  | `( n1 -- n2 )` | Gives the size of `n1` Cells in bytes             |
-| `CREATE` | `( -- )`     | Parses a name and creates a word that pushes its data address |
-| `VARIABLE` | `( -- )`   | Parses a name and creates a word holding one Cell, initially 0 |
-| `CONSTANT` | `( x -- )` | Parses a name and creates a word that pushes `x`  |
-| `DOES>`  | `( -- )`     | Inside a definition: gives the newest `CREATE`d word the code that follows |
-| `:`      | `( -- )`     | Parses a name and starts compiling a definition   |
-| `;`      | `( -- )`     | Ends the definition (immediate)                   |
-| `IMMEDIATE` | `( -- )`  | Marks the newest word, so that it runs during compilation |
-| `:NONAME` | `( -- xt )` | Starts a definition without a name, and pushes its execution token |
-| `EXECUTE` | `( i*x xt -- j*x )` | Runs the word that an execution token refers to |
-| `'`      | `( -- xt )`  | Parses a name and pushes the execution token of that word |
-| `[']`    | `( -- )`     | Inside a definition: parses a name, and compiles its execution token as a literal (immediate) |
-| `>BODY`  | `( xt -- addr )` | Replaces an execution token with the address of that word's Parameter Field |
-| `EXIT`   | `( -- )`     | Returns from the current definition               |
-| `QUIT`   | `( -- )`     | Clears the return stack, discards the rest of the line, and returns to interpreting. Keeps the data stack, and doesn't leave the program. `quit_loop` reads on with the next line |
-| `ABORT`  | `( i*x -- )` | Clears the data stack, then does the same as `QUIT` |
-| `BYE`    | `( -- )`     | Stops the program with exit code 0                          |
-| `(BYE)`  | `( n -- )`    | Stops the program with exit code `n`'s low byte             |
-| `(`      | `( -- )`     | Skips the input up to and including the next `)` (immediate) |
-| `\`      | `( -- )`     | Skips the rest of the line (immediate)            |
-| `DUP`    | `( x -- x x )` | Copies the top Cell                             |
-| `?DUP`   | `( x -- 0 \| x x )` | Copies the top Cell if it isn't zero       |
-| `DROP`   | `( x -- )`   | Removes the top Cell                              |
-| `SWAP`   | `( a b -- b a )` | Exchanges the top two Cells                   |
-| `OVER`   | `( a b -- a b a )` | Copies the second Cell to the top           |
-| `ROT`    | `( a b c -- b c a )` | Moves the third Cell to the top           |
-| `PICK`   | `( ... n -- ... x )` | Copies the `n`th Cell below `n`, counting from 0 |
-| `ROLL`   | `( ... n -- ... x )` | Moves the `n`th Cell below `n` to the top, counting from 0 |
-| `DEPTH`  | `( -- n )`   | Pushes the number of Cells on the stack           |
-| `HELP`   | `( -- )`     | Prints how to leave the program                   |
-| `COPYRIGHT` | `( -- )`  | Prints the copyright notice                       |
-| `LICENSE` | `( -- )`    | Prints the project's license                      |
-
-Division by zero gives `ForthError::DivisionByZero`. `FILL` and `MOVE` validate their
-complete ranges before writing; an invalid range leaves memory unchanged. Comparison words
-return all bits set for true, and zero for false. Word names are case-sensitive, and can be up
-to 255 bytes long. Numbers are decimal, and may be negative.
+[docs/words.md](docs/words.md) lists every word of the FORTH-83 Required Word Set and of the ANS
+Forth CORE and CORE EXT word sets, with the standard that each one belongs to and whether
+rust-forth-vm has it yet. It also has the words that rust-forth-vm adds, such as `BYE` and `HELP`.
 
 ## How it works
 
