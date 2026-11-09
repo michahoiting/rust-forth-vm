@@ -142,7 +142,7 @@ fn prints_runs(runs: usize) -> String {
 }
 
 /// Every workload. `scripts/perf.py` reads this through `--list`.
-const WORKLOADS: [Workload; 12] = [
+const WORKLOADS: [Workload; 13] = [
     Workload {
         name: "boot",
         category: "Startup",
@@ -176,6 +176,15 @@ const WORKLOADS: [Workload; 12] = [
         "Memory",
         true,
         include_str!("workloads/arith_memory.fth"),
+        18,
+        "V @ .",
+        prints_runs,
+    ),
+    tower_workload(
+        "control_flow",
+        "Control flow",
+        true,
+        include_str!("workloads/control_flow.fth"),
         18,
         "V @ .",
         prints_runs,

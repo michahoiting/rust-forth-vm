@@ -12,6 +12,10 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 
 ### Added
 
+- The loop words `BEGIN` and `UNTIL`: the body of a loop runs at least once, and `UNTIL` goes back
+  to `BEGIN` while its flag is false. They use the control flow stack of `IF`, `ELSE` and `THEN`,
+  and a mismatch gives `ForthError::UnbalancedControlFlow`. Part of the control flow words of #119.
+  A new `control_flow` performance workload covers the backward branch.
 - The comparison and logic words `0<>`, `0>`, `<>`, `U>`, `WITHIN`, `NOT`, `TRUE` and `FALSE`.
 - The control flow words `IF`, `ELSE` and `THEN`, which compile the hidden branch words
   `BRANCH` and `0BRANCH`. The compiler keeps the open structures on its own control flow stack,

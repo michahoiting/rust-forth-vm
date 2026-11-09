@@ -225,6 +225,20 @@ pub(super) unsafe fn then(vm: &mut Vm) {
     vm.check(result);
 }
 
+/// `BEGIN ( -- )`: Starts a loop in the open definition, which `UNTIL` ends. This word is
+/// immediate.
+pub(super) unsafe fn begin(vm: &mut Vm) {
+    let result = vm.compiler.begin_loop(&vm.dictionary);
+    vm.check(result);
+}
+
+/// `UNTIL ( flag -- )`: Ends a loop that `BEGIN` started: pops a flag, and goes back to `BEGIN`
+/// if it is false. The loop body runs at least once. This word is immediate.
+pub(super) unsafe fn until(vm: &mut Vm) {
+    let result = vm.compiler.end_until(&mut vm.dictionary);
+    vm.check(result);
+}
+
 /// `IMMEDIATE ( -- )`: Marks the most recently created word as immediate, so that it runs
 /// during compilation instead of being compiled.
 pub(super) unsafe fn immediate(vm: &mut Vm) {

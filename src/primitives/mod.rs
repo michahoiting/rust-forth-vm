@@ -192,6 +192,10 @@ pub(crate) unsafe fn install(vm: &mut Vm) -> Result<(), ForthError> {
     vm.dictionary
         .add_primitive_word("THEN", code_cell(compiler::then), F_IMMEDIATE)?;
     vm.dictionary
+        .add_primitive_word("BEGIN", code_cell(compiler::begin), F_IMMEDIATE)?;
+    vm.dictionary
+        .add_primitive_word("UNTIL", code_cell(compiler::until), F_IMMEDIATE)?;
+    vm.dictionary
         .add_primitive_word("(", code_cell(parsing::paren_comment), F_IMMEDIATE)?;
     vm.dictionary
         .add_primitive_word("\\", code_cell(parsing::line_comment), F_IMMEDIATE)?;

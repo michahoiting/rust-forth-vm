@@ -2940,3 +2940,114 @@ fn an_unfinished_conditional_can_be_continued_in_the_next_call() {
         assert_eq!(output.text(), "1 2 ");
     }
 }
+
+#[test]
+fn begin_until_counts_down() {
+    let define = ": COUNTDOWN BEGIN DUP . 1- DUP 0= UNTIL DROP ;";
+    assert_eq!(output_of(&[define, "3 COUNTDOWN"]), "3 2 1 ");
+    assert_eq!(output_of(&[define, "1 COUNTDOWN"]), "1 ");
+}
+
+#[test]
+fn begin_until_runs_the_body_once_before_the_first_test() {
+    assert_eq!(output_of(&[": T BEGIN 7 . -1 UNTIL ; T"]), "7 ");
+    assert_eq!(
+        output_of(&[": T BEGIN 1+ DUP . DUP 3 > UNTIL DROP ; 0 T"]),
+        "1 2 3 4 "
+    );
+}
+
+#[test]
+fn begin_until_runs_many_times() {
+    assert_eq!(
+        output_of(&[": SUM 0 BEGIN OVER + SWAP 1- SWAP OVER 0= UNTIL NIP ; 1000 SUM ."]),
+        "500500 "
+    );
+}
+
+#[test]
+fn until_consumes_the_flag_and_leaves_the_rest_of_the_stack() {
+    assert_eq!(
+        output_of(&[": T BEGIN 1 UNTIL ; 5 6 T DEPTH . . ."]),
+        "2 6 5 "
+    );
+}
+
+#[test]
+fn loops_nest() {
+    let define = ": TABLE 1 BEGIN 1 BEGIN 2DUP * . 1+ DUP 3 > UNTIL DROP 1+ DUP 3 > UNTIL DROP ;";
+    assert_eq!(output_of(&[define, "TABLE"]), "1 2 3 2 4 6 3 6 9 ");
+}
+
+#[test]
+fn loops_mix_with_conditionals() {
+    let define = ": EVENS 0 BEGIN DUP 2 MOD 0= IF DUP . THEN 1+ DUP 7 = UNTIL DROP ;";
+    assert_eq!(output_of(&[define, "EVENS"]), "0 2 4 6 ");
+    let define = ": T DUP IF BEGIN 1- DUP 0= UNTIL ELSE 99 THEN . ;";
+    assert_eq!(output_of(&[define, "3 T 0 T"]), "0 99 ");
+}
+
+#[test]
+fn a_loop_can_call_a_word_with_a_loop() {
+    let define = ": INNER BEGIN 1- DUP 0= UNTIL ; : OUTER BEGIN 3 INNER DROP 1- DUP 0= UNTIL ;";
+    assert_eq!(output_of(&[define, "4 OUTER . DEPTH ."]), "0 0 ");
+}
+
+#[test]
+fn loops_can_span_lines() {
+    assert_eq!(
+        output_of(&[": T", "BEGIN DUP .", "1-", "DUP 0= UNTIL", "DROP ;", "2 T"]),
+        "2 1 "
+    );
+}
+
+#[test]
+fn begin_and_until_need_a_definition() {
+    unsafe {
+        let mut vm = test_vm(io::sink());
+        assert_error!(&mut vm, "BEGIN", ForthError::NotCompiling("BEGIN"));
+        assert_error!(&mut vm, "UNTIL", ForthError::NotCompiling("UNTIL"));
+    }
+}
+
+#[test]
+fn mismatched_loops_are_an_error_and_roll_back_the_definition() {
+    unsafe {
+        let mut vm = test_vm(io::sink());
+        let before = vm.word_names();
+        for (source, word) in [
+            (": X UNTIL ;", "UNTIL"),
+            (": X IF UNTIL THEN ;", "UNTIL"),
+            (": X IF ELSE UNTIL THEN ;", "UNTIL"),
+            (": X BEGIN THEN ;", "THEN"),
+            (": X BEGIN ELSE THEN ;", "ELSE"),
+            (": X BEGIN ;", ";"),
+            (": X BEGIN IF UNTIL THEN ;", "UNTIL"),
+            (": X BEGIN IF 1 THEN ;", ";"),
+        ] {
+            assert_error!(
+                &mut vm,
+                source,
+                ForthError::UnbalancedControlFlow(name) if *name == word
+            );
+            assert!(!vm.is_compiling(), "{}", source);
+            assert_eq!(vm.word_names(), before, "{}", source);
+        }
+
+        // An aborted definition leaves nothing open for the next one.
+        outer_interpreter(&mut vm, ": X 1 BEGIN 1+ DUP 5 = UNTIL ; X").unwrap();
+    }
+}
+
+#[test]
+fn a_number_cannot_stand_in_for_a_loop_target() {
+    unsafe {
+        let mut vm = test_vm(io::sink());
+        assert_error!(
+            &mut vm,
+            ": X 5 UNTIL ;",
+            ForthError::UnbalancedControlFlow("UNTIL")
+        );
+        assert!(!vm.is_compiling());
+    }
+}
