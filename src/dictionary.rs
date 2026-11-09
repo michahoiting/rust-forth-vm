@@ -451,12 +451,27 @@ impl<P: Copy> Dictionary<P> {
         Ok(xt)
     }
 
-    /// Reads Cell `field` of the header at `header`, or returns `None` if that isn't in the
-    /// arena. Headers can be changed by `!`, so nothing read from one is trusted.
+    /// Reads all Cells of the header at `header`, or returns `None` if it isn't in the arena.
+    /// Headers can be changed by `!`, so nothing read from one is trusted. Reading the whole
+    /// header at once takes one bounds check, which matters to the word search.
+    #[inline(always)]
+    fn header_cells(&self, header: usize) -> Option<[Cell; HEADER_CELLS]> {
+        let end = header.checked_add(HEADER_CELLS * CELL_SIZE)?;
+        let bytes: &[u8; HEADER_CELLS * CELL_SIZE] =
+            self.bytes.get(header..end)?.try_into().ok()?;
+        let mut cells = [0; HEADER_CELLS];
+        for (cell, chunk) in cells.iter_mut().zip(bytes.chunks_exact(CELL_SIZE)) {
+            let mut cell_bytes = [0; CELL_SIZE];
+            cell_bytes.copy_from_slice(chunk);
+            *cell = Cell::from_ne_bytes(cell_bytes);
+        }
+        Some(cells)
+    }
+
+    /// Reads Cell `field` of the header at `header`, or returns `None` if the header isn't in the
+    /// arena.
     fn header_cell(&self, header: usize, field: usize) -> Option<Cell> {
-        let offset = header.checked_add(field * CELL_SIZE)?;
-        let end = offset.checked_add(CELL_SIZE)?;
-        (end <= self.bytes.len()).then(|| self.read_cell(offset))
+        self.header_cells(header).map(|cells| cells[field])
     }
 
     /// Returns the flags of the header at `header`, without the name length. A header that
@@ -466,38 +481,48 @@ impl<P: Copy> Dictionary<P> {
             .map_or(F_HIDDEN | F_PENDING, |cell| cell & !LEN_MASK)
     }
 
-    /// Returns the name bytes of the header at `header`, or `None` if they aren't in the arena.
-    fn header_name(&self, header: usize) -> Option<&[u8]> {
-        let name = self.header_cell(header, NFA)?;
-        let len = self.header_cell(header, LEN_FLAGS)? & LEN_MASK;
+    /// Returns the name bytes of a header with these Cells, or `None` if they aren't in the
+    /// arena.
+    #[inline(always)]
+    fn name_of(&self, cells: &[Cell; HEADER_CELLS]) -> Option<&[u8]> {
+        let name = cells[NFA];
+        let len = cells[LEN_FLAGS] & LEN_MASK;
         self.bytes.get(name..name.checked_add(len)?)
     }
 
-    /// Returns whether a name can find the word with this header, so it's neither hidden nor
+    /// Returns whether a name can find a word with these header flags, so it's neither hidden nor
     /// still being defined.
-    fn is_findable(&self, header: usize) -> bool {
-        self.header_flags(header) & (F_HIDDEN | F_PENDING) == 0
+    fn is_findable(len_flags: Cell) -> bool {
+        len_flags & (F_HIDDEN | F_PENDING) == 0
     }
 
-    /// Returns the headers of the word list, from newest to oldest. It follows the links, but
-    /// stops at a link that doesn't point to an older header, so it always ends.
-    fn headers(&self) -> impl Iterator<Item = usize> + '_ {
+    /// Returns the Cells of the headers in the word list, from newest to oldest. It follows the
+    /// links, but stops at a link that doesn't point to an older header, or at a header that
+    /// isn't in the arena, so it always ends.
+    #[inline(always)]
+    fn headers(&self) -> impl Iterator<Item = [Cell; HEADER_CELLS]> + '_ {
         let mut current = self.words.last().map(|entry| entry.header);
         std::iter::from_fn(move || {
             let header = current?;
-            current = self.header_cell(header, LFA).filter(|&link| link < header);
-            Some(header)
+            let cells = self.header_cells(header)?;
+            current = Some(cells[LFA]).filter(|&link| link < header);
+            Some(cells)
         })
     }
 
     /// Linearly traverses the linked list of the dictionary (from newest to oldest). Returns
-    /// the execution token stored in the header of the matching word.
+    /// the execution token stored in the header of the matching word. The length of the name is
+    /// compared before its bytes are read.
     pub(crate) fn find_word(&self, token: &str) -> Option<Cell> {
+        let token = token.as_bytes();
         self.headers()
-            .find(|&header| {
-                self.is_findable(header) && self.header_name(header) == Some(token.as_bytes())
+            .find(|cells| {
+                let len_flags = cells[LEN_FLAGS];
+                Self::is_findable(len_flags)
+                    && len_flags & LEN_MASK == token.len()
+                    && self.name_of(cells) == Some(token)
             })
-            .and_then(|header| self.header_cell(header, XT))
+            .map(|cells| cells[XT])
     }
 
     /// Returns the sorted names of the words that [`find_word`](Self::find_word) can find, each
@@ -506,8 +531,8 @@ impl<P: Copy> Dictionary<P> {
     pub(crate) fn word_names(&self) -> Vec<String> {
         let mut names: Vec<String> = self
             .headers()
-            .filter(|&header| self.is_findable(header))
-            .filter_map(|header| self.header_name(header))
+            .filter(|cells| Self::is_findable(cells[LEN_FLAGS]))
+            .filter_map(|cells| self.name_of(&cells))
             .filter(|name| !name.is_empty())
             .map(|name| String::from_utf8_lossy(name).into_owned())
             .collect();
