@@ -135,10 +135,13 @@ as the `record` job does.
 
 ## Why `main` refuses pushes
 
-A GitHub ruleset protects `main`, for everyone including the project owner. Changes land
-through a PR once the `lint`, `build-and-test`, `msrv`, `miri` and `miri-32` checks pass and
-the branch is up to date with `main`. PRs that only change Markdown skip the two Miri jobs,
-which then count as passed. Force-pushing to `main` and deleting it are blocked.
+A GitHub ruleset protects `main`. Changes land through a PR once the `lint`, `build-and-test`,
+`msrv`, `miri` and `miri-32` checks pass, code quality finds no errors, all review threads are
+resolved, and the branch is up to date with `main`. PRs that only change Markdown skip the two
+Miri jobs, which then count as passed. The history stays linear, so a PR lands as a squash or
+a rebase. Force-pushing to `main`, deleting it, and pushing to it directly are blocked.
+Repository admins can bypass the rules, but only through a PR, and only they can update
+`main`, so they merge.
 
 The ruleset is kept in [`.github/rulesets/protect-main.json`](.github/rulesets/protect-main.json).
 If you rename a CI job, update the file too, or PRs will wait for a check that no longer
