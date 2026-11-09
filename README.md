@@ -49,14 +49,10 @@ line, and only stops the program while Forth is running. The history is kept in
 `~/.rustforth_history`, or only for the session if `HOME` isn't set. Input from a pipe
 is read as it is, and isn't saved.
 
-`--version` prints the version, the UTC date of the build, and the git tag and hash. The
-prompt starts with the same line, followed by the copyright notice and the words that give
-more information:
+`--version` prints the version, the UTC date of the build, and the git tag and hash:
 
 ```text
 Rust Forth VM 0.1.0 (Built 2026-11-06, Git 0.1.0 5d28858)
-Copyright (c) 2026 M.W.R. Hoiting.
-Type "HELP", "COPYRIGHT" or "LICENSE" for more information.
 ```
 
 `(dirty)` follows the hash unless the build is a clean release, which means `HEAD` has a
