@@ -23,7 +23,7 @@ make msrv      # Checks the oldest supported Rust version, from `rust-version`
 make mutants   # Mutation testing, which CI runs weekly. Needs cargo-mutants
 make mutants-diff DIFF=/tmp/pr.diff # Test mutations overlapping a diff
 make mutants-test # Test incremental mutation reporting
-make perf-ci   # Compares the performance of two commits, such as BASE=HEAD^1. Needs python3
+make perf-ci   # Compares the performance of two commits, such as BASE=HEAD^1, with HISTORY=history.jsonl for the development. Needs python3
 make demo      # Opens the demo menu
 make doc-serve # Serves the docs on localhost, including private items. Needs python3
 ```
@@ -45,6 +45,7 @@ make perf-report  # Shows the stored development of the measurements
 make perf-compare # Measures another commit too, such as BASE=origin/main
 make perf-pad-check # Checks that gated workloads don't depend on the size of the dictionary
 make perf-test # Runs the unit tests of the measuring script, which make perf-ci also does
+make perf-record SUMMARY= HISTORY= # Appends a perf-ci result to a history.jsonl, as CI does on `perf-data`
 ```
 
 `main` is protected by the ruleset in `.github/rulesets/protect-main.json`. Renaming a CI job means updating its required check there too. Never bypass the hooks with `--no-verify` unless asked, and don't run `make protect` unless asked.

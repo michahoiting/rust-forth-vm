@@ -53,6 +53,15 @@ TOP_FUNCTIONS = 20
 # How many runs a sparkline shows.
 HISTORY_RUNS = 20
 
+# A gated workload whose head is this much above the oldest of its last DRIFT_POINTS comparable
+# merges to main gets a drift warning in CI. It catches a slow drift of small slowdowns, which no
+# single comparison of a base and a head shows. It never fails the job. See #125.
+DRIFT_PERCENT = 10.0
+DRIFT_POINTS = 30
+
+# The version of the lines in the history of main, `history.jsonl` on the `perf-data` branch.
+HISTORY_SCHEMA = 1
+
 # How many functions the analysis of a slowdown shows.
 ANALYSIS_FUNCTIONS = 10
 
@@ -545,6 +554,9 @@ def status_text(row):
 def markdown_report(summary):
     """Returns the report of a `ci` run as Markdown, from the summary that command_ci writes."""
     metric, rows = summary["metric"], summary["rows"]
+    charted = summary.get("history") is not None
+    chart_head = f" Last {HISTORY_RUNS} merges |" if charted else ""
+    chart_align = "---|" if charted else ""
     lines = [
         "## Performance",
         "",
@@ -557,12 +569,14 @@ def markdown_report(summary):
         lines += [
             "The base has no workloads, so there's nothing to compare with. The head has:",
             "",
-            "| Workload | Category | Head |",
-            "|---|---|--:|",
+            "| Workload | Category | Head |" + chart_head,
+            "|---|---|--:|" + chart_align,
         ]
         for result in summary["head"]:
+            name = result["name"]
             value = format_value(result["metrics"][metric])
-            lines.append(f"| {markdown_code(result['name'])} | {result['category']} | {value} |")
+            chart = f" {development_chart(summary, name)} |" if charted else ""
+            lines.append(f"| {markdown_code(name)} | {result['category']} | {value} |{chart}")
     else:
         categories = {result["name"]: result["category"] for result in summary["base"]}
         categories.update({result["name"]: result["category"] for result in summary["head"]})
@@ -572,8 +586,11 @@ def markdown_report(summary):
             "| Workload | Category | Base | Head | Change |"
             + (" Branch misses |" if branches else "")
             + " Status |"
+            + chart_head
         )
-        lines.append("|---|---|--:|--:|--:|" + ("--:|" if branches else "") + "---|")
+        lines.append(
+            "|---|---|--:|--:|--:|" + ("--:|" if branches else "") + "---|" + chart_align
+        )
         for row in rows:
             cells = [
                 markdown_code(row["name"]),
@@ -585,6 +602,8 @@ def markdown_report(summary):
             if branches:
                 cells.append(format_change(misses.get(row["name"])))
             cells.append(status_text(row))
+            if charted:
+                cells.append(development_chart(summary, row["name"]))
             lines.append("| " + " | ".join(cells) + " |")
         lines += [
             "",
@@ -604,6 +623,7 @@ def markdown_report(summary):
         if changed:
             names = ", ".join(markdown_code(name) for name in changed)
             lines += ["", f"Not compared, because their source changed: {names}."]
+    lines += history_notes(summary)
     for name, differences in summary["analyses"].items():
         change = next(row["change"] for row in rows if row["name"] == name)
         lines += [
@@ -636,12 +656,248 @@ def annotations(summary):
                 f"::warning title=Performance::{row['name']} has"
                 f" {format_change(row['change'])} {summary['metric']}"
             )
+    for name, item in (summary.get("history") or {}).items():
+        if item["drifting"]:
+            lines.append(
+                f"::warning title=Performance drift::{name} is {format_change(item['drift'])}"
+                f" {summary['metric']} above the oldest of its last {DRIFT_POINTS} merges"
+            )
     if summary["elapsed_seconds"] > CI_BUDGET_SECONDS:
         lines.append(
             f"::warning title=Performance::Measuring took {summary['elapsed_seconds']:.0f} s,"
             f" more than the budget of {CI_BUDGET_SECONDS} s"
         )
     return lines
+
+
+# --- The history of main, for `ci` and `record` ---
+
+
+def pr_number(subject):
+    """Returns the PR number at the end of a squash-merge subject, such as `Fix it (#134)`."""
+    found = re.search(r"\(#(\d+)\)\s*$", subject.splitlines()[0] if subject else "")
+    return int(found.group(1)) if found else None
+
+
+def utc_date(date):
+    """Returns an ISO 8601 date in UTC, as `2026-11-08T16:54:43Z`."""
+    parsed = datetime.datetime.fromisoformat(re.sub(r"Z$", "+00:00", date))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+    return parsed.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def history_entry(summary, subject, date):
+    """Returns the line of the history of main for the head of a `ci` summary.
+
+    `subject` is the commit's subject, which gives the PR number, and `date` its commit date.
+    """
+    workloads = {}
+    for result in summary["head"]:
+        workloads[result["name"]] = {
+            "source_sha256": result["source_sha256"],
+            "gated": result["gated"],
+            **result["metrics"],
+        }
+    return {
+        "schema": HISTORY_SCHEMA,
+        "commit": summary["head_sha"],
+        "pr": pr_number(subject),
+        "date": utc_date(date),
+        "backend": summary["backend"],
+        "rustc": summary["rustc"],
+        "tool_version": summary["tool_version"],
+        "target": summary["target"],
+        "machine": summary["machine"],
+        "workloads": workloads,
+    }
+
+
+def read_history(path):
+    """Returns the lines of a history file, oldest first, or an empty list without the file.
+
+    Lines with another schema, or that aren't JSON, are left out. They are sorted by date,
+    because two pushes to main can append in the other order.
+    """
+    path = Path(path)
+    if not path.exists():
+        return []
+    entries = []
+    for number, line in enumerate(path.read_text().splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            print(f"{path}:{number} isn't JSON, so it's left out.", file=sys.stderr)
+            continue
+        if isinstance(entry, dict) and entry.get("schema") == HISTORY_SCHEMA:
+            entries.append(entry)
+    return sorted(entries, key=lambda entry: entry["date"])
+
+
+def series(history, name, result, rustc, tool_version, limit, metric="ir"):
+    """Returns the comparable points of a workload in the history, and whether the series broke.
+
+    `result` is the head's result of the workload, as measure_tree gives it. A point is
+    comparable when it has the same workload source, `rustc` and counter version as the head.
+    Going back from the newest line, the series stops at the first line that isn't, or that
+    doesn't have the workload, or after `limit` points.
+
+    Returns the points, newest last, each as a dict with `commit`, `pr` and `value`, and a break.
+    The break is None, or a dict with the `reasons` that the line before the series differs, and
+    `since`, the commit that the series starts again at, which is None when it's the head.
+    """
+    points = []
+    broke = None
+    for entry in reversed(history):
+        if len(points) >= limit:
+            break
+        workload = entry["workloads"].get(name)
+        if workload is None or workload.get(metric) is None:
+            break
+        reasons = []
+        if workload["source_sha256"] != result["source_sha256"]:
+            reasons.append("changed workload source")
+        if entry["rustc"] != rustc:
+            reasons.append(f"new rustc, {entry['rustc']} before")
+        if entry["tool_version"] != tool_version:
+            reasons.append(f"new counter version, {entry['tool_version']} before")
+        if reasons:
+            since = points[-1]["commit"] if points else None
+            broke = {"reasons": reasons, "since": since}
+            break
+        points.append({"commit": entry["commit"], "pr": entry["pr"], "value": workload[metric]})
+    return points[::-1], broke
+
+
+def drift(points, head_value):
+    """Returns the change of the head from the oldest of the last DRIFT_POINTS points, in percent.
+
+    Returns None without points, or with an oldest value of 0.
+    """
+    window = points[-DRIFT_POINTS:]
+    if not window or not window[0]["value"] or head_value is None:
+        return None
+    return percent_change(window[0]["value"], head_value)
+
+
+def history_of(summary, history):
+    """Returns the development of each head workload of a `ci` summary, by workload name.
+
+    Each item has the `points` and `broke` of series, the `drift` of the head in percent, and
+    `drifting`, which says whether that drift warns.
+    """
+    metric = summary["metric"]
+    developments = {}
+    for result in summary["head"]:
+        points, broke = series(
+            history,
+            result["name"],
+            result,
+            summary["rustc"],
+            summary["tool_version"],
+            max(HISTORY_RUNS, DRIFT_POINTS),
+            metric,
+        )
+        change = drift(points, result["metrics"].get(metric))
+        drifting = (
+            result["gated"]
+            and summary["backend"] in DECIDES
+            and change is not None
+            and change >= DRIFT_PERCENT
+        )
+        developments[result["name"]] = {
+            "points": points,
+            "broke": broke,
+            "drift": change,
+            "drifting": drifting,
+        }
+    return developments
+
+
+def development_chart(summary, name):
+    """Returns the sparkline of the last merges and the head of a workload, or a dash."""
+    item = (summary.get("history") or {}).get(name)
+    head = next((result for result in summary["head"] if result["name"] == name), None)
+    if not item or not item["points"] or head is None:
+        return "-"
+    values = [point["value"] for point in item["points"][-HISTORY_RUNS:]]
+    return sparkline(values + [head["metrics"][summary["metric"]]])
+
+
+def commit_text(commit, pr):
+    """Names a commit of main for the report, with its PR if it has one."""
+    text = markdown_code(commit[:12])
+    return f"{text} (#{pr})" if pr else text
+
+
+def history_notes(summary):
+    """Returns the Markdown lines about the history of main: breaks and drift."""
+    developments = summary.get("history")
+    if developments is None:
+        return []
+    lines = [
+        "",
+        f"**Last {HISTORY_RUNS} merges** shows the `{summary['metric']}` of up to {HISTORY_RUNS}"
+        " earlier merges to `main`, oldest first, and this head as the last point.",
+    ]
+    if not any(item["points"] or item["broke"] for item in developments.values()):
+        lines += ["", "No earlier merges to `main` are recorded yet."]
+    breaks = {}
+    for name, item in developments.items():
+        if item["broke"]:
+            since = item["broke"]["since"]
+            pr = next((p["pr"] for p in item["points"] if p["commit"] == since), None)
+            key = (since, pr, "; ".join(item["broke"]["reasons"]))
+            breaks.setdefault(key, []).append(name)
+    for (since, pr, reasons), names in breaks.items():
+        where = f"at {commit_text(since, pr)}" if since else "with this head"
+        listed = ", ".join(markdown_code(name) for name in names)
+        lines += ["", f"The series of {listed} starts again {where}: {reasons}."]
+    for name, item in developments.items():
+        if item["drifting"]:
+            oldest = item["points"][-DRIFT_POINTS:][0]
+            lines += [
+                "",
+                f"**Drift:** {markdown_code(name)} is {format_change(item['drift'])} above"
+                f" {commit_text(oldest['commit'], oldest['pr'])}, the oldest of its last"
+                f" {DRIFT_POINTS} comparable merges. A gated workload warns from"
+                f" +{DRIFT_PERCENT:g}%, which doesn't fail this check.",
+            ]
+    return lines
+
+
+def command_record(args):
+    """Appends the head of a `ci` summary to the history of main.
+
+    It does nothing without a summary or measurements, which is what a change to only Markdown
+    leaves, or when the history already has the commit, as after a rerun.
+    """
+    path = Path(args.summary)
+    if not path.exists():
+        print(f"{path} doesn't exist, so nothing was measured to record.")
+        return 0
+    summary = json.loads(path.read_text())
+    if not summary.get("head"):
+        print("The summary has no measurements to record.")
+        return 0
+    history_path = Path(args.history)
+    if any(entry["commit"] == summary["head_sha"] for entry in read_history(history_path)):
+        print(f"{history_path} already has {summary['head_sha']}.")
+        return 0
+    subject = args.subject
+    if subject is None:
+        subject = command_output("git", "log", "-1", "--format=%s", summary["head_sha"])
+    date = args.date
+    if date is None:
+        date = command_output("git", "log", "-1", "--format=%cI", summary["head_sha"])
+    entry = history_entry(summary, subject, date)
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(history_path, "a", encoding="utf-8") as history_file:
+        history_file.write(json.dumps(entry, sort_keys=True) + "\n")
+    print(f"Recorded {summary['head_sha']} in {history_path}.")
+    return 0
 
 
 # --- The database ---
@@ -972,6 +1228,8 @@ def command_ci(args):
         "analyses": analyses,
         "elapsed_seconds": round(time.monotonic() - started, 1),
     }
+    if args.history is not None:
+        summary["history"] = history_of(summary, read_history(args.history))
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     report = markdown_report(summary)
     (out / "report.md").write_text(report)
@@ -1023,7 +1281,19 @@ def main():
     ci.add_argument(
         "--out", default=str(TARGET / "perf" / "ci"), help="where the report and files go"
     )
+    ci.add_argument(
+        "--history", help="the history of main, history.jsonl, to show the development against"
+    )
     ci.set_defaults(handler=command_ci)
+
+    record = commands.add_parser(
+        "record", help="append the head of a ci summary to the history of main"
+    )
+    record.add_argument("summary", help="the summary.json that ci wrote")
+    record.add_argument("history", help="the history.jsonl to append to")
+    record.add_argument("--subject", help="the commit's subject, default: from git")
+    record.add_argument("--date", help="the commit date, default: from git")
+    record.set_defaults(handler=command_record)
 
     args = parser.parse_args()
     sys.exit(args.handler(args))
