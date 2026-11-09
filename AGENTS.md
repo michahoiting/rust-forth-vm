@@ -8,7 +8,7 @@ A clean-room Forth virtual machine in Rust: indirect threaded, with a linked-lis
 
 The FORTH-83 standard is the reference for how words behave. Later ANS Forth words are fine where they're useful.
 
-See `README.md` for the word list and internals, and the GitHub issues for known problems. Don't copy either into this file, because they change.
+See `docs/words.md` for the word list, `README.md` for the internals, and the GitHub issues for known problems. Don't copy either into this file, because they change.
 
 See `CONTRIBUTING.md` for setup, the release steps, and the versioning policy. After the first release, versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
@@ -82,7 +82,7 @@ main → line_editor
 - Doc comments on `unsafe fn` have a `# Safety` section when the caller has something to uphold. The contract shared by primitives is on `PrimitiveFn`.
 - Doc comments on primitives start with the word and its stack effect in one code span, such as `` `@ ( addr -- x )`: ``. Outside a code span, rustdoc would change `--` and `*`.
 - Public API changes update the doc examples, which run as doctests.
-- Docs describe behavior, and link to the README for the word list and limitations instead of copying them.
+- Docs describe behavior, and link to `docs/words.md` for the word list and to the README for the limitations, instead of copying them.
 - Breaking changes are fine until the project owner says otherwise.
 - Everything is part of the unreleased `0.1.0` until the project owner releases it. Until then, all changelog entries go under `### Added`, including fixes and changes, and nothing is marked as breaking. After the first release, this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), and breaking changes start with `**Breaking:**`.
 - Every user-visible change adds an entry under `[Unreleased]` in `CHANGELOG.md`.
@@ -100,7 +100,8 @@ Every new word or feature includes:
 - Unit tests next to the code, comparing exact state.
 - API tests in `tests/forth.rs`, using only the public API.
 - Normal use cases in the demo, as a commented block in `SECTIONS` in `src/main.rs`, and the updated `tests/demo_output.txt`.
-- README updates: the word table, and the limitations if they change.
+- The word's row in `docs/words.md` set to `Yes`, with its stack effect and description. A word outside the listed word sets gets a new row.
+- README updates to the limitations, if they change.
 - A `CHANGELOG.md` entry.
 
 ## Working on changes

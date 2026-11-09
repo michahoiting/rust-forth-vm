@@ -12,6 +12,9 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 
 ### Added
 
+- `docs/words.md`, which replaces the word table in the README. It lists every word of the
+  FORTH-83 Required Word Set and the ANS Forth CORE and CORE EXT word sets, with the standard of
+  each word and whether rust-forth-vm has it, and a test keeps that column in line with the VM.
 - `quit_loop` runs the loop that the standard's `QUIT` stands for: it reads lines through a
   closure, evaluates them, and reports each `LineResult`, so `QUIT` and `ABORT` carry on with the
   next line, and a host only sees the end of the input and `BYE`. `forth-vm` uses it.

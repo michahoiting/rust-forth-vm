@@ -7,7 +7,8 @@
 //! state lives in [`Vm`], and carries over from one call to the next. Errors are
 //! [`ForthError`]s. The stacks and the dictionary hold [`Cell`]s.
 //!
-//! The README has the list of words, how the VM works, and its limitations.
+//! `docs/words.md` has the list of words. The README has how the VM works, and its
+//! limitations.
 //!
 //! # Examples
 //!
