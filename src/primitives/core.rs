@@ -373,16 +373,12 @@ pub(super) unsafe fn xor(vm: &mut Vm) {
     binary_replace(vm, |a, b| a ^ b);
 }
 
-/// `INVERT ( x1 -- x2 )`: Inverts every bit in a Cell.
+/// `INVERT ( x1 -- x2 )`: Inverts every bit in a Cell. `NOT` is the same primitive, as FORTH-83
+/// defines it.
 pub(super) unsafe fn invert(vm: &mut Vm) {
     if let Some(value) = vm.pop() {
         vm.push(!value);
     }
-}
-
-/// `NOT ( x1 -- x2 )`: Inverts every bit in a Cell, like `INVERT`, as FORTH-83 defines it.
-pub(super) unsafe fn not(vm: &mut Vm) {
-    invert(vm);
 }
 
 /// `LSHIFT ( x1 u -- x2 )`: Shifts left logically, giving zero for a shift of `Cell::BITS` or
@@ -842,19 +838,6 @@ mod tests {
     }
 
     #[test]
-    fn not_inverts_every_bit_like_invert() {
-        unsafe {
-            for value in [0, 1, Cell::MAX] {
-                assert_eq!(
-                    stack_after(not, &[9, value]),
-                    stack_after(invert, &[9, value])
-                );
-            }
-            assert_eq!(stack_after(not, &[0]), [Cell::MAX]);
-        }
-    }
-
-    #[test]
     fn true_and_false_push_flags() {
         unsafe {
             assert_eq!(stack_after(true_flag, &[9]), [9, Cell::MAX]);
@@ -1212,7 +1195,6 @@ mod tests {
                 zero_not_equal,
                 zero_greater_than,
                 invert,
-                not,
                 cell_plus,
             ] {
                 assert_underflow(word, &[]);

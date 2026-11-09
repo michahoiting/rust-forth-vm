@@ -78,7 +78,7 @@ pub(crate) unsafe fn install(vm: &mut Vm) -> Result<(), ForthError> {
     vm.dictionary
         .add_primitive_word("INVERT", code_cell(core::invert), 0)?;
     vm.dictionary
-        .add_primitive_word("NOT", code_cell(core::not), 0)?;
+        .add_primitive_word("NOT", code_cell(core::invert), 0)?;
     vm.dictionary
         .add_primitive_word("LSHIFT", code_cell(core::left_shift), 0)?;
     vm.dictionary
