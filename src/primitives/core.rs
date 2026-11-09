@@ -526,6 +526,27 @@ pub(super) unsafe fn over(vm: &mut Vm) {
     }
 }
 
+/// `NIP ( x1 x2 -- x2 )`: Removes the second Cell.
+pub(super) unsafe fn nip(vm: &mut Vm) {
+    if vm.require(2) {
+        let second = vm.data_stack.len() - 2;
+        vm.data_stack.swap_remove(second);
+    }
+}
+
+/// `TUCK ( x1 x2 -- x2 x1 x2 )`: Copies the top Cell below the second one.
+pub(super) unsafe fn tuck(vm: &mut Vm) {
+    if vm.require(2) {
+        let len = vm.data_stack.len();
+        let top = vm.data_stack[len - 1];
+        vm.push(top);
+        // Only rotate when the push succeeded, so an overflow leaves the stack unchanged.
+        if vm.data_stack.len() > len {
+            vm.data_stack[len - 2..].rotate_right(1);
+        }
+    }
+}
+
 /// `ROT ( a b c -- b c a )`: Moves the third Cell to the top.
 pub(super) unsafe fn rot(vm: &mut Vm) {
     if vm.require(3) {
@@ -787,6 +808,32 @@ mod tests {
     }
 
     #[test]
+    fn nip_removes_the_second_cell() {
+        unsafe {
+            assert_eq!(stack_after(nip, &[1, 2, 3]), [1, 3]);
+        }
+    }
+
+    #[test]
+    fn tuck_copies_the_top_cell_below_the_second() {
+        unsafe {
+            assert_eq!(stack_after(tuck, &[1, 2, 3]), [1, 3, 2, 3]);
+        }
+    }
+
+    #[test]
+    fn tuck_on_a_full_stack_overflows_and_leaves_the_stack_unchanged() {
+        unsafe {
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            vm.data_stack_limit = 2;
+            vm.data_stack.extend_from_slice(&[1, 2]);
+            tuck(&mut vm);
+            assert!(matches!(vm.error, Some(ForthError::DataStackOverflow)));
+            assert_eq!(vm.data_stack, [1, 2]);
+        }
+    }
+
+    #[test]
     fn rot_moves_the_third_cell_to_the_top() {
         unsafe {
             assert_eq!(stack_after(rot, &[1, 2, 3, 4]), [1, 3, 4, 2]);
@@ -842,7 +889,7 @@ mod tests {
             for word in [dup as PrimitiveFn, question_dup, drop, pick, roll] {
                 assert_underflow(word, &[]);
             }
-            for word in [swap as PrimitiveFn, over, plus, store] {
+            for word in [swap as PrimitiveFn, over, nip, tuck, plus, store] {
                 assert_underflow(word, &[]);
                 assert_underflow(word, &[1]);
             }
