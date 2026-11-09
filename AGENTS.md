@@ -37,7 +37,7 @@ These aren't part of CI:
 ```sh
 make setup-dev # Installs the developer tools and the git hooks. Run it once after cloning
 make hooks     # Installs only the git hooks from `.githooks/`
-make protect   # Applies the ruleset for `main`. Needs gh and admin access
+make protect   # Applies the rulesets in `.github/rulesets/`, or only RULESETS=<files>. Needs gh, python3 and admin access
 make metrics   # Reports PR lead time, reviews, CI reruns and closed issues. Needs gh and python3
 make demo-expected # Updates `tests/demo_output.txt`, the expected demo output
 make perf      # Measures the VM, and stores the result in `target/perf/results.sqlite`. Needs python3
@@ -48,7 +48,7 @@ make perf-test # Runs the unit tests of the measuring script, which make perf-ci
 make perf-record SUMMARY= HISTORY= # Appends a perf-ci result to a history.jsonl, as CI does on `perf-data`
 ```
 
-`main` is protected by the ruleset in `.github/rulesets/protect-main.json`. Renaming a CI job means updating its required check there too. Never bypass the hooks with `--no-verify` unless asked, and don't run `make protect` unless asked.
+`main` is protected by the ruleset in `.github/rulesets/protect-main.json`, and `perf-data` by the two `perf-data` rulesets there. Renaming a CI job means updating its required check there too. Never bypass the hooks with `--no-verify` unless asked, and don't run `make protect` unless asked.
 
 ## Architecture
 

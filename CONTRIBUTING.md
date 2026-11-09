@@ -117,8 +117,8 @@ The job doesn't fail on a slowdown yet. PRs that only change Markdown skip the m
 The report also shows the development: a column **Last 20 merges** has a sparkline of each
 workload over the last 20 merges to `main`, with the head as the last point. The `record` job
 appends the figures of each push to `main` as one line to `history.jsonl` on the orphan branch
-`perf-data`, which it creates on the first push. Only that job writes the branch, so don't edit
-it by hand. A series starts again, with a note, when the workload's source, `rustc` or the
+`perf-data`, which it creates on the first push. Only that job writes the branch, and rulesets
+refuse other pushes, so don't edit it by hand. See [below](#why-main-refuses-pushes). A series starts again, with a note, when the workload's source, `rustc` or the
 Valgrind version changes, since its figures can't be compared across that. A gated workload
 that is 10% or more above the oldest of its last 30 comparable merges gets a drift warning, which
 catches many small slowdowns that no single PR shows. Drift doesn't fail the job either.
@@ -135,15 +135,29 @@ as the `record` job does.
 
 ## Why `main` refuses pushes
 
-A GitHub ruleset protects `main`, for everyone including the project owner. Changes land
-through a PR once the `lint`, `build-and-test`, `msrv`, `miri` and `miri-32` checks pass and
-the branch is up to date with `main`. PRs that only change Markdown skip the two Miri jobs,
-which then count as passed. Force-pushing to `main` and deleting it are blocked.
+A GitHub ruleset protects `main`. Changes land through a PR once the `lint`, `build-and-test`,
+`msrv`, `miri` and `miri-32` checks pass, code quality finds no errors, all review threads are
+resolved, and the branch is up to date with `main`. PRs that only change Markdown skip the two
+Miri jobs, which then count as passed. The history stays linear, and a PR lands as one squashed
+commit. Force-pushing to `main`, deleting it, and pushing to it directly are blocked.
+Repository admins can bypass the rules, but only through a PR, and only they can update
+`main`, so they merge.
 
 The ruleset is kept in [`.github/rulesets/protect-main.json`](.github/rulesets/protect-main.json).
-After changing it, a repository admin applies it with `make protect`, which needs the `gh`
-CLI. If you rename a CI job, update the file too, or PRs will wait for a check that no
-longer exists.
+If you rename a CI job, update the file too, or PRs will wait for a check that no longer
+exists.
+
+Two more rulesets protect `perf-data`, the history of the performance figures:
+
+- [`protect-perf-data.json`](.github/rulesets/protect-perf-data.json) blocks deleting and
+  force-pushing the branch, for everyone.
+- [`perf-data-writers.json`](.github/rulesets/perf-data-writers.json) refuses pushes, except
+  from GitHub Actions, which the `record` job uses, and from repository admins, who can fix
+  the history by hand.
+
+After changing a ruleset file, a repository admin applies it with `make protect`, which needs
+the `gh` CLI and python3. It updates the ruleset with the file's name, or creates it. To apply
+only some files, pass them, such as `make protect RULESETS=.github/rulesets/protect-perf-data.json`.
 
 ## Versioning
 
