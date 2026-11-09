@@ -56,17 +56,17 @@ See the [limitations](../README.md#limitations) in the README for what the VM do
 | `2>R` | `( x1 x2 -- )` | ANS CORE EXT | No | Moves two Cells to the return stack, keeping their order |
 | `2R>` | `( -- x1 x2 )` | ANS CORE EXT | No | Moves two Cells from the return stack, keeping their order |
 | `2R@` | `( -- x1 x2 )` | ANS CORE EXT | No | Copies the top two Cells of the return stack |
-| `>R` | `( x -- )` | FORTH-83, ANS CORE | No (#117) | Moves a Cell to the return stack |
-| `R>` | `( -- x )` | FORTH-83, ANS CORE | No (#117) | Moves a Cell from the return stack |
-| `R@` | `( -- x )` | FORTH-83, ANS CORE | No (#117) | Copies the top Cell of the return stack |
+| `>R` | `( x -- )` | FORTH-83, ANS CORE | No ([#117](https://github.com/michahoiting/rust-forth-vm/issues/117)) | Moves a Cell to the return stack |
+| `R>` | `( -- x )` | FORTH-83, ANS CORE | No ([#117](https://github.com/michahoiting/rust-forth-vm/issues/117)) | Moves a Cell from the return stack |
+| `R@` | `( -- x )` | FORTH-83, ANS CORE | No ([#117](https://github.com/michahoiting/rust-forth-vm/issues/117)) | Copies the top Cell of the return stack |
 
 ## Arithmetic
 
 | Word | Stack effect | Standard | Implemented | Description |
 |------|--------------|----------|-------------|-------------|
 | `*` | `( a b -- n )` | FORTH-83, ANS CORE | Yes | Multiplies two Cells, wrapping on overflow |
-| `*/` | `( n1 n2 n3 -- n4 )` | FORTH-83, ANS CORE | No (#116) | Multiplies `n1` by `n2` and divides by `n3`, with a double-cell intermediate |
-| `*/MOD` | `( n1 n2 n3 -- n4 n5 )` | FORTH-83, ANS CORE | No (#116) | Like `*/`, and also gives the remainder `n4` |
+| `*/` | `( n1 n2 n3 -- n4 )` | FORTH-83, ANS CORE | No ([#116](https://github.com/michahoiting/rust-forth-vm/issues/116)) | Multiplies `n1` by `n2` and divides by `n3`, with a double-cell intermediate |
+| `*/MOD` | `( n1 n2 n3 -- n4 n5 )` | FORTH-83, ANS CORE | No ([#116](https://github.com/michahoiting/rust-forth-vm/issues/116)) | Like `*/`, and also gives the remainder `n4` |
 | `+` | `( a b -- n )` | FORTH-83, ANS CORE | Yes | Adds two Cells, wrapping on overflow |
 | `-` | `( a b -- n )` | FORTH-83, ANS CORE | Yes | Subtracts two Cells, wrapping on overflow |
 | `/` | `( n1 n2 -- n3 )` | FORTH-83, ANS CORE | Yes | Divides signed numbers, rounding down |
@@ -90,12 +90,12 @@ See the [limitations](../README.md#limitations) in the README for what the VM do
 | `D+` | `( d1 d2 -- d3 )` | FORTH-83 | No | Adds two double-cell numbers |
 | `D<` | `( d1 d2 -- flag )` | FORTH-83 | No | Gives true if `d1` is less than `d2` |
 | `DNEGATE` | `( d1 -- d2 )` | FORTH-83 | No | Negates a double-cell number |
-| `FM/MOD` | `( d n1 -- n2 n3 )` | ANS CORE | No (#116) | Divides a double by `n1`, rounding down, giving the remainder and quotient |
-| `M*` | `( n1 n2 -- d )` | ANS CORE | No (#116) | Multiplies two signed numbers into a double-cell product |
-| `S>D` | `( n -- d )` | ANS CORE | No (#116) | Extends a signed number to a double-cell number |
-| `SM/REM` | `( d n1 -- n2 n3 )` | ANS CORE | No (#116) | Divides a double by `n1`, rounding toward zero, giving the remainder and quotient |
-| `UM*` | `( u1 u2 -- ud )` | FORTH-83, ANS CORE | No (#116) | Multiplies two unsigned numbers into a double-cell product |
-| `UM/MOD` | `( ud u1 -- u2 u3 )` | FORTH-83, ANS CORE | No (#116) | Divides an unsigned double by `u1`, giving the remainder `u2` and quotient `u3` |
+| `FM/MOD` | `( d n1 -- n2 n3 )` | ANS CORE | No ([#116](https://github.com/michahoiting/rust-forth-vm/issues/116)) | Divides a double by `n1`, rounding down, giving the remainder and quotient |
+| `M*` | `( n1 n2 -- d )` | ANS CORE | No ([#116](https://github.com/michahoiting/rust-forth-vm/issues/116)) | Multiplies two signed numbers into a double-cell product |
+| `S>D` | `( n -- d )` | ANS CORE | No ([#116](https://github.com/michahoiting/rust-forth-vm/issues/116)) | Extends a signed number to a double-cell number |
+| `SM/REM` | `( d n1 -- n2 n3 )` | ANS CORE | No ([#116](https://github.com/michahoiting/rust-forth-vm/issues/116)) | Divides a double by `n1`, rounding toward zero, giving the remainder and quotient |
+| `UM*` | `( u1 u2 -- ud )` | FORTH-83, ANS CORE | No ([#116](https://github.com/michahoiting/rust-forth-vm/issues/116)) | Multiplies two unsigned numbers into a double-cell product |
+| `UM/MOD` | `( ud u1 -- u2 u3 )` | FORTH-83, ANS CORE | No ([#116](https://github.com/michahoiting/rust-forth-vm/issues/116)) | Divides an unsigned double by `u1`, giving the remainder `u2` and quotient `u3` |
 
 ## Comparison and logic
 
@@ -142,7 +142,7 @@ See the [limitations](../README.md#limitations) in the README for what the VM do
 | `CELLS` | `( n1 -- n2 )` | ANS CORE | Yes | Gives the size of `n1` Cells in bytes |
 | `CHAR+` | `( c-addr1 -- c-addr2 )` | ANS CORE | Yes | Adds the size of a character to an address |
 | `CHARS` | `( n1 -- n2 )` | ANS CORE | Yes | Gives the size of `n1` characters in bytes. A character is one byte |
-| `CMOVE` | `( c-addr1 c-addr2 u -- )` | FORTH-83 | No (#120) | Copies `u` bytes, starting with the lowest address |
+| `CMOVE` | `( c-addr1 c-addr2 u -- )` | FORTH-83 | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Copies `u` bytes, starting with the lowest address |
 | `CMOVE>` | `( c-addr1 c-addr2 u -- )` | FORTH-83 | No | Copies `u` bytes, starting with the highest address |
 | `ERASE` | `( addr u -- )` | ANS CORE EXT | No | Sets `u` bytes to zero |
 | `FILL` | `( c-addr u char -- )` | FORTH-83, ANS CORE | Yes | Fills `u` bytes with the low byte of `char` |
@@ -179,77 +179,77 @@ See the [limitations](../README.md#limitations) in the README for what the VM do
 | `COMPILE,` | `( xt -- )` | ANS CORE EXT | Yes | Appends a call to the word with this execution token to the open definition |
 | `EXECUTE` | `( i*x xt -- j*x )` | FORTH-83, ANS CORE | Yes | Runs the word that an execution token refers to |
 | `EXIT` | `( -- )` | FORTH-83, ANS CORE | Yes | Returns from the current definition |
-| `LITERAL` | `( x -- )` | FORTH-83, ANS CORE | No (#118) | Inside a definition: compiles `x` as a literal (immediate) |
-| `POSTPONE` | `( -- )` | ANS CORE | No (#118) | Inside a definition: parses a name, and compiles its compilation behavior (immediate) |
-| `RECURSE` | `( -- )` | ANS CORE | No (#118) | Inside a definition: compiles a call to the definition itself (immediate) |
-| `STATE` | `( -- a-addr )` | FORTH-83, ANS CORE | No (#118) | Pushes the address of a Cell that's true while compiling |
-| `[` | `( -- )` | FORTH-83, ANS CORE | No (#118) | Switches to interpreting, inside a definition (immediate) |
+| `LITERAL` | `( x -- )` | FORTH-83, ANS CORE | No ([#118](https://github.com/michahoiting/rust-forth-vm/issues/118)) | Inside a definition: compiles `x` as a literal (immediate) |
+| `POSTPONE` | `( -- )` | ANS CORE | No ([#118](https://github.com/michahoiting/rust-forth-vm/issues/118)) | Inside a definition: parses a name, and compiles its compilation behavior (immediate) |
+| `RECURSE` | `( -- )` | ANS CORE | No ([#118](https://github.com/michahoiting/rust-forth-vm/issues/118)) | Inside a definition: compiles a call to the definition itself (immediate) |
+| `STATE` | `( -- a-addr )` | FORTH-83, ANS CORE | No ([#118](https://github.com/michahoiting/rust-forth-vm/issues/118)) | Pushes the address of a Cell that's true while compiling |
+| `[` | `( -- )` | FORTH-83, ANS CORE | No ([#118](https://github.com/michahoiting/rust-forth-vm/issues/118)) | Switches to interpreting, inside a definition (immediate) |
 | `[']` | `( -- )` | FORTH-83, ANS CORE | Yes | Inside a definition: parses a name, and compiles its execution token as a literal (immediate) |
 | `[COMPILE]` | `( -- )` | FORTH-83, ANS CORE EXT | No | Inside a definition: parses the name of an immediate word and compiles it (immediate) |
-| `]` | `( -- )` | FORTH-83, ANS CORE | No (#118) | Switches to compiling |
+| `]` | `( -- )` | FORTH-83, ANS CORE | No ([#118](https://github.com/michahoiting/rust-forth-vm/issues/118)) | Switches to compiling |
 
 ## Control flow
 
 | Word | Stack effect | Standard | Implemented | Description |
 |------|--------------|----------|-------------|-------------|
-| `+LOOP` | `( n -- )` | FORTH-83, ANS CORE | No (#119) | Inside a definition: adds `n` to the index, and repeats until it crosses the limit (immediate) |
+| `+LOOP` | `( n -- )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: adds `n` to the index, and repeats until it crosses the limit (immediate) |
 | `?DO` | `( n1 n2 -- )` | ANS CORE EXT | No | Like `DO`, but skips the loop if `n1` equals `n2` (immediate) |
-| `AGAIN` | `( -- )` | ANS CORE EXT | No (#119) | Inside a definition: always goes back to `BEGIN` (immediate) |
-| `BEGIN` | `( -- )` | FORTH-83, ANS CORE | No (#119) | Inside a definition: marks the start of a loop (immediate) |
+| `AGAIN` | `( -- )` | ANS CORE EXT | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: always goes back to `BEGIN` (immediate) |
+| `BEGIN` | `( -- )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: marks the start of a loop (immediate) |
 | `CASE` | `( -- )` | ANS CORE EXT | No | Inside a definition: starts a selection among `OF` clauses (immediate) |
-| `DO` | `( n1 n2 -- )` | FORTH-83, ANS CORE | No (#119) | Inside a definition: starts a counted loop from `n2` up to the limit `n1` (immediate) |
-| `ELSE` | `( -- )` | FORTH-83, ANS CORE | No (#119) | Inside a definition: starts the code that runs when the flag of `IF` is false (immediate) |
+| `DO` | `( n1 n2 -- )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: starts a counted loop from `n2` up to the limit `n1` (immediate) |
+| `ELSE` | `( -- )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: starts the code that runs when the flag of `IF` is false (immediate) |
 | `ENDCASE` | `( x -- )` | ANS CORE EXT | No | Inside a definition: ends a `CASE`, and drops the value that no clause matched (immediate) |
 | `ENDOF` | `( -- )` | ANS CORE EXT | No | Inside a definition: ends an `OF` clause (immediate) |
-| `I` | `( -- n )` | FORTH-83, ANS CORE | No (#119) | Pushes the index of the innermost loop |
-| `IF` | `( flag -- )` | FORTH-83, ANS CORE | No (#119) | Inside a definition: runs the code up to `ELSE` or `THEN` only if `flag` is true (immediate) |
-| `J` | `( -- n )` | FORTH-83, ANS CORE | No (#119) | Pushes the index of the next outer loop |
-| `LEAVE` | `( -- )` | FORTH-83, ANS CORE | No (#119) | Leaves the innermost loop right away |
-| `LOOP` | `( -- )` | FORTH-83, ANS CORE | No (#119) | Inside a definition: adds one to the index, and repeats until it reaches the limit (immediate) |
+| `I` | `( -- n )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Pushes the index of the innermost loop |
+| `IF` | `( flag -- )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: runs the code up to `ELSE` or `THEN` only if `flag` is true (immediate) |
+| `J` | `( -- n )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Pushes the index of the next outer loop |
+| `LEAVE` | `( -- )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Leaves the innermost loop right away |
+| `LOOP` | `( -- )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: adds one to the index, and repeats until it reaches the limit (immediate) |
 | `OF` | `( x1 x2 -- \| x1 )` | ANS CORE EXT | No | Inside a definition: runs the clause up to `ENDOF` if `x1` equals `x2` (immediate) |
-| `REPEAT` | `( -- )` | FORTH-83, ANS CORE | No (#119) | Inside a definition: goes back to `BEGIN`, and ends the loop of `WHILE` (immediate) |
-| `THEN` | `( -- )` | FORTH-83, ANS CORE | No (#119) | Inside a definition: ends an `IF` (immediate) |
-| `UNLOOP` | `( -- )` | ANS CORE | No (#119) | Drops the loop parameters, so that `EXIT` can leave from inside a loop |
-| `UNTIL` | `( flag -- )` | FORTH-83, ANS CORE | No (#119) | Inside a definition: goes back to `BEGIN` while `flag` is false (immediate) |
-| `WHILE` | `( flag -- )` | FORTH-83, ANS CORE | No (#119) | Inside a definition: leaves a `BEGIN` loop when `flag` is false (immediate) |
+| `REPEAT` | `( -- )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: goes back to `BEGIN`, and ends the loop of `WHILE` (immediate) |
+| `THEN` | `( -- )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: ends an `IF` (immediate) |
+| `UNLOOP` | `( -- )` | ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Drops the loop parameters, so that `EXIT` can leave from inside a loop |
+| `UNTIL` | `( flag -- )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: goes back to `BEGIN` while `flag` is false (immediate) |
+| `WHILE` | `( flag -- )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: leaves a `BEGIN` loop when `flag` is false (immediate) |
 
 ## Strings and output
 
 | Word | Stack effect | Standard | Implemented | Description |
 |------|--------------|----------|-------------|-------------|
 | `-TRAILING` | `( c-addr u1 -- c-addr u2 )` | FORTH-83 | No | Shortens a string to drop its trailing spaces |
-| `."` | `( -- )` | FORTH-83, ANS CORE | No (#120) | Inside a definition: parses text up to `"`, and prints it when the definition runs (immediate) |
+| `."` | `( -- )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Inside a definition: parses text up to `"`, and prints it when the definition runs (immediate) |
 | `.(` | `( -- )` | FORTH-83, ANS CORE EXT | No | Parses text up to `)`, and prints it right away (immediate) |
 | `BL` | `( -- char )` | ANS CORE | Yes | Pushes the value of the space character |
 | `C"` | `( -- c-addr )` | ANS CORE EXT | No | Inside a definition: parses text up to `"`, and pushes it as a counted string (immediate) |
-| `CHAR` | `( -- char )` | ANS CORE | No (#120) | Parses a name and pushes its first character |
-| `COUNT` | `( c-addr1 -- c-addr2 u )` | FORTH-83, ANS CORE | No (#120) | Gives the bytes and the length of a counted string |
-| `CR` | `( -- )` | FORTH-83, ANS CORE | No (#120) | Starts a new line |
-| `EMIT` | `( char -- )` | FORTH-83, ANS CORE | No (#120) | Prints one character |
-| `S"` | `( -- c-addr u )` | ANS CORE | No (#120) | Parses text up to `"`, and pushes it as a string |
-| `SPACE` | `( -- )` | FORTH-83, ANS CORE | No (#120) | Prints a space |
-| `SPACES` | `( n -- )` | FORTH-83, ANS CORE | No (#120) | Prints `n` spaces |
-| `TYPE` | `( c-addr u -- )` | FORTH-83, ANS CORE | No (#120) | Prints `u` bytes |
-| `[CHAR]` | `( -- )` | ANS CORE | No (#120) | Inside a definition: parses a name, and compiles its first character as a literal (immediate) |
+| `CHAR` | `( -- char )` | ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Parses a name and pushes its first character |
+| `COUNT` | `( c-addr1 -- c-addr2 u )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Gives the bytes and the length of a counted string |
+| `CR` | `( -- )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Starts a new line |
+| `EMIT` | `( char -- )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Prints one character |
+| `S"` | `( -- c-addr u )` | ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Parses text up to `"`, and pushes it as a string |
+| `SPACE` | `( -- )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Prints a space |
+| `SPACES` | `( n -- )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Prints `n` spaces |
+| `TYPE` | `( c-addr u -- )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Prints `u` bytes |
+| `[CHAR]` | `( -- )` | ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Inside a definition: parses a name, and compiles its first character as a literal (immediate) |
 
 ## Numbers
 
 | Word | Stack effect | Standard | Implemented | Description |
 |------|--------------|----------|-------------|-------------|
-| `#` | `( ud1 -- ud2 )` | FORTH-83, ANS CORE | No (#121) | Adds the next digit of `ud1` to the text |
-| `#>` | `( xd -- c-addr u )` | FORTH-83, ANS CORE | No (#121) | Ends the conversion, and gives the text |
-| `#S` | `( ud1 -- ud2 )` | FORTH-83, ANS CORE | No (#121) | Adds the remaining digits to the text, leaving zero |
+| `#` | `( ud1 -- ud2 )` | FORTH-83, ANS CORE | No ([#121](https://github.com/michahoiting/rust-forth-vm/issues/121)) | Adds the next digit of `ud1` to the text |
+| `#>` | `( xd -- c-addr u )` | FORTH-83, ANS CORE | No ([#121](https://github.com/michahoiting/rust-forth-vm/issues/121)) | Ends the conversion, and gives the text |
+| `#S` | `( ud1 -- ud2 )` | FORTH-83, ANS CORE | No ([#121](https://github.com/michahoiting/rust-forth-vm/issues/121)) | Adds the remaining digits to the text, leaving zero |
 | `.` | `( n -- )` | FORTH-83, ANS CORE | Yes | Prints a Cell as a signed number |
 | `.R` | `( n1 n2 -- )` | ANS CORE EXT | No | Prints `n1` as a signed number, right-aligned in `n2` characters |
-| `<#` | `( -- )` | FORTH-83, ANS CORE | No (#121) | Starts converting a number to text |
-| `>NUMBER` | `( ud1 c-addr1 u1 -- ud2 c-addr2 u2 )` | ANS CORE | No (#121) | Adds the digits of a string to `ud1`, up to the first character that isn't a digit |
-| `BASE` | `( -- a-addr )` | FORTH-83, ANS CORE | No (#121) | Pushes the address of the number base |
+| `<#` | `( -- )` | FORTH-83, ANS CORE | No ([#121](https://github.com/michahoiting/rust-forth-vm/issues/121)) | Starts converting a number to text |
+| `>NUMBER` | `( ud1 c-addr1 u1 -- ud2 c-addr2 u2 )` | ANS CORE | No ([#121](https://github.com/michahoiting/rust-forth-vm/issues/121)) | Adds the digits of a string to `ud1`, up to the first character that isn't a digit |
+| `BASE` | `( -- a-addr )` | FORTH-83, ANS CORE | No ([#121](https://github.com/michahoiting/rust-forth-vm/issues/121)) | Pushes the address of the number base |
 | `CONVERT` | `( ud1 c-addr1 -- ud2 c-addr2 )` | FORTH-83, ANS CORE EXT | No | Like `>NUMBER`, for the string after `c-addr1`, which ends at the first character that isn't a digit |
-| `DECIMAL` | `( -- )` | FORTH-83, ANS CORE | No (#121) | Sets the number base to 10 |
-| `HEX` | `( -- )` | ANS CORE EXT | No (#121) | Sets the number base to 16 |
-| `HOLD` | `( char -- )` | FORTH-83, ANS CORE | No (#121) | Adds a character to the text |
-| `SIGN` | `( n -- )` | FORTH-83, ANS CORE | No (#121) | Adds a minus sign to the text if `n` is negative |
-| `U.` | `( u -- )` | FORTH-83, ANS CORE | No (#121) | Prints a Cell as an unsigned number |
+| `DECIMAL` | `( -- )` | FORTH-83, ANS CORE | No ([#121](https://github.com/michahoiting/rust-forth-vm/issues/121)) | Sets the number base to 10 |
+| `HEX` | `( -- )` | ANS CORE EXT | No ([#121](https://github.com/michahoiting/rust-forth-vm/issues/121)) | Sets the number base to 16 |
+| `HOLD` | `( char -- )` | FORTH-83, ANS CORE | No ([#121](https://github.com/michahoiting/rust-forth-vm/issues/121)) | Adds a character to the text |
+| `SIGN` | `( n -- )` | FORTH-83, ANS CORE | No ([#121](https://github.com/michahoiting/rust-forth-vm/issues/121)) | Adds a minus sign to the text if `n` is negative |
+| `U.` | `( u -- )` | FORTH-83, ANS CORE | No ([#121](https://github.com/michahoiting/rust-forth-vm/issues/121)) | Prints a Cell as an unsigned number |
 | `U.R` | `( u n -- )` | ANS CORE EXT | No | Prints `u` as an unsigned number, right-aligned in `n` characters |
 
 ## Input and the interpreter
@@ -258,23 +258,23 @@ See the [limitations](../README.md#limitations) in the README for what the VM do
 |------|--------------|----------|-------------|-------------|
 | `#TIB` | `( -- a-addr )` | FORTH-83, ANS CORE EXT | No | Pushes the address of the length of the terminal input buffer |
 | `(` | `( -- )` | FORTH-83, ANS CORE | Yes | Skips the input up to and including the next `)` (immediate) |
-| `>IN` | `( -- a-addr )` | FORTH-83, ANS CORE | No (#122) | Pushes the address of the offset into the input |
-| `ACCEPT` | `( c-addr +n1 -- +n2 )` | ANS CORE | No (#122) | Reads a line of up to `+n1` characters, and gives its length |
-| `ENVIRONMENT?` | `( c-addr u -- false \| i*x true )` | ANS CORE | No (#122) | Answers a question about the system, given as a string |
-| `EVALUATE` | `( i*x c-addr u -- j*x )` | ANS CORE | No (#122) | Interprets a string |
+| `>IN` | `( -- a-addr )` | FORTH-83, ANS CORE | No ([#122](https://github.com/michahoiting/rust-forth-vm/issues/122)) | Pushes the address of the offset into the input |
+| `ACCEPT` | `( c-addr +n1 -- +n2 )` | ANS CORE | No ([#122](https://github.com/michahoiting/rust-forth-vm/issues/122)) | Reads a line of up to `+n1` characters, and gives its length |
+| `ENVIRONMENT?` | `( c-addr u -- false \| i*x true )` | ANS CORE | No ([#122](https://github.com/michahoiting/rust-forth-vm/issues/122)) | Answers a question about the system, given as a string |
+| `EVALUATE` | `( i*x c-addr u -- j*x )` | ANS CORE | No ([#122](https://github.com/michahoiting/rust-forth-vm/issues/122)) | Interprets a string |
 | `EXPECT` | `( c-addr +n -- )` | FORTH-83, ANS CORE EXT | No | Reads a line of up to `+n` characters, and stores its length in `SPAN` |
-| `FIND` | `( c-addr -- c-addr 0 \| xt 1 \| xt -1 )` | FORTH-83, ANS CORE | No (#122) | Looks up a word by a counted string, and tells whether it's immediate |
-| `KEY` | `( -- char )` | FORTH-83, ANS CORE | No (#122) | Reads one character |
-| `PARSE` | `( char -- c-addr u )` | ANS CORE EXT | No (#122) | Parses text up to `char`, and gives it as a string |
+| `FIND` | `( c-addr -- c-addr 0 \| xt 1 \| xt -1 )` | FORTH-83, ANS CORE | No ([#122](https://github.com/michahoiting/rust-forth-vm/issues/122)) | Looks up a word by a counted string, and tells whether it's immediate |
+| `KEY` | `( -- char )` | FORTH-83, ANS CORE | No ([#122](https://github.com/michahoiting/rust-forth-vm/issues/122)) | Reads one character |
+| `PARSE` | `( char -- c-addr u )` | ANS CORE EXT | No ([#122](https://github.com/michahoiting/rust-forth-vm/issues/122)) | Parses text up to `char`, and gives it as a string |
 | `QUERY` | `( -- )` | ANS CORE EXT | No | Reads a line into the terminal input buffer |
 | `REFILL` | `( -- flag )` | ANS CORE EXT | No | Reads the next line of input, and tells whether there was one |
 | `RESTORE-INPUT` | `( xn ... x1 n -- flag )` | ANS CORE EXT | No | Restores the state of the input, and tells whether that failed |
 | `SAVE-INPUT` | `( -- xn ... x1 n )` | ANS CORE EXT | No | Saves the state of the input |
-| `SOURCE` | `( -- c-addr u )` | ANS CORE | No (#122) | Gives the current input |
+| `SOURCE` | `( -- c-addr u )` | ANS CORE | No ([#122](https://github.com/michahoiting/rust-forth-vm/issues/122)) | Gives the current input |
 | `SOURCE-ID` | `( -- 0 \| -1 )` | ANS CORE EXT | No | Gives 0 for the user input device, or -1 for a string from `EVALUATE` |
 | `SPAN` | `( -- a-addr )` | FORTH-83, ANS CORE EXT | No | Pushes the address of the length that `EXPECT` read |
 | `TIB` | `( -- c-addr )` | FORTH-83, ANS CORE EXT | No | Pushes the address of the terminal input buffer |
-| `WORD` | `( char -- c-addr )` | FORTH-83, ANS CORE | No (#122) | Parses text up to `char`, and gives it as a counted string |
+| `WORD` | `( char -- c-addr )` | FORTH-83, ANS CORE | No ([#122](https://github.com/michahoiting/rust-forth-vm/issues/122)) | Parses text up to `char`, and gives it as a counted string |
 | `\` | `( -- )` | ANS CORE EXT | Yes | Skips the rest of the line (immediate) |
 
 ## Program and system
@@ -283,7 +283,7 @@ See the [limitations](../README.md#limitations) in the README for what the VM do
 |------|--------------|----------|-------------|-------------|
 | `(BYE)` | `( n -- )` | rust-forth-vm | Yes | Stops the program with exit code `n`'s low byte |
 | `ABORT` | `( i*x -- )` | FORTH-83, ANS CORE | Yes | Clears the data stack, then does the same as `QUIT` |
-| `ABORT"` | `( i*x flag -- )` | FORTH-83, ANS CORE | No (#120) | Inside a definition: parses text up to `"`. When the definition runs with a true flag, it prints the text and does `ABORT` (immediate) |
+| `ABORT"` | `( i*x flag -- )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Inside a definition: parses text up to `"`. When the definition runs with a true flag, it prints the text and does `ABORT` (immediate) |
 | `BYE` | `( -- )` | ANS TOOLS EXT | Yes | Stops the program with exit code 0 |
 | `COPYRIGHT` | `( -- )` | rust-forth-vm | Yes | Prints the copyright notice |
 | `FORTH-83` | `( -- )` | FORTH-83 | No | Exists to show that the system follows the FORTH-83 Standard |

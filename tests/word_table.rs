@@ -55,6 +55,53 @@ fn word_of(row: &[String]) -> &str {
         .expect("the word must be code")
 }
 
+/// The address of the project's issues, which a planned word links to.
+const ISSUES: &str = "https://github.com/michahoiting/rust-forth-vm/issues/";
+
+/// Returns whether `implemented` is `Yes`, `No`, or `No` with a link to the issue that plans
+/// the word, such as `No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119))`.
+fn is_valid_implemented(implemented: &str) -> bool {
+    if implemented == "Yes" || implemented == "No" {
+        return true;
+    }
+    let Some(link) = implemented
+        .strip_prefix("No ([#")
+        .and_then(|rest| rest.strip_suffix("))"))
+    else {
+        return false;
+    };
+    let Some((number, url)) = link.split_once("](") else {
+        return false;
+    };
+    !number.is_empty()
+        && number.bytes().all(|byte| byte.is_ascii_digit())
+        && url == format!("{}{}", ISSUES, number)
+}
+
+#[test]
+fn is_valid_implemented_accepts_yes_no_and_a_planned_issue() {
+    assert!(is_valid_implemented("Yes"));
+    assert!(is_valid_implemented("No"));
+    assert!(is_valid_implemented(
+        "No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119))"
+    ));
+}
+
+#[test]
+fn is_valid_implemented_rejects_anything_else() {
+    for value in [
+        "",
+        "Maybe",
+        "No (#119)",
+        "No ([#](https://github.com/michahoiting/rust-forth-vm/issues/))",
+        "No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/120))",
+        "No ([#119](https://example.com/issues/119))",
+        "No ([#11x](https://github.com/michahoiting/rust-forth-vm/issues/11x))",
+    ] {
+        assert!(!is_valid_implemented(value), "accepted: {:?}", value);
+    }
+}
+
 #[test]
 fn cells_keeps_an_escaped_bar_in_its_cell() {
     assert_eq!(
@@ -84,10 +131,9 @@ fn every_row_is_complete() {
         assert!(!row[1].is_empty(), "no stack effect in row: {:?}", row);
         assert!(!row[2].is_empty(), "no standard in row: {:?}", row);
         assert!(!row[4].is_empty(), "no description in row: {:?}", row);
-        let implemented = &row[3];
         assert!(
-            implemented == "Yes" || implemented == "No" || implemented.starts_with("No (#"),
-            "Implemented must be Yes, No or No (#issue) in row: {:?}",
+            is_valid_implemented(&row[3]),
+            "Implemented must be Yes, No, or No with a link to an issue in row: {:?}",
             row
         );
     }
