@@ -12,6 +12,7 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 
 ### Added
 
+- A demo section that prints the first `n` primes with `BEGIN ... UNTIL`.
 - The loop words `BEGIN` and `UNTIL`: the body of a loop runs at least once, and `UNTIL` goes back
   to `BEGIN` while its flag is false. They use the control flow stack of `IF`, `ELSE` and `THEN`,
   and a mismatch gives `ForthError::UnbalancedControlFlow`. Part of the control flow words of #119.

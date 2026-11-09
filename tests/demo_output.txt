@@ -21,9 +21,10 @@ Demo sections:
   16. Compiling Calls from an Immediate Word
   17. Conditionals with IF, ELSE and THEN
   18. Loops with BEGIN and UNTIL
-  19. Program Information
-  20. Returning to the Interpreter with QUIT and ABORT
-  21. Error Handling
+  19. Generating Primes
+  20. Program Information
+  21. Returning to the Interpreter with QUIT and ABORT
+  22. Error Handling
 Enter a section number, Q to quit [0]: --- TEST RUN 1: Evaluating Text Operations ---
 Input:
     40 2 +            \ leaves 42 on the stack
@@ -327,7 +328,27 @@ Input:
 Output: 3 2 1 0 2 4 6 8 ok
 -------------------------------------
 
---- TEST RUN 19: Program Information ---
+--- TEST RUN 19: Generating Primes ---
+Input:
+    : PRIME? ( n -- flag )     \ trial division by 2, 3, 4 ... up to the square root of n
+      2 BEGIN
+        2DUP DUP * < IF 2DROP TRUE TRUE ELSE
+          2DUP MOD 0= IF 2DROP FALSE TRUE ELSE 1+ FALSE THEN
+        THEN
+      UNTIL ;
+    : PRIMES ( n -- )          \ prints the first n primes
+      DUP 0> IF
+        2 BEGIN                \ stack: primes still to print, candidate
+          DUP PRIME? IF DUP . SWAP 1- SWAP THEN
+          1+ OVER 0=
+        UNTIL 2DROP
+      ELSE DROP THEN ;
+    15 PRIMES          \ prints the first 15 primes
+    0 PRIMES           \ prints nothing
+Output: 2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 ok
+-------------------------------------
+
+--- TEST RUN 20: Program Information ---
 Input:
     HELP                          \ prints how to leave the prompt
     COPYRIGHT                     \ prints the copyright notice
@@ -358,7 +379,7 @@ SOFTWARE.
 ok
 -------------------------------------
 
---- TEST RUN 20: Returning to the Interpreter with QUIT and ABORT ---
+--- TEST RUN 21: Returning to the Interpreter with QUIT and ABORT ---
 Input:
     7 1 . QUIT 2 .                  \ prints 1, and leaves 7 on the stack
 Output: 1 
@@ -385,7 +406,7 @@ Input:
 Output: 0 ok
 -------------------------------------
 
---- TEST RUN 21: Error Handling ---
+--- TEST RUN 22: Error Handling ---
 Input:
     : BROKEN 1 NO-SUCH-WORD ;
 Output: Forth Error: Word or numeric literal 'NO-SUCH-WORD' not recognized.
@@ -444,7 +465,8 @@ Demo sections:
   16. Compiling Calls from an Immediate Word
   17. Conditionals with IF, ELSE and THEN
   18. Loops with BEGIN and UNTIL
-  19. Program Information
-  20. Returning to the Interpreter with QUIT and ABORT
-  21. Error Handling
+  19. Generating Primes
+  20. Program Information
+  21. Returning to the Interpreter with QUIT and ABORT
+  22. Error Handling
 Enter a section number, Q to quit [0]: 
