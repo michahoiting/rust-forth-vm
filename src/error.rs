@@ -66,6 +66,10 @@ pub enum ForthError {
     /// A word, named here, can't run while a definition is open, because it would leave a
     /// thread with something other than whole Cells in it.
     DefinitionOpen(&'static str),
+    /// A word that ends or continues a control structure, named here, found none that it fits:
+    /// `ELSE` needs an open `IF`, `THEN` needs an open `IF` or `ELSE`, and `;` needs all of them
+    /// closed.
+    UnbalancedControlFlow(&'static str),
     /// `ALLOT` was asked to give back this many bytes, held as a negative number, which is
     /// more than the data of the newest word, or that word wasn't made by `CREATE`.
     AllotBelowData(isize),
@@ -132,6 +136,9 @@ impl fmt::Display for ForthError {
             }
             ForthError::DefinitionOpen(word) => {
                 write!(f, "{} can't be used while a definition is open.", word)
+            }
+            ForthError::UnbalancedControlFlow(word) => {
+                write!(f, "{} does not match the open control structure.", word)
             }
             ForthError::AllotBelowData(bytes) => {
                 write!(

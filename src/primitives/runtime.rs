@@ -84,6 +84,23 @@ pub(super) unsafe fn lit(vm: &mut Vm) {
     vm.ip = vm.ip.add(1); // Skip the inline data cell
 }
 
+/// `BRANCH ( -- )`: Jumps to the address in the inline operand of the thread. `ELSE` compiles it.
+pub(super) unsafe fn branch(vm: &mut Vm) {
+    vm.ip = *vm.ip as *const Cell;
+}
+
+/// `0BRANCH ( flag -- )`: Pops a flag, and jumps like `BRANCH` if it is zero. Otherwise it skips
+/// the inline operand. `IF` compiles it.
+pub(super) unsafe fn zero_branch(vm: &mut Vm) {
+    if let Some(flag) = vm.pop() {
+        if flag == 0 {
+            branch(vm);
+        } else {
+            vm.ip = vm.ip.add(1);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::io;
@@ -97,6 +114,56 @@ mod tests {
 
     unsafe fn xt_of(vm: &Vm, name: &str) -> Cell {
         cfa_of(vm.dictionary.find_word(name).unwrap()) as Cell
+    }
+
+    #[test]
+    fn branch_jumps_to_the_operand() {
+        unsafe {
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            let mut thread: [Cell; 4] = [0; 4];
+            thread[0] = thread.as_ptr().add(3) as Cell;
+
+            vm.ip = thread.as_ptr();
+            branch(&mut vm);
+            assert_eq!(vm.ip, thread.as_ptr().add(3));
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+        }
+    }
+
+    #[test]
+    fn zero_branch_jumps_only_on_zero() {
+        unsafe {
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            let mut thread: [Cell; 4] = [0; 4];
+            thread[0] = thread.as_ptr().add(3) as Cell;
+            let start = thread.as_ptr();
+
+            vm.ip = start;
+            vm.data_stack.extend_from_slice(&[9, 0]);
+            zero_branch(&mut vm);
+            assert_eq!(vm.ip, start.add(3));
+            assert_eq!(vm.data_stack, [9]);
+
+            vm.ip = start;
+            vm.data_stack.push(5);
+            zero_branch(&mut vm);
+            assert_eq!(vm.ip, start.add(1));
+            assert_eq!(vm.data_stack, [9]);
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+        }
+    }
+
+    #[test]
+    fn zero_branch_needs_a_cell_and_stays_put() {
+        unsafe {
+            let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+            let thread: [Cell; 1] = [0];
+            vm.ip = thread.as_ptr();
+
+            zero_branch(&mut vm);
+            assert!(matches!(vm.error, Some(ForthError::DataStackUnderflow)));
+            assert_eq!(vm.ip, thread.as_ptr());
+        }
     }
 
     #[test]

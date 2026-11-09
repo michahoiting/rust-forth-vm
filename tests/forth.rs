@@ -754,6 +754,10 @@ fn errors_have_stable_messages() {
             "C, can't be used while a definition is open.",
         ),
         (
+            ForthError::UnbalancedControlFlow("THEN"),
+            "THEN does not match the open control structure.",
+        ),
+        (
             ForthError::AllotBelowData(-3),
             "ALLOT of -3 goes below the data of the newest word.",
         ),
@@ -2805,4 +2809,134 @@ fn quit_loop_ends_at_the_end_of_the_input() {
     let (code, _, labels, _) = run_loop(&[]);
     assert_eq!(code, None);
     assert!(labels.is_empty());
+}
+
+#[test]
+fn if_then_runs_its_code_only_for_a_true_flag() {
+    let define = ": T IF 42 . THEN 7 . ;";
+    assert_eq!(output_of(&[define, "1 T"]), "42 7 ");
+    assert_eq!(output_of(&[define, "-1 T"]), "42 7 ");
+    assert_eq!(output_of(&[define, "0 T"]), "7 ");
+}
+
+#[test]
+fn if_else_then_runs_one_of_two_parts() {
+    let define = ": SIGN DUP 0< IF DROP -1 ELSE 0 > IF 1 ELSE 0 THEN THEN . ;";
+    assert_eq!(output_of(&[define, "-9 SIGN 0 SIGN 9 SIGN"]), "-1 0 1 ");
+}
+
+#[test]
+fn if_else_then_works_with_empty_parts() {
+    assert_eq!(output_of(&[": T IF THEN 1 . ; 0 T 1 T"]), "1 1 ");
+    assert_eq!(output_of(&[": T IF ELSE 2 . THEN ; 1 T 0 T"]), "2 ");
+    assert_eq!(output_of(&[": T IF 3 . ELSE THEN ; 1 T 0 T"]), "3 ");
+}
+
+#[test]
+fn if_consumes_the_flag_and_leaves_the_rest_of_the_stack() {
+    assert_eq!(output_of(&[": T IF ELSE THEN ; 8 1 T 9 0 T DEPTH ."]), "2 ");
+}
+
+#[test]
+fn if_works_in_a_word_called_from_a_conditional() {
+    let define = ": A IF 1 ELSE 2 THEN ; : B IF 0 A ELSE 1 A THEN . ;";
+    assert_eq!(output_of(&[define, "1 B 0 B"]), "2 1 ");
+}
+
+#[test]
+fn conditionals_can_span_lines() {
+    assert_eq!(
+        output_of(&[": T", "IF 5 .", "ELSE 6 .", "THEN ;", "1 T 0 T"]),
+        "5 6 "
+    );
+}
+
+#[test]
+fn control_flow_words_need_a_definition() {
+    unsafe {
+        let mut vm = test_vm(io::sink());
+        assert_error!(&mut vm, "IF", ForthError::NotCompiling("IF"));
+        assert_error!(&mut vm, "ELSE", ForthError::NotCompiling("ELSE"));
+        assert_error!(&mut vm, "THEN", ForthError::NotCompiling("THEN"));
+    }
+}
+
+#[test]
+fn mismatched_control_flow_is_an_error_and_rolls_back_the_definition() {
+    unsafe {
+        let mut vm = test_vm(io::sink());
+        let before = vm.word_names();
+        assert_error!(
+            &mut vm,
+            ": X THEN ;",
+            ForthError::UnbalancedControlFlow("THEN")
+        );
+        assert_error!(
+            &mut vm,
+            ": X ELSE ;",
+            ForthError::UnbalancedControlFlow("ELSE")
+        );
+        assert_error!(
+            &mut vm,
+            ": X IF ELSE ELSE THEN ;",
+            ForthError::UnbalancedControlFlow("ELSE")
+        );
+        assert_error!(
+            &mut vm,
+            ": X IF ELSE THEN THEN ;",
+            ForthError::UnbalancedControlFlow("THEN")
+        );
+        assert_error!(&mut vm, ": X IF ;", ForthError::UnbalancedControlFlow(";"));
+        assert_error!(
+            &mut vm,
+            ": X IF ELSE ;",
+            ForthError::UnbalancedControlFlow(";")
+        );
+        assert!(!vm.is_compiling());
+        assert_eq!(vm.word_names(), before);
+
+        // An aborted definition leaves nothing open for the next one.
+        outer_interpreter(&mut vm, ": X 1 IF 2 THEN ;").unwrap();
+    }
+}
+
+#[test]
+fn a_forged_branch_target_cannot_reach_a_thread() {
+    unsafe {
+        let mut vm = test_vm(io::sink());
+        // THEN takes its target from the compiler, never from the data stack.
+        assert_error!(
+            &mut vm,
+            ": X 5 THEN ;",
+            ForthError::UnbalancedControlFlow("THEN")
+        );
+    }
+}
+
+#[test]
+fn the_branch_words_cannot_be_found_or_run() {
+    unsafe {
+        let mut vm = test_vm(io::sink());
+        for name in ["BRANCH", "0BRANCH"] {
+            assert_error!(&mut vm, name, ForthError::UnknownWord(word) if word == name);
+            assert_error!(
+                &mut vm,
+                &format!("' {}", name),
+                ForthError::UnknownWord(word) if word == name
+            );
+            assert!(!vm.word_names().iter().any(|word| word == name));
+        }
+    }
+}
+
+#[test]
+fn an_unfinished_conditional_can_be_continued_in_the_next_call() {
+    unsafe {
+        let output = Capture::default();
+        let mut vm = test_vm(output.clone());
+        outer_interpreter(&mut vm, ": T IF 1 .").unwrap();
+        assert!(vm.is_compiling());
+        outer_interpreter(&mut vm, "ELSE 2 . THEN ; 1 T 0 T").unwrap();
+        assert_eq!(output.text(), "1 2 ");
+    }
 }

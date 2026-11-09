@@ -51,7 +51,7 @@ const MORE_INFORMATION: &str = r#"Type "HELP", "COPYRIGHT" or "LICENSE" for more
 
 /// The demo sections, each with its title and one block of Forth source. Each section runs in a
 /// new VM, so it must define everything it uses.
-const SECTIONS: [(&str, &str); 17] = [
+const SECTIONS: [(&str, &str); 18] = [
     (
         "Evaluating Text Operations",
         r"
@@ -332,6 +332,18 @@ CREATE SCRATCH 16 ALLOT
 
 \ , can't write into a definition, so an immediate word has to use COMPILE,
 CREATE TABLE 5 , TABLE @ .    \ prints 5: , still works when no definition is open
+",
+    ),
+    (
+        "Conditionals with IF, ELSE and THEN",
+        r"
+: SIGN DUP 0< IF DROP -1 ELSE 0 > IF 1 ELSE 0 THEN THEN ;
+-7 SIGN .          \ prints -1
+0 SIGN .           \ prints 0
+7 SIGN .           \ prints 1
+: ABS-ISH DUP 0< IF NEGATE THEN ;
+-42 ABS-ISH .      \ prints 42: IF without ELSE
+42 ABS-ISH .       \ prints 42
 ",
     ),
     (

@@ -204,6 +204,27 @@ pub(super) unsafe fn semicolon(vm: &mut Vm) {
     vm.check(result);
 }
 
+/// `IF ( flag -- )`: Starts a conditional in the open definition: the code up to `ELSE` or
+/// `THEN` runs only if `flag` is true. This word is immediate.
+pub(super) unsafe fn if_(vm: &mut Vm) {
+    let result = vm.compiler.begin_if(&mut vm.dictionary);
+    vm.check(result);
+}
+
+/// `ELSE ( -- )`: Ends the true part of `IF`, and starts the code that runs when the flag was
+/// false. This word is immediate.
+pub(super) unsafe fn else_(vm: &mut Vm) {
+    let result = vm.compiler.begin_else(&mut vm.dictionary);
+    vm.check(result);
+}
+
+/// `THEN ( -- )`: Ends `IF`, or `IF` and `ELSE`: the code behind it runs in both cases. This
+/// word is immediate.
+pub(super) unsafe fn then(vm: &mut Vm) {
+    let result = vm.compiler.end_if(&mut vm.dictionary);
+    vm.check(result);
+}
+
 /// `IMMEDIATE ( -- )`: Marks the most recently created word as immediate, so that it runs
 /// during compilation instead of being compiled.
 pub(super) unsafe fn immediate(vm: &mut Vm) {
