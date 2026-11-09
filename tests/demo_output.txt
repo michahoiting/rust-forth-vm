@@ -19,9 +19,10 @@ Demo sections:
   14. Reaching a Word's Parameter Field
   15. Bytes and Reserved Memory
   16. Compiling Calls from an Immediate Word
-  17. Program Information
-  18. Returning to the Interpreter with QUIT and ABORT
-  19. Error Handling
+  17. Conditionals with IF, ELSE and THEN
+  18. Program Information
+  19. Returning to the Interpreter with QUIT and ABORT
+  20. Error Handling
 Enter a section number, Q to quit [0]: --- TEST RUN 1: Evaluating Text Operations ---
 Input:
     40 2 +            \ leaves 42 on the stack
@@ -304,7 +305,19 @@ Input:
 Output: 7 9 5 ok
 -------------------------------------
 
---- TEST RUN 17: Program Information ---
+--- TEST RUN 17: Conditionals with IF, ELSE and THEN ---
+Input:
+    : SIGN DUP 0< IF DROP -1 ELSE 0 > IF 1 ELSE 0 THEN THEN ;
+    -7 SIGN .          \ prints -1
+    0 SIGN .           \ prints 0
+    7 SIGN .           \ prints 1
+    : ABS-ISH DUP 0< IF NEGATE THEN ;
+    -42 ABS-ISH .      \ prints 42: IF without ELSE
+    42 ABS-ISH .       \ prints 42
+Output: -1 0 1 42 42 ok
+-------------------------------------
+
+--- TEST RUN 18: Program Information ---
 Input:
     HELP                          \ prints how to leave the prompt
     COPYRIGHT                     \ prints the copyright notice
@@ -335,7 +348,7 @@ SOFTWARE.
 ok
 -------------------------------------
 
---- TEST RUN 18: Returning to the Interpreter with QUIT and ABORT ---
+--- TEST RUN 19: Returning to the Interpreter with QUIT and ABORT ---
 Input:
     7 1 . QUIT 2 .                  \ prints 1, and leaves 7 on the stack
 Output: 1 
@@ -362,7 +375,7 @@ Input:
 Output: 0 ok
 -------------------------------------
 
---- TEST RUN 19: Error Handling ---
+--- TEST RUN 20: Error Handling ---
 Input:
     : BROKEN 1 NO-SUCH-WORD ;
 Output: Forth Error: Word or numeric literal 'NO-SUCH-WORD' not recognized.
@@ -419,7 +432,8 @@ Demo sections:
   14. Reaching a Word's Parameter Field
   15. Bytes and Reserved Memory
   16. Compiling Calls from an Immediate Word
-  17. Program Information
-  18. Returning to the Interpreter with QUIT and ABORT
-  19. Error Handling
+  17. Conditionals with IF, ELSE and THEN
+  18. Program Information
+  19. Returning to the Interpreter with QUIT and ABORT
+  20. Error Handling
 Enter a section number, Q to quit [0]: 

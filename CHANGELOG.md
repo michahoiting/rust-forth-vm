@@ -13,6 +13,10 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 ### Added
 
 - The comparison and logic words `0<>`, `0>`, `<>`, `U>`, `WITHIN`, `NOT`, `TRUE` and `FALSE`.
+- The control flow words `IF`, `ELSE` and `THEN`, which compile the hidden branch words
+  `BRANCH` and `0BRANCH`. The compiler keeps the open structures on its own control flow stack,
+  so a program can't forge a branch target, and a mismatch gives
+  `ForthError::UnbalancedControlFlow`. See #154, which is part of #119.
 - The stack words `NIP` and `TUCK`.
 - `docs/words.md`, which replaces the word table in the README. It lists every word of the
   FORTH-83 Required Word Set and the ANS Forth CORE and CORE EXT word sets, with the standard of

@@ -186,6 +186,12 @@ pub(crate) unsafe fn install(vm: &mut Vm) -> Result<(), ForthError> {
     vm.dictionary
         .add_primitive_word("IMMEDIATE", code_cell(compiler::immediate), 0)?;
     vm.dictionary
+        .add_primitive_word("IF", code_cell(compiler::if_), F_IMMEDIATE)?;
+    vm.dictionary
+        .add_primitive_word("ELSE", code_cell(compiler::else_), F_IMMEDIATE)?;
+    vm.dictionary
+        .add_primitive_word("THEN", code_cell(compiler::then), F_IMMEDIATE)?;
+    vm.dictionary
         .add_primitive_word("(", code_cell(parsing::paren_comment), F_IMMEDIATE)?;
     vm.dictionary
         .add_primitive_word("\\", code_cell(parsing::line_comment), F_IMMEDIATE)?;
@@ -213,6 +219,18 @@ pub(crate) unsafe fn install(vm: &mut Vm) -> Result<(), ForthError> {
         code_cell(runtime::lit),
         F_HIDDEN | F_COMPILE_ONLY,
     )?;
-    vm.compiler.link_primitives(lit_cfa, exit_cfa);
+    // The branches read an operand from the thread too.
+    let branch_cfa = vm.dictionary.add_primitive_word(
+        "BRANCH",
+        code_cell(runtime::branch),
+        F_HIDDEN | F_COMPILE_ONLY,
+    )?;
+    let zero_branch_cfa = vm.dictionary.add_primitive_word(
+        "0BRANCH",
+        code_cell(runtime::zero_branch),
+        F_HIDDEN | F_COMPILE_ONLY,
+    )?;
+    vm.compiler
+        .link_primitives(lit_cfa, exit_cfa, branch_cfa, zero_branch_cfa);
     Ok(())
 }
