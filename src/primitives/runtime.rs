@@ -57,10 +57,15 @@ pub(super) fn execute(vm: &mut Vm) {
 /// `LIT ( -- x )`: Fetches the inline literal value from the thread, pushes it, and skips the
 /// data cell.
 pub(super) fn lit(vm: &mut Vm) {
-    let result = vm.dictionary.fetch(vm.ip);
-    if let Some(literal_value) = vm.check(result) {
-        vm.push(literal_value);
-        vm.ip += mem::size_of::<Cell>(); // Skip the inline data cell
+    match vm.dictionary.fetch_thread(vm.ip) {
+        Some(literal_value) => {
+            vm.push(literal_value);
+            vm.ip += mem::size_of::<Cell>(); // Skip the inline data cell
+        }
+        None => {
+            let result = vm.dictionary.fetch(vm.ip);
+            vm.check(result);
+        }
     }
 }
 

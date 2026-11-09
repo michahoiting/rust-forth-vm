@@ -112,9 +112,7 @@ pub struct Vm {
     /// The most Cells that the return stack can hold.
     pub(crate) return_stack_limit: usize,
     /// Word storage, HERE, the head of the word list and the XT table.
-    pub(crate) dictionary: Dictionary,
-    /// The primitives, indexed by [`Code::Primitive`].
-    pub(crate) primitives: Vec<PrimitiveFn>,
+    pub(crate) dictionary: Dictionary<PrimitiveFn>,
 
     /// Compilation state.
     pub(crate) compiler: Compiler,
@@ -170,7 +168,7 @@ impl Vm {
         self.dictionary.word_names()
     }
 
-    /// Creates a VM with an empty dictionary of `dictionary_cells` Cells, and no primitives.
+    /// Creates a VM with an empty dictionary of `dictionary_cells` Cells, without primitives.
     ///
     /// # Errors
     ///
@@ -184,7 +182,6 @@ impl Vm {
             data_stack_limit: config.data_stack_cells,
             return_stack_limit: config.return_stack_cells,
             dictionary: Dictionary::new(config.dictionary_cells)?,
-            primitives: Vec::new(),
             compiler: Compiler::default(),
             output,
             input: InputSource::default(),
@@ -203,12 +200,8 @@ impl Vm {
         code: PrimitiveFn,
         flags: Cell,
     ) -> Result<Cell, ForthError> {
-        let index = self.primitives.len();
-        let xt = self
-            .dictionary
-            .write_header(name, Code::Primitive(index), flags)?;
-        self.primitives.push(code);
-        Ok(xt)
+        self.dictionary
+            .write_header(name, Code::Primitive(code), flags)
     }
 
     /// Records an error, unless one is already set, so that the first error wins. The inner
@@ -286,20 +279,6 @@ impl Vm {
 
 // --- THE INNER INTERPRETER (NEXT) ---
 
-/// The heart of the Forth engine. Fetches the execution token at IP, moves IP to the next Cell,
-/// and runs the word.
-#[inline(always)]
-fn next(vm: &mut Vm) {
-    match vm.dictionary.fetch(vm.ip) {
-        Ok(xt) => {
-            // The fetch succeeded, so the Cell ends inside the arena and this can't overflow.
-            vm.ip += mem::size_of::<Cell>();
-            execute_xt(vm, xt);
-        }
-        Err(error) => vm.set_error(error),
-    }
-}
-
 /// Runs the word with this execution token, from a thread or from `EXECUTE`. An `xt` that isn't
 /// in the XT table gives [`ForthError::InvalidExecutionToken`]. Unlike `EXECUTE`, this doesn't
 /// refuse words that are pending or compile-only, because a thread may call those.
@@ -310,10 +289,7 @@ pub(crate) fn execute_xt(vm: &mut Vm, xt: Cell) {
         return;
     };
     match entry.code {
-        Code::Primitive(index) => match vm.primitives.get(index) {
-            Some(&primitive) => primitive(vm),
-            None => vm.set_error(ForthError::InvalidExecutionToken(xt)),
-        },
+        Code::Primitive(primitive) => primitive(vm),
         // DOCOL: save the return address, and run the thread at the body.
         Code::Colon => {
             vm.push_return(vm.ip);
@@ -337,10 +313,23 @@ pub(crate) fn execute_xt(vm: &mut Vm, xt: Cell) {
     }
 }
 
-/// Runs NEXT until no thread is running, or a word reports an error.
+/// Runs NEXT until no thread is running, or a word reports an error. NEXT is the heart of the
+/// Forth engine: it fetches the execution token at IP, moves IP to the next Cell, and runs the
+/// word.
 pub(crate) fn run(vm: &mut Vm) {
-    while vm.ip != NO_IP && vm.error.is_none() {
-        next(vm);
+    while vm.error.is_none() {
+        let Some(xt) = vm.dictionary.fetch_thread(vm.ip) else {
+            // [`NO_IP`] ends the run. Any other IP that can't be read is an error, which a
+            // full fetch names.
+            if vm.ip != NO_IP {
+                let result = vm.dictionary.fetch(vm.ip);
+                vm.check(result);
+            }
+            return;
+        };
+        // The fetch succeeded, so the Cell ends inside the arena and this can't overflow.
+        vm.ip += mem::size_of::<Cell>();
+        execute_xt(vm, xt);
     }
 }
 
@@ -557,32 +546,25 @@ mod tests {
     }
 
     #[test]
-    fn a_primitive_index_past_the_table_is_an_error() {
+    fn next_reports_an_ip_outside_the_dictionary() {
         let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-        let index = vm.primitives.len();
-        let xt = vm
-            .dictionary
-            .write_header("BAD", Code::Primitive(index), 0)
-            .unwrap();
-
-        execute_xt(&mut vm, xt);
-        assert!(matches!(
-            vm.error,
-            Some(ForthError::InvalidExecutionToken(bad)) if bad == xt
-        ));
-    }
-
-    #[test]
-    fn next_reports_an_ip_outside_the_written_dictionary() {
-        let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
-        let here = vm.dictionary.here();
-        vm.ip = here;
+        let ip = Cell::MAX - CELL_SIZE + 1;
+        vm.ip = ip;
 
         run(&mut vm);
         assert!(matches!(
             vm.error,
-            Some(ForthError::UnwrittenAddress(addr)) if addr == here
+            Some(ForthError::AddressOutOfBounds(addr)) if addr == ip
         ));
+    }
+
+    #[test]
+    fn run_stops_at_no_ip_without_an_error() {
+        let mut vm = boot(io::sink(), VmConfig::new(TEST_CELLS)).unwrap();
+        vm.ip = NO_IP;
+
+        run(&mut vm);
+        assert!(vm.error.is_none(), "got: {:?}", vm.error);
     }
 
     #[test]
@@ -612,14 +594,19 @@ mod tests {
     }
 
     #[test]
-    fn add_primitive_gives_consecutive_indexes() {
+    fn add_primitive_gives_consecutive_execution_tokens() {
         let mut vm = Vm::new(Box::new(io::sink()), VmConfig::new(TEST_CELLS)).unwrap();
-        fn noop(_: &mut Vm) {}
-        let first = vm.add_primitive("A", noop, 0).unwrap();
-        let second = vm.add_primitive("B", noop, 0).unwrap();
-
+        fn push_seven(vm: &mut Vm) {
+            vm.push(7);
+        }
+        let first = vm.add_primitive("A", push_seven, 0).unwrap();
+        let second = vm.add_primitive("B", push_seven, 0).unwrap();
         assert_eq!((first, second), (0, 1));
-        assert_eq!(vm.primitives.len(), 2);
-        assert_eq!(vm.dictionary.entry(1).unwrap().code, Code::Primitive(1));
+
+        // Running the word shows which code it has. Function addresses can't show it, because
+        // Rust doesn't guarantee that they compare equal.
+        execute_xt(&mut vm, second);
+        assert!(vm.error.is_none(), "got: {:?}", vm.error);
+        assert_eq!(vm.data_stack, [7]);
     }
 }

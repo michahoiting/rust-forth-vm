@@ -37,11 +37,11 @@ impl Compiler {
     /// # Errors
     ///
     /// See [`Dictionary::write_header`].
-    pub(crate) fn begin_definition(
+    pub(crate) fn begin_definition<P: Copy>(
         &mut self,
-        dictionary: &mut Dictionary,
+        dictionary: &mut Dictionary<P>,
         name: &str,
-        code: Code,
+        code: Code<P>,
         flags: Cell,
     ) -> Result<Cell, ForthError> {
         let restore_point = dictionary.mark();
@@ -57,7 +57,10 @@ impl Compiler {
     ///
     /// Returns [`ForthError::NotCompiling`] if no definition is in progress, and
     /// [`ForthError::DictionaryOverflow`] if `EXIT` doesn't fit in the dictionary.
-    pub(crate) fn end_definition(&mut self, dictionary: &mut Dictionary) -> Result<(), ForthError> {
+    pub(crate) fn end_definition<P: Copy>(
+        &mut self,
+        dictionary: &mut Dictionary<P>,
+    ) -> Result<(), ForthError> {
         if !self.compiling {
             return Err(ForthError::NotCompiling(";"));
         }
@@ -73,9 +76,9 @@ impl Compiler {
     /// # Errors
     ///
     /// Returns [`ForthError::DictionaryOverflow`] if the call doesn't fit in the dictionary.
-    pub(crate) fn compile_word(
+    pub(crate) fn compile_word<P: Copy>(
         &self,
-        dictionary: &mut Dictionary,
+        dictionary: &mut Dictionary<P>,
         xt: Cell,
     ) -> Result<(), ForthError> {
         dictionary.comma(xt)
@@ -86,9 +89,9 @@ impl Compiler {
     /// # Errors
     ///
     /// Returns [`ForthError::DictionaryOverflow`] if the literal doesn't fit in the dictionary.
-    pub(crate) fn compile_literal(
+    pub(crate) fn compile_literal<P: Copy>(
         &self,
-        dictionary: &mut Dictionary,
+        dictionary: &mut Dictionary<P>,
         number: Cell,
     ) -> Result<(), ForthError> {
         dictionary.comma(LIT_XT)?;
@@ -96,7 +99,7 @@ impl Compiler {
     }
 
     /// Leaves compile mode and discards any half-built definition.
-    pub(crate) fn abort(&mut self, dictionary: &mut Dictionary) {
+    pub(crate) fn abort<P: Copy>(&mut self, dictionary: &mut Dictionary<P>) {
         self.compiling = false;
         if let Some(mark) = self.definition.take() {
             dictionary.restore(mark);
@@ -110,6 +113,9 @@ mod tests {
     use crate::dictionary::F_HIDDEN;
 
     const TEST_CELLS: usize = 64 * 1024;
+
+    // A dictionary whose primitives are numbers.
+    type Dictionary = super::Dictionary<usize>;
 
     // Returns whether `xt` can be found by its name.
     fn findable(dictionary: &Dictionary, name: &str, xt: Cell) -> bool {

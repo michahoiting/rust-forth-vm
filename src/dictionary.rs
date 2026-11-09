@@ -60,11 +60,12 @@ pub(crate) const F_PENDING: Cell = 1 << 10;
 /// run it with `IP` somewhere else. Every word with an inline operand needs this flag.
 pub(crate) const F_COMPILE_ONLY: Cell = 1 << 11;
 
-/// What a word does when it runs. This takes the place of a code field.
+/// What a word does when it runs. This takes the place of a code field. `P` is the type of a
+/// primitive, which the dictionary only stores: the VM's function type, or a number in tests.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Code {
-    /// Calls the primitive with this index in the VM's table of primitives.
-    Primitive(usize),
+pub(crate) enum Code<P> {
+    /// Calls this primitive.
+    Primitive(P),
     /// Runs the thread at the body, as a word made by `:` or `:NONAME`.
     Colon,
     /// Pushes the address of the body, as a word made by `CREATE` or `VARIABLE`.
@@ -78,9 +79,9 @@ pub(crate) enum Code {
 
 /// The entry of one word in the XT table.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct XtEntry {
+pub(crate) struct XtEntry<P> {
     /// What the word does when it runs.
-    pub(crate) code: Code,
+    pub(crate) code: Code<P>,
     /// The address of the word's body: its data or its thread. It directly follows the header.
     pub(crate) body: Cell,
     /// The address of the word's header.
@@ -103,25 +104,26 @@ pub(crate) struct Mark {
     words: usize,
 }
 
-/// The arena that holds every word, the linked list running through it, and the XT table.
-pub(crate) struct Dictionary {
+/// The arena that holds every word, the linked list running through it, and the XT table, whose
+/// primitives have the type `P`.
+pub(crate) struct Dictionary<P> {
     /// The arena. Its length is a whole number of Cells, and never changes.
     bytes: Vec<u8>,
     /// The address of the next free byte. It is cell-aligned unless `C,` or `ALLOT` left it
     /// unaligned.
     here: usize,
     /// The XT table, oldest word first. The last entry is the newest word.
-    words: Vec<XtEntry>,
+    words: Vec<XtEntry<P>>,
 }
 
-impl Dictionary {
+impl<P: Copy> Dictionary<P> {
     /// Allocates an arena of `cells` Cells for our Forth dictionary space. Its size can't change
     /// later.
     ///
     /// # Errors
     ///
     /// Returns [`ForthError::DictionaryTooLarge`] if the arena can't be allocated.
-    pub(crate) fn new(cells: usize) -> Result<Dictionary, ForthError> {
+    pub(crate) fn new(cells: usize) -> Result<Dictionary<P>, ForthError> {
         let too_large = ForthError::DictionaryTooLarge(cells);
         let size = cells.checked_mul(CELL_SIZE).ok_or(too_large)?;
         let mut bytes: Vec<u8> = Vec::new();
@@ -351,6 +353,22 @@ impl Dictionary {
         Ok(self.read_cell(offset))
     }
 
+    /// Reads the Cell of a thread at `ip`, for the inner interpreter and words with inline
+    /// operands. This is the hot path, so it only checks that the Cell is inside the arena, which
+    /// is all that keeps the read safe. Unlike [`fetch`](Self::fetch), it doesn't check HERE or
+    /// the alignment. `ip` is always cell-aligned, because it only ever comes from the body of a
+    /// word, the action of `DOES>`, or the return stack, and moves a Cell at a time. It only
+    /// passes HERE if `!` overwrote the `EXIT` of a thread, and then reads whatever is there.
+    /// Returns `None` if the Cell isn't inside the arena, as for
+    /// [`NO_IP`](crate::vm::NO_IP), whose range wraps.
+    #[inline(always)]
+    pub(crate) fn fetch_thread(&self, ip: Cell) -> Option<Cell> {
+        let bytes = self.bytes.get(ip..ip.wrapping_add(CELL_SIZE))?;
+        let mut cell = [0; CELL_SIZE];
+        cell.copy_from_slice(bytes);
+        Some(Cell::from_ne_bytes(cell))
+    }
+
     /// Writes the Cell at `addr`, checked in the same way as `fetch`. This can change word
     /// headers and compiled code, but not the XT table.
     ///
@@ -397,7 +415,7 @@ impl Dictionary {
     pub(crate) fn write_header(
         &mut self,
         name: &str,
-        code: Code,
+        code: Code<P>,
         flags: Cell,
     ) -> Result<Cell, ForthError> {
         if name.len() > LEN_MASK {
@@ -500,7 +518,7 @@ impl Dictionary {
 
     /// Returns the entry of the word with this execution token, or `None` if there is none.
     #[inline(always)]
-    pub(crate) fn entry(&self, xt: Cell) -> Option<XtEntry> {
+    pub(crate) fn entry(&self, xt: Cell) -> Option<XtEntry<P>> {
         self.words.get(xt).copied()
     }
 
@@ -555,7 +573,7 @@ impl Dictionary {
     }
 
     /// Gives the most recently created word a new action, if there is one.
-    pub(crate) fn set_last_code(&mut self, code: Code) {
+    pub(crate) fn set_last_code(&mut self, code: Code<P>) {
         if let Some(entry) = self.words.last_mut() {
             entry.code = code;
         }
@@ -586,7 +604,7 @@ impl Dictionary {
 
 /// Returns whether a word with this code was made by `CREATE`, so that `DOES>` may change its
 /// action and `ALLOT` may give back its data.
-fn is_created(code: Code) -> bool {
+fn is_created<P>(code: Code<P>) -> bool {
     matches!(code, Code::Variable | Code::Does(_))
 }
 
@@ -598,6 +616,9 @@ mod tests {
     use crate::{boot, outer_interpreter, VmConfig};
 
     const TEST_CELLS: usize = 64 * 1024;
+
+    // A dictionary whose primitives are numbers.
+    type Dictionary = super::Dictionary<usize>;
 
     // A Cell that stands for -1, and for -1 Cell, as a negative address.
     const MINUS_ONE: Cell = Cell::MAX;
@@ -618,7 +639,7 @@ mod tests {
     }
 
     // Returns the header of the word with this execution token.
-    fn header_of(dictionary: &Dictionary, xt: Cell) -> usize {
+    fn header_of<P>(dictionary: &super::Dictionary<P>, xt: Cell) -> usize {
         dictionary.words[xt].header
     }
 
@@ -1295,6 +1316,21 @@ mod tests {
 
         dictionary.store(xt, 42).unwrap();
         assert_eq!(dictionary.find_word("A"), Some(42));
+    }
+
+    #[test]
+    fn fetch_thread_checks_only_the_arena() {
+        let mut dictionary = dictionary_with(&[1, 2]);
+        let end = end_of(&dictionary);
+        dictionary.restore(Mark { here: 0, words: 0 });
+
+        assert_eq!(dictionary.fetch_thread(0), Some(1));
+        assert_eq!(dictionary.fetch_thread(CELL_SIZE), Some(2));
+        assert_eq!(dictionary.fetch_thread(end - CELL_SIZE), Some(0));
+        assert_eq!(dictionary.fetch_thread(end - CELL_SIZE + 1), None);
+        assert_eq!(dictionary.fetch_thread(end), None);
+        assert_eq!(dictionary.fetch_thread(Cell::MAX), None);
+        assert_eq!(dictionary.fetch_thread(MINUS_ONE_CELL), None);
     }
 
     #[test]
