@@ -12,6 +12,7 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 
 ### Added
 
+- The comparison and logic words `0<>`, `0>`, `<>`, `U>`, `WITHIN`, `NOT`, `TRUE` and `FALSE`.
 - The stack words `NIP` and `TUCK`.
 - `docs/words.md`, which replaces the word table in the README. It lists every word of the
   FORTH-83 Required Word Set and the ANS Forth CORE and CORE EXT word sets, with the standard of

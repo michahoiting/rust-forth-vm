@@ -318,6 +318,46 @@ pub(super) unsafe fn zero_less_than(vm: &mut Vm) {
     }
 }
 
+/// `0<> ( x -- flag )`: Gives true if `x` isn't zero.
+pub(super) unsafe fn zero_not_equal(vm: &mut Vm) {
+    if let Some(value) = vm.pop() {
+        vm.push(flag(value != 0));
+    }
+}
+
+/// `0> ( n -- flag )`: Gives true if `n` is greater than zero.
+pub(super) unsafe fn zero_greater_than(vm: &mut Vm) {
+    if let Some(value) = vm.pop() {
+        vm.push(flag((value as isize) > 0));
+    }
+}
+
+/// `<> ( x1 x2 -- flag )`: Gives true if two Cells differ.
+pub(super) unsafe fn not_equal(vm: &mut Vm) {
+    binary_replace(vm, |a, b| flag(a != b));
+}
+
+/// `U> ( u1 u2 -- flag )`: Gives true if `u1` is greater than `u2` as unsigned numbers.
+pub(super) unsafe fn unsigned_greater_than(vm: &mut Vm) {
+    binary_replace(vm, |a, b| flag(a > b));
+}
+
+/// `WITHIN ( n1 n2 n3 -- flag )`: Gives true if `n1` is at least `n2` and below `n3`, counting
+/// around the end of the range when `n2` is greater than `n3`.
+pub(super) unsafe fn within(vm: &mut Vm) {
+    if !vm.require(3) {
+        return;
+    }
+    let len = vm.data_stack.len();
+    let (value, low, high) = (
+        vm.data_stack[len - 3],
+        vm.data_stack[len - 2],
+        vm.data_stack[len - 1],
+    );
+    vm.data_stack.truncate(len - 3);
+    vm.push(flag(value.wrapping_sub(low) < high.wrapping_sub(low)));
+}
+
 /// `AND ( x1 x2 -- x3 )`: Gives the bitwise AND of two Cells.
 pub(super) unsafe fn and(vm: &mut Vm) {
     binary_replace(vm, |a, b| a & b);
@@ -338,6 +378,11 @@ pub(super) unsafe fn invert(vm: &mut Vm) {
     if let Some(value) = vm.pop() {
         vm.push(!value);
     }
+}
+
+/// `NOT ( x1 -- x2 )`: Inverts every bit in a Cell, like `INVERT`, as FORTH-83 defines it.
+pub(super) unsafe fn not(vm: &mut Vm) {
+    invert(vm);
 }
 
 /// `LSHIFT ( x1 u -- x2 )`: Shifts left logically, giving zero for a shift of `Cell::BITS` or
@@ -477,6 +522,16 @@ pub(super) unsafe fn move_bytes(vm: &mut Vm) {
 /// `BL ( -- char )`: Pushes the value of the space character.
 pub(super) unsafe fn blank(vm: &mut Vm) {
     vm.push(b' ' as Cell);
+}
+
+/// `TRUE ( -- flag )`: Pushes a true flag, with all bits set.
+pub(super) unsafe fn true_flag(vm: &mut Vm) {
+    vm.push(flag(true));
+}
+
+/// `FALSE ( -- flag )`: Pushes a false flag, zero.
+pub(super) unsafe fn false_flag(vm: &mut Vm) {
+    vm.push(flag(false));
 }
 
 /// `. ( x -- )`: Pops a Cell from the stack and writes it to the output as a signed number.
@@ -762,6 +817,71 @@ mod tests {
             assert_underflow(char_plus, &[]);
             assert_underflow(chars, &[]);
             assert_underflow(cells, &[]);
+        }
+    }
+
+    #[test]
+    fn remaining_comparison_words_give_forth_flags() {
+        unsafe {
+            let minus_one = (-1isize) as Cell;
+            assert_eq!(stack_after(zero_not_equal, &[7, 0]), [7, 0]);
+            assert_eq!(stack_after(zero_not_equal, &[7, 1]), [7, Cell::MAX]);
+            assert_eq!(stack_after(zero_not_equal, &[minus_one]), [Cell::MAX]);
+            assert_eq!(stack_after(zero_greater_than, &[7, 1]), [7, Cell::MAX]);
+            assert_eq!(stack_after(zero_greater_than, &[7, 0]), [7, 0]);
+            assert_eq!(stack_after(zero_greater_than, &[minus_one]), [0]);
+            assert_eq!(stack_after(not_equal, &[7, 3, 3]), [7, 0]);
+            assert_eq!(stack_after(not_equal, &[7, 3, 4]), [7, Cell::MAX]);
+            assert_eq!(
+                stack_after(unsigned_greater_than, &[Cell::MAX, 0]),
+                [Cell::MAX]
+            );
+            assert_eq!(stack_after(unsigned_greater_than, &[0, Cell::MAX]), [0]);
+            assert_eq!(stack_after(unsigned_greater_than, &[5, 5]), [0]);
+        }
+    }
+
+    #[test]
+    fn not_inverts_every_bit_like_invert() {
+        unsafe {
+            for value in [0, 1, Cell::MAX] {
+                assert_eq!(
+                    stack_after(not, &[9, value]),
+                    stack_after(invert, &[9, value])
+                );
+            }
+            assert_eq!(stack_after(not, &[0]), [Cell::MAX]);
+        }
+    }
+
+    #[test]
+    fn true_and_false_push_flags() {
+        unsafe {
+            assert_eq!(stack_after(true_flag, &[9]), [9, Cell::MAX]);
+            assert_eq!(stack_after(false_flag, &[9]), [9, 0]);
+        }
+    }
+
+    #[test]
+    fn within_includes_the_low_limit_and_excludes_the_high_limit() {
+        unsafe {
+            assert_eq!(stack_after(within, &[7, 5, 1, 10]), [7, Cell::MAX]);
+            assert_eq!(stack_after(within, &[1, 1, 10]), [Cell::MAX]);
+            assert_eq!(stack_after(within, &[10, 1, 10]), [0]);
+            assert_eq!(stack_after(within, &[11, 1, 10]), [0]);
+            assert_eq!(stack_after(within, &[0, 1, 10]), [0]);
+            assert_eq!(stack_after(within, &[5, 5, 5]), [0]);
+        }
+    }
+
+    #[test]
+    fn within_counts_around_the_end_of_the_range() {
+        unsafe {
+            assert_eq!(stack_after(within, &[1, 10, 3]), [Cell::MAX]);
+            assert_eq!(stack_after(within, &[Cell::MAX, 10, 3]), [Cell::MAX]);
+            assert_eq!(stack_after(within, &[3, 10, 3]), [0]);
+            assert_eq!(stack_after(within, &[5, 10, 3]), [0]);
+            assert_eq!(stack_after(within, &[10, 10, 3]), [Cell::MAX]);
         }
     }
 
@@ -1089,7 +1209,10 @@ mod tests {
                 absolute,
                 zero_equal,
                 zero_less_than,
+                zero_not_equal,
+                zero_greater_than,
                 invert,
+                not,
                 cell_plus,
             ] {
                 assert_underflow(word, &[]);
@@ -1106,6 +1229,8 @@ mod tests {
                 less_than,
                 greater_than,
                 unsigned_less_than,
+                not_equal,
+                unsigned_greater_than,
                 and,
                 or,
                 xor,
@@ -1116,7 +1241,7 @@ mod tests {
                 assert_underflow(word, &[]);
                 assert_underflow(word, &[1]);
             }
-            for word in [two_store as PrimitiveFn, fill, move_bytes] {
+            for word in [two_store as PrimitiveFn, fill, move_bytes, within] {
                 for stack in [&[][..], &[1][..], &[1, 2][..]] {
                     assert_underflow(word, stack);
                 }

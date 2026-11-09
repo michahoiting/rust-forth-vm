@@ -186,6 +186,31 @@ fn comparisons_and_logic_words_return_forth_flags() {
 }
 
 #[test]
+fn remaining_comparison_and_logic_words_work_interpreted_and_compiled() {
+    let expected = "-1 0 -1 0 -1 0 -1 0 -1 0 -6 -1 0 -1 0 ";
+    assert_eq!(
+        output_of(&[
+            "5 0<> . 0 0<> . 5 0> . -5 0> .",
+            "3 4 <> . 4 4 <> . -1 0 U> . 0 -1 U> .",
+            "TRUE . FALSE . 5 NOT .",
+            "5 1 10 WITHIN . 11 1 10 WITHIN . 1 10 3 WITHIN . 5 10 3 WITHIN .",
+        ]),
+        expected
+    );
+    assert_eq!(
+        output_of(&[
+            ": NONZERO? 0<> ; : POSITIVE? 0> ; : DIFFER <> ; : UABOVE U> ;",
+            ": YES TRUE ; : NO FALSE ; : FLIP NOT ; : INSIDE WITHIN ;",
+            "5 NONZERO? . 0 NONZERO? . 5 POSITIVE? . -5 POSITIVE? .",
+            "3 4 DIFFER . 4 4 DIFFER . -1 0 UABOVE . 0 -1 UABOVE .",
+            "YES . NO . 5 FLIP .",
+            "5 1 10 INSIDE . 11 1 10 INSIDE . 1 10 3 INSIDE . 5 10 3 INSIDE .",
+        ]),
+        expected
+    );
+}
+
+#[test]
 fn pairs_and_memory_words_work_interpreted_and_compiled() {
     let cell_size = mem::size_of::<Cell>();
     assert_eq!(
@@ -269,7 +294,8 @@ fn new_words_report_api_underflow_and_leave_the_vm_usable() {
         let output = Capture::default();
         let mut vm = test_vm(output.clone());
         for word in [
-            "1+", "1-", "2*", "2/", "NEGATE", "ABS", "0=", "0<", "INVERT", "CELL+", "2@",
+            "1+", "1-", "2*", "2/", "NEGATE", "ABS", "0=", "0<", "0<>", "0>", "INVERT", "NOT",
+            "CELL+", "2@",
         ] {
             let error = outer_interpreter(&mut vm, word).unwrap_err();
             assert!(
@@ -278,8 +304,8 @@ fn new_words_report_api_underflow_and_leave_the_vm_usable() {
             );
         }
         for word in [
-            "-", "*", "/", "MOD", "/MOD", "MIN", "MAX", "=", "<", ">", "U<", "AND", "OR", "XOR",
-            "LSHIFT", "RSHIFT", "+!",
+            "-", "*", "/", "MOD", "/MOD", "MIN", "MAX", "=", "<", ">", "U<", "<>", "U>", "AND",
+            "OR", "XOR", "LSHIFT", "RSHIFT", "+!",
         ] {
             let source = format!("1 {word}");
             let error = outer_interpreter(&mut vm, &source).unwrap_err();
@@ -288,7 +314,7 @@ fn new_words_report_api_underflow_and_leave_the_vm_usable() {
                 "{word}: {error}"
             );
         }
-        for word in ["2!", "FILL", "MOVE"] {
+        for word in ["2!", "FILL", "MOVE", "WITHIN"] {
             let source = format!("1 2 {word}");
             let error = outer_interpreter(&mut vm, &source).unwrap_err();
             assert!(
@@ -1204,6 +1230,8 @@ fn every_word_that_grows_the_stack_overflows_at_the_limit() {
         "?DUP",
         "OVER",
         "TUCK",
+        "TRUE",
+        "FALSE",
         "DEPTH",
         "X",
         "C",
