@@ -3,6 +3,7 @@
 [![CI](https://github.com/michahoiting/rust-forth-vm/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/michahoiting/rust-forth-vm/actions/workflows/ci.yml?query=branch%3Amain+event%3Apush)
 [![Lint](https://github.com/michahoiting/rust-forth-vm/actions/workflows/lint.yml/badge.svg?branch=main&event=push)](https://github.com/michahoiting/rust-forth-vm/actions/workflows/lint.yml?query=branch%3Amain+event%3Apush)
 [![Mutation testing](https://github.com/michahoiting/rust-forth-vm/actions/workflows/mutants.yml/badge.svg?branch=main)](https://github.com/michahoiting/rust-forth-vm/actions/workflows/mutants.yml?query=branch%3Amain)
+[![CodeQL](https://github.com/michahoiting/rust-forth-vm/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/michahoiting/rust-forth-vm/actions/workflows/github-code-scanning/codeql)
 
 A clean-room implementation of a Forth virtual machine in Rust. It is an
 indirect-threaded VM with a linked-list dictionary, a text interpreter, and a
