@@ -92,7 +92,8 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 - The MIT license, and a minimum supported Rust version.
 - This changelog, a contributing guide, a versioning policy, and getting-started steps in
   the README.
-- Git hooks and a GitHub ruleset that protect `main`.
+- Git hooks and a GitHub ruleset that protect `main`, and rulesets that keep the `perf-data`
+  history from being deleted, force-pushed or pushed to by anything but its workflow.
 - `make setup-dev`, which installs the developer tools and the git hooks.
 - Faster CI: the two Miri targets run as separate jobs, PRs that only change Markdown skip
   Miri, and new pushes to a PR cancel its older runs.

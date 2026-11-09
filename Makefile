@@ -11,7 +11,8 @@
 # make doc-serve  Serves the docs on localhost, which needs python3.
 # make setup-dev  Installs the developer tools and the git hooks. Run it once after cloning.
 # make hooks      Installs only the git hooks in this clone.
-# make protect    Applies the GitHub ruleset for main, which needs gh and admin access.
+# make protect    Applies the GitHub rulesets, which needs gh, python3 and admin access.
+#                 make protect RULESETS=path applies only the given files.
 # make metrics    Reports PR lead time and issue throughput, which needs gh and python3.
 # make demo-expected  Updates the expected demo output that the tests compare with.
 # make perf       Measures the VM, and stores the result under target/perf, which needs python3.
@@ -27,7 +28,7 @@ export RUSTUP_AUTO_INSTALL := 0
 
 MIRI_32_BIT_TARGET := i686-unknown-linux-gnu
 DOC_PORT ?= 8000
-RULESET := .github/rulesets/protect-main.json
+RULESETS ?= $(wildcard .github/rulesets/*.json)
 MSRV := $(shell sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
 
 .DEFAULT_GOAL := ci
@@ -191,14 +192,18 @@ setup-dev:
 hooks:
 	git config core.hooksPath .githooks
 
-# Updates the ruleset if it already exists, so that this can run again after a change.
-protect:
+# Applies each ruleset file. A ruleset with the file's name is updated, so that this can run
+# again after a change, and a missing one is created.
+protect: check-python
 	@set -e; \
-	id=$$(gh api 'repos/{owner}/{repo}/rulesets' --jq '.[] | select(.name == "Protect main") | .id'); \
-	if [ -n "$$id" ]; then \
-		gh api --method PUT "repos/{owner}/{repo}/rulesets/$$id" --input $(RULESET) --silent; \
-		echo "Updated the ruleset."; \
-	else \
-		gh api --method POST 'repos/{owner}/{repo}/rulesets' --input $(RULESET) --silent; \
-		echo "Created the ruleset."; \
-	fi
+	for file in $(RULESETS); do \
+		name=$$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["name"])' "$$file"); \
+		id=$$(gh api 'repos/{owner}/{repo}/rulesets' --jq ".[] | select(.name == \"$$name\") | .id"); \
+		if [ -n "$$id" ]; then \
+			gh api --method PUT "repos/{owner}/{repo}/rulesets/$$id" --input "$$file" --silent; \
+			echo "Updated the ruleset $$name."; \
+		else \
+			gh api --method POST 'repos/{owner}/{repo}/rulesets' --input "$$file" --silent; \
+			echo "Created the ruleset $$name."; \
+		fi; \
+	done
