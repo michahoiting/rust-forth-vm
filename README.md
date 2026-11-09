@@ -145,6 +145,9 @@ rust-forth-vm has it yet. It also has the words that rust-forth-vm adds, such as
 
 ## How it works
 
+See the [guide to indirect threaded Forth](docs/indirect-threading.md) for a longer explanation of
+execution tokens, CFAs and the dictionary layout.
+
 Every dictionary entry has the same header. The name bytes are stored in the
 dictionary directly in front of it.
 
