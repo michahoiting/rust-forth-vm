@@ -164,8 +164,8 @@ See the [limitations](../README.md#limitations) in the README for what the VM do
 | `FORGET` | `( -- )` | FORTH-83 | No | Parses a name and removes that word and every later definition |
 | `IMMEDIATE` | `( -- )` | FORTH-83, ANS CORE | Yes | Marks the newest word, so that it runs during compilation |
 | `MARKER` | `( -- )` | ANS CORE EXT | No | Parses a name and creates a word that removes itself and every later definition |
-| `TO` | `( x -- )` | ANS CORE EXT | No (#156) | Parses the name of a `VALUE` and gives it the value `x` |
-| `VALUE` | `( x -- )` | ANS CORE EXT | No (#156) | Parses a name and creates a word that pushes `x`, which `TO` can change |
+| `TO` | `( x -- )` | ANS CORE EXT | No ([#156](https://github.com/michahoiting/rust-forth-vm/issues/156)) | Parses the name of a `VALUE` and gives it the value `x` |
+| `VALUE` | `( x -- )` | ANS CORE EXT | No ([#156](https://github.com/michahoiting/rust-forth-vm/issues/156)) | Parses a name and creates a word that pushes `x`, which `TO` can change |
 | `VARIABLE` | `( -- )` | FORTH-83, ANS CORE | Yes | Parses a name and creates a word holding one Cell, initially 0 |
 | `VOCABULARY` | `( -- )` | FORTH-83 | No | Parses a name and creates a word list with that name |
 
