@@ -102,24 +102,24 @@ See the [limitations](../README.md#limitations) in the README for what the VM do
 | Word | Stack effect | Standard | Implemented | Description |
 |------|--------------|----------|-------------|-------------|
 | `0<` | `( n -- flag )` | FORTH-83, ANS CORE | Yes | Gives true if `n` is negative |
-| `0<>` | `( x -- flag )` | ANS CORE EXT | No | Gives true if `x` isn't zero |
+| `0<>` | `( x -- flag )` | ANS CORE EXT | Yes | Gives true if `x` isn't zero |
 | `0=` | `( n -- flag )` | FORTH-83, ANS CORE | Yes | Gives true if `n` is zero |
-| `0>` | `( n -- flag )` | FORTH-83, ANS CORE EXT | No | Gives true if `n` is greater than zero |
+| `0>` | `( n -- flag )` | FORTH-83, ANS CORE EXT | Yes | Gives true if `n` is greater than zero |
 | `<` | `( n1 n2 -- flag )` | FORTH-83, ANS CORE | Yes | Gives true if `n1` is less than `n2` signed |
-| `<>` | `( x1 x2 -- flag )` | ANS CORE EXT | No | Gives true if two Cells differ |
+| `<>` | `( x1 x2 -- flag )` | ANS CORE EXT | Yes | Gives true if two Cells differ |
 | `=` | `( n1 n2 -- flag )` | FORTH-83, ANS CORE | Yes | Gives true if two Cells are equal |
 | `>` | `( n1 n2 -- flag )` | FORTH-83, ANS CORE | Yes | Gives true if `n1` is greater than `n2` signed |
 | `AND` | `( x1 x2 -- x3 )` | FORTH-83, ANS CORE | Yes | Gives the bitwise AND of two Cells |
-| `FALSE` | `( -- flag )` | ANS CORE EXT | No | Pushes a false flag, zero |
+| `FALSE` | `( -- flag )` | ANS CORE EXT | Yes | Pushes a false flag, zero |
 | `INVERT` | `( x1 -- x2 )` | ANS CORE | Yes | Inverts every bit in a Cell |
 | `LSHIFT` | `( x1 u -- x2 )` | ANS CORE | Yes | Shifts left logically; large shifts give zero |
-| `NOT` | `( x1 -- x2 )` | FORTH-83 | No | FORTH-83: inverts every bit, like `INVERT`. ANS Forth dropped it, because other Forths use it as `0=` |
+| `NOT` | `( x1 -- x2 )` | FORTH-83 | Yes | FORTH-83: inverts every bit, like `INVERT`. ANS Forth dropped it, because other Forths use it as `0=` |
 | `OR` | `( x1 x2 -- x3 )` | FORTH-83, ANS CORE | Yes | Gives the bitwise OR of two Cells |
 | `RSHIFT` | `( x1 u -- x2 )` | ANS CORE | Yes | Shifts right logically; large shifts give zero |
-| `TRUE` | `( -- flag )` | ANS CORE EXT | No | Pushes a true flag, with all bits set |
+| `TRUE` | `( -- flag )` | ANS CORE EXT | Yes | Pushes a true flag, with all bits set |
 | `U<` | `( u1 u2 -- flag )` | FORTH-83, ANS CORE | Yes | Gives true if `u1` is less than `u2` unsigned |
-| `U>` | `( u1 u2 -- flag )` | ANS CORE EXT | No | Gives true if `u1` is greater than `u2` unsigned |
-| `WITHIN` | `( n1 n2 n3 -- flag )` | ANS CORE EXT | No | Gives true if `n1` is at least `n2` and below `n3`, counting around the end of the range |
+| `U>` | `( u1 u2 -- flag )` | ANS CORE EXT | Yes | Gives true if `u1` is greater than `u2` unsigned |
+| `WITHIN` | `( n1 n2 n3 -- flag )` | ANS CORE EXT | Yes | Gives true if `n1` is at least `n2` and below `n3`, counting around the end of the range |
 | `XOR` | `( x1 x2 -- x3 )` | FORTH-83, ANS CORE | Yes | Gives the bitwise exclusive OR of two Cells |
 
 ## Memory

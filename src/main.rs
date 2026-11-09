@@ -151,6 +151,11 @@ COUNTER @ .                   \ prints 50
         r"
 4 4 = . 2 3 < . 3 2 > . -1 0 U< .  \ prints -1 -1 -1 0
 0 0= . -1 0< .                     \ prints -1 -1
+5 0<> . 0 0<> . 5 0> . -5 0> .     \ prints -1 0 -1 0
+3 4 <> . 4 4 <> . -1 0 U> .        \ prints -1 0 -1
+TRUE . FALSE . 5 NOT .             \ prints -1 0 -6
+5 1 10 WITHIN . 10 1 10 WITHIN .   \ prints -1 0
+1 10 3 WITHIN . 5 10 3 WITHIN .    \ prints -1 0: the range wraps around
 12 10 AND . 12 10 OR . 12 10 XOR . \ prints 8 14 6
 0 INVERT . 3 2 LSHIFT . 12 2 RSHIFT . \ prints -1 12 3
 ",

@@ -56,9 +56,19 @@ pub(crate) unsafe fn install(vm: &mut Vm) -> Result<(), ForthError> {
     vm.dictionary
         .add_primitive_word("U<", code_cell(core::unsigned_less_than), 0)?;
     vm.dictionary
+        .add_primitive_word("<>", code_cell(core::not_equal), 0)?;
+    vm.dictionary
+        .add_primitive_word("U>", code_cell(core::unsigned_greater_than), 0)?;
+    vm.dictionary
+        .add_primitive_word("WITHIN", code_cell(core::within), 0)?;
+    vm.dictionary
         .add_primitive_word("0=", code_cell(core::zero_equal), 0)?;
     vm.dictionary
         .add_primitive_word("0<", code_cell(core::zero_less_than), 0)?;
+    vm.dictionary
+        .add_primitive_word("0<>", code_cell(core::zero_not_equal), 0)?;
+    vm.dictionary
+        .add_primitive_word("0>", code_cell(core::zero_greater_than), 0)?;
     vm.dictionary
         .add_primitive_word("AND", code_cell(core::and), 0)?;
     vm.dictionary
@@ -67,6 +77,8 @@ pub(crate) unsafe fn install(vm: &mut Vm) -> Result<(), ForthError> {
         .add_primitive_word("XOR", code_cell(core::xor), 0)?;
     vm.dictionary
         .add_primitive_word("INVERT", code_cell(core::invert), 0)?;
+    vm.dictionary
+        .add_primitive_word("NOT", code_cell(core::invert), 0)?;
     vm.dictionary
         .add_primitive_word("LSHIFT", code_cell(core::left_shift), 0)?;
     vm.dictionary
@@ -93,6 +105,10 @@ pub(crate) unsafe fn install(vm: &mut Vm) -> Result<(), ForthError> {
         .add_primitive_word("MOVE", code_cell(core::move_bytes), 0)?;
     vm.dictionary
         .add_primitive_word("BL", code_cell(core::blank), 0)?;
+    vm.dictionary
+        .add_primitive_word("TRUE", code_cell(core::true_flag), 0)?;
+    vm.dictionary
+        .add_primitive_word("FALSE", code_cell(core::false_flag), 0)?;
     vm.dictionary
         .add_primitive_word(".", code_cell(core::dot_print), 0)?;
     vm.dictionary
