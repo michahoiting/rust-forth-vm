@@ -51,7 +51,7 @@ const MORE_INFORMATION: &str = r#"Type "HELP", "COPYRIGHT" or "LICENSE" for more
 
 /// The demo sections, each with its title and one block of Forth source. Each section runs in a
 /// new VM, so it must define everything it uses.
-const SECTIONS: [(&str, &str); 19] = [
+const SECTIONS: [(&str, &str); 20] = [
     (
         "Evaluating Text Operations",
         r"
@@ -353,6 +353,26 @@ CREATE TABLE 5 , TABLE @ .    \ prints 5: , still works when no definition is op
 3 COUNTDOWN        \ prints 3 2 1: the body runs before the first test
 : EVENS 0 BEGIN DUP 2 MOD 0= IF DUP . THEN 1+ 2DUP = UNTIL 2DROP ;
 10 EVENS           \ prints 0 2 4 6 8: an IF inside a loop
+",
+    ),
+    (
+        "Generating Primes",
+        r"
+: PRIME? ( n -- flag )     \ trial division by 2, 3, 4 ... up to the square root of n
+  2 BEGIN
+    2DUP DUP * < IF 2DROP TRUE TRUE ELSE
+      2DUP MOD 0= IF 2DROP FALSE TRUE ELSE 1+ FALSE THEN
+    THEN
+  UNTIL ;
+: PRIMES ( n -- )          \ prints the first n primes
+  DUP 0> IF
+    2 BEGIN                \ stack: primes still to print, candidate
+      DUP PRIME? IF DUP . SWAP 1- SWAP THEN
+      1+ OVER 0=
+    UNTIL 2DROP
+  ELSE DROP THEN ;
+15 PRIMES          \ prints the first 15 primes
+0 PRIMES           \ prints nothing
 ",
     ),
     (
