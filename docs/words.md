@@ -195,7 +195,7 @@ See the [limitations](../README.md#limitations) in the README for what the VM do
 | `+LOOP` | `( n -- )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: adds `n` to the index, and repeats until it crosses the limit (immediate) |
 | `?DO` | `( n1 n2 -- )` | ANS CORE EXT | No | Like `DO`, but skips the loop if `n1` equals `n2` (immediate) |
 | `AGAIN` | `( -- )` | ANS CORE EXT | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: always goes back to `BEGIN` (immediate) |
-| `BEGIN` | `( -- )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: marks the start of a loop (immediate) |
+| `BEGIN` | `( -- )` | FORTH-83, ANS CORE | Yes | Inside a definition: marks the start of a loop (immediate) |
 | `CASE` | `( -- )` | ANS CORE EXT | No | Inside a definition: starts a selection among `OF` clauses (immediate) |
 | `DO` | `( n1 n2 -- )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: starts a counted loop from `n2` up to the limit `n1` (immediate) |
 | `ELSE` | `( -- )` | FORTH-83, ANS CORE | Yes | Inside a definition: starts the code that runs when the flag of `IF` is false (immediate) |
@@ -210,7 +210,7 @@ See the [limitations](../README.md#limitations) in the README for what the VM do
 | `REPEAT` | `( -- )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: goes back to `BEGIN`, and ends the loop of `WHILE` (immediate) |
 | `THEN` | `( -- )` | FORTH-83, ANS CORE | Yes | Inside a definition: ends an `IF` (immediate) |
 | `UNLOOP` | `( -- )` | ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Drops the loop parameters, so that `EXIT` can leave from inside a loop |
-| `UNTIL` | `( flag -- )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: goes back to `BEGIN` while `flag` is false (immediate) |
+| `UNTIL` | `( flag -- )` | FORTH-83, ANS CORE | Yes | Inside a definition: goes back to `BEGIN` while `flag` is false (immediate) |
 | `WHILE` | `( flag -- )` | FORTH-83, ANS CORE | No ([#119](https://github.com/michahoiting/rust-forth-vm/issues/119)) | Inside a definition: leaves a `BEGIN` loop when `flag` is false (immediate) |
 
 ## Strings and output

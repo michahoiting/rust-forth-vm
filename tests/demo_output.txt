@@ -20,9 +20,10 @@ Demo sections:
   15. Bytes and Reserved Memory
   16. Compiling Calls from an Immediate Word
   17. Conditionals with IF, ELSE and THEN
-  18. Program Information
-  19. Returning to the Interpreter with QUIT and ABORT
-  20. Error Handling
+  18. Loops with BEGIN and UNTIL
+  19. Program Information
+  20. Returning to the Interpreter with QUIT and ABORT
+  21. Error Handling
 Enter a section number, Q to quit [0]: --- TEST RUN 1: Evaluating Text Operations ---
 Input:
     40 2 +            \ leaves 42 on the stack
@@ -317,7 +318,16 @@ Input:
 Output: -1 0 1 42 42 ok
 -------------------------------------
 
---- TEST RUN 18: Program Information ---
+--- TEST RUN 18: Loops with BEGIN and UNTIL ---
+Input:
+    : COUNTDOWN BEGIN DUP . 1- DUP 0= UNTIL DROP ;
+    3 COUNTDOWN        \ prints 3 2 1: the body runs before the first test
+    : EVENS 0 BEGIN DUP 2 MOD 0= IF DUP . THEN 1+ 2DUP = UNTIL 2DROP ;
+    10 EVENS           \ prints 0 2 4 6 8: an IF inside a loop
+Output: 3 2 1 0 2 4 6 8 ok
+-------------------------------------
+
+--- TEST RUN 19: Program Information ---
 Input:
     HELP                          \ prints how to leave the prompt
     COPYRIGHT                     \ prints the copyright notice
@@ -348,7 +358,7 @@ SOFTWARE.
 ok
 -------------------------------------
 
---- TEST RUN 19: Returning to the Interpreter with QUIT and ABORT ---
+--- TEST RUN 20: Returning to the Interpreter with QUIT and ABORT ---
 Input:
     7 1 . QUIT 2 .                  \ prints 1, and leaves 7 on the stack
 Output: 1 
@@ -375,7 +385,7 @@ Input:
 Output: 0 ok
 -------------------------------------
 
---- TEST RUN 20: Error Handling ---
+--- TEST RUN 21: Error Handling ---
 Input:
     : BROKEN 1 NO-SUCH-WORD ;
 Output: Forth Error: Word or numeric literal 'NO-SUCH-WORD' not recognized.
@@ -433,7 +443,8 @@ Demo sections:
   15. Bytes and Reserved Memory
   16. Compiling Calls from an Immediate Word
   17. Conditionals with IF, ELSE and THEN
-  18. Program Information
-  19. Returning to the Interpreter with QUIT and ABORT
-  20. Error Handling
+  18. Loops with BEGIN and UNTIL
+  19. Program Information
+  20. Returning to the Interpreter with QUIT and ABORT
+  21. Error Handling
 Enter a section number, Q to quit [0]: 

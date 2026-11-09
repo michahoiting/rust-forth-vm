@@ -7,14 +7,17 @@ use crate::cell::Cell;
 use crate::dictionary::{cfa_of, Dictionary, Mark, F_PENDING};
 use crate::error::ForthError;
 
-/// A control structure that is still open in the definition. Each entry holds the address of the
-/// operand that its forward branch gets once the structure ends.
+/// A control structure that is still open in the definition. An entry for a forward branch holds
+/// the address of the operand that the branch gets once the structure ends. An entry for a
+/// backward branch holds the address that the branch goes to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ControlEntry {
     /// After `IF`: the operand of `0BRANCH`.
     If(Cell),
     /// After `ELSE`: the operand of `BRANCH`.
     Else(Cell),
+    /// After `BEGIN`: the address of the code behind it, where `UNTIL` goes back to.
+    Begin(Cell),
 }
 
 /// The compilation state of a VM.
@@ -153,7 +156,7 @@ impl Compiler {
         if !self.compiling {
             return Err(ForthError::NotCompiling("IF"));
         }
-        let operand = Self::compile_branch(dictionary, self.zero_branch_cfa)?;
+        let operand = Self::compile_branch(dictionary, self.zero_branch_cfa, 0)?;
         self.control.push(ControlEntry::If(operand));
         Ok(())
     }
@@ -177,7 +180,7 @@ impl Compiler {
         let Some(ControlEntry::If(open)) = self.control.last().copied() else {
             return Err(ForthError::UnbalancedControlFlow("ELSE"));
         };
-        let operand = Self::compile_branch(dictionary, self.branch_cfa)?;
+        let operand = Self::compile_branch(dictionary, self.branch_cfa, 0)?;
         // The new branch is compiled first, so that the `IF` goes to the code behind it.
         dictionary.store(open, dictionary.here())?;
         self.control.pop();
@@ -203,13 +206,54 @@ impl Compiler {
         Ok(())
     }
 
-    /// Compiles a call to a branch word with an operand of 0, and returns the address of the
+    /// Compiles `BEGIN`: the start of a loop. It compiles nothing, and records where `UNTIL`
+    /// goes back to.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::NotCompiling`] if no definition is open.
+    pub(crate) fn begin_loop(&mut self, dictionary: &Dictionary) -> Result<(), ForthError> {
+        if !self.compiling {
+            return Err(ForthError::NotCompiling("BEGIN"));
+        }
+        self.control.push(ControlEntry::Begin(dictionary.here()));
+        Ok(())
+    }
+
+    /// Compiles `UNTIL`: a branch back to `BEGIN`, taken when the flag is zero.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::NotCompiling`] if no definition is open,
+    /// [`ForthError::UnbalancedControlFlow`] unless the innermost open structure is a `BEGIN`, and
+    /// [`ForthError::DictionaryOverflow`] if the branch doesn't fit in the dictionary. Nothing
+    /// is compiled then, and the `BEGIN` stays open.
+    pub(crate) unsafe fn end_until(
+        &mut self,
+        dictionary: &mut Dictionary,
+    ) -> Result<(), ForthError> {
+        if !self.compiling {
+            return Err(ForthError::NotCompiling("UNTIL"));
+        }
+        let Some(&ControlEntry::Begin(target)) = self.control.last() else {
+            return Err(ForthError::UnbalancedControlFlow("UNTIL"));
+        };
+        Self::compile_branch(dictionary, self.zero_branch_cfa, target)?;
+        self.control.pop();
+        Ok(())
+    }
+
+    /// Compiles a call to a branch word with this operand, and returns the address of the
     /// operand. Nothing is compiled if either Cell doesn't fit.
-    unsafe fn compile_branch(dictionary: &mut Dictionary, cfa: Cell) -> Result<Cell, ForthError> {
+    unsafe fn compile_branch(
+        dictionary: &mut Dictionary,
+        cfa: Cell,
+        target: Cell,
+    ) -> Result<Cell, ForthError> {
         let mark = dictionary.mark();
         dictionary.comma(cfa)?;
         let operand = dictionary.here();
-        if let Err(error) = dictionary.comma(0) {
+        if let Err(error) = dictionary.comma(target) {
             dictionary.restore(mark);
             return Err(error);
         }
@@ -415,6 +459,160 @@ mod tests {
                 Err(ForthError::DictionaryOverflow)
             ));
             assert_eq!(dictionary.mark(), before);
+            assert!(compiler.control.is_empty());
+        }
+    }
+
+    #[test]
+    fn begin_compiles_nothing_and_until_branches_back_to_it() {
+        unsafe {
+            let (mut dictionary, mut compiler) = open();
+            let start = dictionary.here();
+            let cell = mem::size_of::<Cell>();
+
+            compiler.begin_loop(&dictionary).unwrap();
+            assert_eq!(dictionary.here(), start);
+            assert_eq!(compiler.control, [ControlEntry::Begin(start)]);
+            compiler.compile_word(&mut dictionary, 7).unwrap();
+            compiler.end_until(&mut dictionary).unwrap();
+
+            assert_eq!(dictionary.fetch(start).unwrap(), 7);
+            assert_eq!(dictionary.fetch(start + cell).unwrap(), IF_CFA);
+            assert_eq!(dictionary.fetch(start + 2 * cell).unwrap(), start);
+            assert_eq!(dictionary.here(), start + 3 * cell);
+            assert!(compiler.control.is_empty());
+        }
+    }
+
+    #[test]
+    fn loops_nest_and_mix_with_conditionals() {
+        unsafe {
+            let (mut dictionary, mut compiler) = open();
+            let outer = dictionary.here();
+            let cell = mem::size_of::<Cell>();
+
+            compiler.begin_loop(&dictionary).unwrap();
+            compiler.begin_if(&mut dictionary).unwrap();
+            compiler.begin_loop(&dictionary).unwrap();
+            let inner = dictionary.here();
+            compiler.end_until(&mut dictionary).unwrap();
+            compiler.end_if(&mut dictionary).unwrap();
+            compiler.end_until(&mut dictionary).unwrap();
+
+            // IF operand, the inner UNTIL, and the outer UNTIL.
+            assert_eq!(dictionary.fetch(outer + cell).unwrap(), inner + 2 * cell);
+            assert_eq!(dictionary.fetch(inner + cell).unwrap(), inner);
+            assert_eq!(dictionary.fetch(inner + 3 * cell).unwrap(), outer);
+            assert!(compiler.control.is_empty());
+        }
+    }
+
+    #[test]
+    fn until_needs_a_begin_and_changes_nothing_without_one() {
+        unsafe {
+            let (mut dictionary, mut compiler) = open();
+            let before = dictionary.mark();
+            assert!(matches!(
+                compiler.end_until(&mut dictionary),
+                Err(ForthError::UnbalancedControlFlow("UNTIL"))
+            ));
+            assert_eq!(dictionary.mark(), before);
+
+            for open_entry in [false, true] {
+                compiler.begin_if(&mut dictionary).unwrap();
+                if open_entry {
+                    compiler.begin_else(&mut dictionary).unwrap();
+                }
+                let stack = compiler.control.clone();
+                let before = dictionary.mark();
+                assert!(matches!(
+                    compiler.end_until(&mut dictionary),
+                    Err(ForthError::UnbalancedControlFlow("UNTIL"))
+                ));
+                assert_eq!(dictionary.mark(), before);
+                assert_eq!(compiler.control, stack);
+                compiler.end_if(&mut dictionary).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn else_and_then_do_not_close_a_begin() {
+        unsafe {
+            let (mut dictionary, mut compiler) = open();
+            compiler.begin_loop(&dictionary).unwrap();
+            let before = dictionary.mark();
+
+            assert!(matches!(
+                compiler.begin_else(&mut dictionary),
+                Err(ForthError::UnbalancedControlFlow("ELSE"))
+            ));
+            assert!(matches!(
+                compiler.end_if(&mut dictionary),
+                Err(ForthError::UnbalancedControlFlow("THEN"))
+            ));
+            assert!(matches!(
+                compiler.end_definition(&mut dictionary),
+                Err(ForthError::UnbalancedControlFlow(";"))
+            ));
+            assert_eq!(dictionary.mark(), before);
+            assert_eq!(compiler.control.len(), 1);
+        }
+    }
+
+    #[test]
+    fn begin_and_until_need_a_definition() {
+        unsafe {
+            let mut dictionary = Dictionary::new(TEST_CELLS).unwrap();
+            let mut compiler = Compiler::default();
+            let before = dictionary.mark();
+
+            assert!(matches!(
+                compiler.begin_loop(&dictionary),
+                Err(ForthError::NotCompiling("BEGIN"))
+            ));
+            assert!(matches!(
+                compiler.end_until(&mut dictionary),
+                Err(ForthError::NotCompiling("UNTIL"))
+            ));
+            assert_eq!(dictionary.mark(), before);
+            assert!(compiler.control.is_empty());
+        }
+    }
+
+    #[test]
+    fn an_until_that_does_not_fit_compiles_nothing_and_keeps_the_begin() {
+        unsafe {
+            let (mut dictionary, mut compiler) = open();
+            compiler.begin_loop(&dictionary).unwrap();
+            // Fill the dictionary until one Cell is left, which holds the CFA but not the operand.
+            let mut before_last = dictionary.mark();
+            loop {
+                let mark = dictionary.mark();
+                if dictionary.comma(0).is_err() {
+                    break;
+                }
+                before_last = mark;
+            }
+            dictionary.restore(before_last);
+            let before = dictionary.mark();
+
+            assert!(matches!(
+                compiler.end_until(&mut dictionary),
+                Err(ForthError::DictionaryOverflow)
+            ));
+            assert_eq!(dictionary.mark(), before);
+            assert_eq!(compiler.control.len(), 1);
+        }
+    }
+
+    #[test]
+    fn abort_clears_an_open_begin() {
+        unsafe {
+            let (mut dictionary, mut compiler) = open();
+            compiler.begin_loop(&dictionary).unwrap();
+
+            compiler.abort(&mut dictionary);
             assert!(compiler.control.is_empty());
         }
     }

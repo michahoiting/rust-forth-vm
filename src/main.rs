@@ -51,7 +51,7 @@ const MORE_INFORMATION: &str = r#"Type "HELP", "COPYRIGHT" or "LICENSE" for more
 
 /// The demo sections, each with its title and one block of Forth source. Each section runs in a
 /// new VM, so it must define everything it uses.
-const SECTIONS: [(&str, &str); 18] = [
+const SECTIONS: [(&str, &str); 19] = [
     (
         "Evaluating Text Operations",
         r"
@@ -344,6 +344,15 @@ CREATE TABLE 5 , TABLE @ .    \ prints 5: , still works when no definition is op
 : ABS-ISH DUP 0< IF NEGATE THEN ;
 -42 ABS-ISH .      \ prints 42: IF without ELSE
 42 ABS-ISH .       \ prints 42
+",
+    ),
+    (
+        "Loops with BEGIN and UNTIL",
+        r"
+: COUNTDOWN BEGIN DUP . 1- DUP 0= UNTIL DROP ;
+3 COUNTDOWN        \ prints 3 2 1: the body runs before the first test
+: EVENS 0 BEGIN DUP 2 MOD 0= IF DUP . THEN 1+ 2DUP = UNTIL 2DROP ;
+10 EVENS           \ prints 0 2 4 6 8: an IF inside a loop
 ",
     ),
     (
