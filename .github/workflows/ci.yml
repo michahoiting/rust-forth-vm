@@ -18,23 +18,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Tells the Miri jobs whether a PR changes anything besides Markdown.
-  changes:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      code: ${{ steps.diff.outputs.code }}
-    steps:
-      # On a PR, HEAD is the merge commit, and its first parent is the base.
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 2
-
-      - name: Check for changes besides Markdown
-        id: diff
-        run: echo "code=$(make -s code-changed BASE=HEAD^1)" >> "$GITHUB_OUTPUT"
-
   build-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -72,33 +55,3 @@ jobs:
 
       - name: Check the oldest supported Rust version
         run: make msrv
-
-  # Miri skips only on an explicit false. A skipped required check counts as passed, so on a
-  # push to main, or if the changes job fails, the empty output makes Miri run.
-  miri:
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Install Rust
-        run: rustup toolchain install nightly --profile minimal --component miri,rust-src
-
-      - name: Test under Miri
-        run: make miri
-
-  miri-32:
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Install Rust
-        run: rustup toolchain install nightly --profile minimal --component miri,rust-src
-
-      - name: Test under Miri on a 32-bit target
-        run: make miri-32

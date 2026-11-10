@@ -30,7 +30,7 @@ make doc-serve # Serves the docs on localhost, including private items. Needs py
 
 `make ci` must pass before a PR. Each step is also its own target, such as `make test`. Add new CI steps to the `Makefile`, not directly to the workflows.
 
-CI uses the latest stable toolchain on purpose, so a new lint can fail it with no code change. Raise `rust-version` when code needs a newer feature, and check it with a PR's CI run. CI runs on PRs and on pushes to `main`, not on other branches. PRs that only change Markdown skip Miri.
+CI uses the latest stable toolchain on purpose, so a new lint can fail it with no code change. Raise `rust-version` when code needs a newer feature, and check it with a PR's CI run. CI runs on PRs and on pushes to `main`, not on other branches. Miri doesn't run on PRs. The `miri.yml` workflow runs it nightly on `main`, so a Miri failure shows up after merge. Run `make ci-all` locally before a PR that touches `unsafe` code.
 
 These aren't part of CI:
 

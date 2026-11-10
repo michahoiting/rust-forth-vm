@@ -1,0 +1,83 @@
+name: Miri
+
+# Runs Miri on main each night that has new commits, instead of on every PR. A failed run opens or
+# updates an issue.
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Skips the nightly run when main has no commits since the last Miri run. A manual run always goes ahead.
+  changed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check for commits since the last run
+        id: check
+        env:
+          RUN_ID: ${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: echo "run=$(make -s miri-needed RUN_ID="$RUN_ID" SHA="$SHA")" >> "$GITHUB_OUTPUT"
+
+  miri:
+    needs: changed
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changed.outputs.run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup toolchain install nightly --profile minimal --component miri,rust-src
+
+      - name: Test under Miri
+        run: make miri
+
+  miri-32:
+    needs: changed
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changed.outputs.run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup toolchain install nightly --profile minimal --component miri,rust-src
+
+      - name: Test under Miri on a 32-bit target
+        run: make miri-32
+
+  report-failure:
+    needs: [miri, miri-32]
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Open or update the failure issue
+        run: make report-miri RUN_URL="$RUN_URL"

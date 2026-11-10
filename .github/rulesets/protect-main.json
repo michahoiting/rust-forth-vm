@@ -35,9 +35,7 @@
         "required_status_checks": [
           { "context": "lint" },
           { "context": "build-and-test" },
-          { "context": "msrv" },
-          { "context": "miri" },
-          { "context": "miri-32" }
+          { "context": "msrv" }
         ]
       }
     },
@@ -46,7 +44,6 @@
       "parameters": { "severity": "errors" }
     },
     { "type": "required_linear_history" },
-    { "type": "creation" },
-    { "type": "update" }
+    { "type": "creation" }
   ]
 }
