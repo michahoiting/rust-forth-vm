@@ -136,9 +136,9 @@ as the `record` job does.
 ## Why `main` refuses pushes
 
 A GitHub ruleset protects `main`. Changes land through a PR once the `lint`, `build-and-test`,
-`msrv`, `miri` and `miri-32` checks pass, code quality finds no errors, all review threads are
-resolved, and the branch is up to date with `main`. PRs that only change Markdown skip the two
-Miri jobs, which then count as passed. The history stays linear, and a PR lands as one squashed
+`msrv` checks pass, code quality finds no errors, all review threads are resolved, and the
+branch is up to date with `main`. Miri doesn't run on PRs. It runs nightly on `main`, and a
+failed run opens or updates a GitHub issue. The history stays linear, and a PR lands as one squashed
 commit. Force-pushing to `main`, deleting it, and pushing to it directly are blocked.
 Repository admins can bypass the rules, but only through a PR, and only they can update
 `main`, so they merge.

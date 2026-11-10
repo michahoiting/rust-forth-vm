@@ -3,6 +3,7 @@
 [![CI](https://github.com/michahoiting/rust-forth-vm/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/michahoiting/rust-forth-vm/actions/workflows/ci.yml?query=branch%3Amain+event%3Apush)
 [![Lint](https://github.com/michahoiting/rust-forth-vm/actions/workflows/lint.yml/badge.svg?branch=main&event=push)](https://github.com/michahoiting/rust-forth-vm/actions/workflows/lint.yml?query=branch%3Amain+event%3Apush)
 [![Mutation testing](https://github.com/michahoiting/rust-forth-vm/actions/workflows/mutants.yml/badge.svg?branch=main)](https://github.com/michahoiting/rust-forth-vm/actions/workflows/mutants.yml?query=branch%3Amain)
+[![Miri](https://github.com/michahoiting/rust-forth-vm/actions/workflows/miri.yml/badge.svg?branch=main)](https://github.com/michahoiting/rust-forth-vm/actions/workflows/miri.yml?query=branch%3Amain)
 [![CodeQL](https://github.com/michahoiting/rust-forth-vm/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/michahoiting/rust-forth-vm/actions/workflows/github-code-scanning/codeql)
 
 A clean-room implementation of a Forth virtual machine in Rust. It is an
@@ -18,7 +19,10 @@ You need `git`, `make`, and Rust with the `rustfmt` and `clippy` components. The
 oldest supported Rust version is the `rust-version` in [Cargo.toml](Cargo.toml).
 If you don't have Rust yet, install it with [rustup](https://rustup.rs), which
 includes both components. Serving the docs with `make doc-serve` also needs
-`python3`.
+`python3`. To change the GitHub workflows, you also need
+[actionlint](https://github.com/rhysd/actionlint), which checks them, and
+[shellcheck](https://www.shellcheck.net), which actionlint uses to check the `run:`
+scripts. On macOS with Homebrew, install both with `brew install actionlint shellcheck`.
 
 Get the code and run the demo:
 

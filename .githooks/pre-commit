@@ -1,7 +1,8 @@
 #!/bin/sh
 # Copyright (c) 2026 M.W.R. Hoiting
 
-# Refuses commits on main, and checks the formatting. Install with `make hooks`.
+# Refuses commits on main, checks the formatting, and checks the GitHub workflows when they are
+# staged. Install with `make hooks`.
 
 set -eu
 
@@ -11,3 +12,13 @@ if [ "$(git symbolic-ref --short -q HEAD || true)" = "main" ]; then
 fi
 
 make fmt
+
+# Only the workflows that this commit adds or changes. Without actionlint, the commit still
+# goes through, and CI checks the workflows anyway.
+if [ -n "$(git diff --cached --name-only --diff-filter=ACMR -- '.github/workflows/*.yml')" ]; then
+    if command -v actionlint >/dev/null 2>&1; then
+        make actionlint
+    else
+        echo "Note: actionlint is not installed, so the workflows were not checked. CI checks them." >&2
+    fi
+fi

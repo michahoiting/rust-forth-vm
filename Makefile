@@ -14,6 +14,8 @@
 # make protect    Applies the GitHub rulesets, which needs gh, python3 and admin access.
 #                 make protect RULESETS=path applies only the given files.
 # make metrics    Reports PR lead time and issue throughput, which needs gh and python3.
+# make report-miri RUN_URL=url  Opens or updates the issue for a failed nightly Miri run, which needs gh.
+# make actionlint Checks the GitHub workflows, which needs actionlint.
 # make demo-expected  Updates the expected demo output that the tests compare with.
 # make perf       Measures the VM, and stores the result under target/perf, which needs python3.
 # make perf-report   Shows the stored development of the measurements.
@@ -33,7 +35,7 @@ MSRV := $(shell sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
 
 .DEFAULT_GOAL := ci
 
-.PHONY: ci ci-all fmt clippy build test test-release test-minimal doc doc-serve miri miri-32 check-miri msrv msrv-version code-changed mutants mutants-diff mutants-test check-mutants demo demo-expected setup-dev hooks protect metrics perf perf-report perf-compare perf-pad-check perf-test perf-ci perf-record check-python
+.PHONY: ci ci-all fmt clippy build test test-release test-minimal doc doc-serve miri miri-32 check-miri report-miri actionlint msrv msrv-version code-changed mutants mutants-diff mutants-test check-mutants demo demo-expected setup-dev hooks protect metrics perf perf-report perf-compare perf-pad-check perf-test perf-ci perf-record check-python
 
 ci: fmt clippy build test test-release test-minimal doc
 
@@ -82,6 +84,26 @@ check-miri:
 		echo "  rustup toolchain install nightly --profile minimal --component miri,rust-src"; \
 		exit 1; \
 	}
+
+# Opens an issue for a failed nightly Miri run, or comments on the open one. The workflow
+# passes RUN_URL, the link to the run.
+report-miri:
+	@test -n "$(RUN_URL)" || { echo "Set RUN_URL to the link of the failed run."; exit 1; }
+	@gh label create miri-failure --color B60205 --description "A nightly Miri run failed" >/dev/null 2>&1 || true
+	@number=$$(gh issue list --state open --label miri-failure --limit 1 --json number --jq '.[0].number') && \
+	if [ -n "$$number" ]; then \
+		gh issue comment "$$number" --body "Nightly Miri run failed: $(RUN_URL)"; \
+	else \
+		gh issue create --title "Nightly Miri run fails" --label miri-failure --body "Nightly Miri run failed: $(RUN_URL)"; \
+	fi
+
+# Checks the GitHub workflows with actionlint. CI runs the same target in the lint job.
+actionlint:
+	@command -v actionlint >/dev/null 2>&1 || { \
+		echo "actionlint is not installed. Install it with brew install actionlint, or see https://github.com/rhysd/actionlint"; \
+		exit 1; \
+	}
+	actionlint
 
 msrv:
 	@cargo +$(MSRV) --version >/dev/null 2>&1 || { \
@@ -188,6 +210,8 @@ setup-dev:
 	@$(MAKE) --no-print-directory hooks
 	@command -v python3 >/dev/null 2>&1 || echo "Note: python3 is not installed. make doc-serve, make metrics and make perf need it."
 	@command -v gh >/dev/null 2>&1 || echo "Note: gh is not installed. make protect and make metrics need it."
+	@command -v actionlint >/dev/null 2>&1 || echo "Note: actionlint is not installed. It checks the GitHub workflows. Install it with brew install actionlint."
+	@command -v shellcheck >/dev/null 2>&1 || echo "Note: shellcheck is not installed. actionlint uses it to check the run: scripts. Install it with brew install shellcheck."
 
 hooks:
 	git config core.hooksPath .githooks
@@ -195,6 +219,7 @@ hooks:
 # Applies each ruleset file. A ruleset with the file's name is updated, so that this can run
 # again after a change, and a missing one is created.
 protect: check-python
+	@test -n "$(RULESETS)" || { echo "No ruleset files to apply."; exit 1; }
 	@set -e; \
 	for file in $(RULESETS); do \
 		name=$$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["name"])' "$$file"); \

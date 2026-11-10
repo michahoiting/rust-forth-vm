@@ -1,0 +1,56 @@
+name: Miri
+
+# Runs Miri on main every night, instead of on every PR. A failed run opens or updates an issue.
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  miri:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup toolchain install nightly --profile minimal --component miri,rust-src
+
+      - name: Test under Miri
+        run: make miri
+
+  miri-32:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup toolchain install nightly --profile minimal --component miri,rust-src
+
+      - name: Test under Miri on a 32-bit target
+        run: make miri-32
+
+  report-failure:
+    needs: [miri, miri-32]
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Open or update the failure issue
+        run: make report-miri RUN_URL="$RUN_URL"

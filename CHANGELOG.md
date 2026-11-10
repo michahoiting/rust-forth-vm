@@ -12,6 +12,9 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 
 ### Added
 
+- Miri runs nightly on `main` in the new `miri.yml` workflow, instead of on every PR. A failed run
+  opens or updates a GitHub issue labeled `miri-failure`. A Miri status badge is in the README.
+
 - A guide to indirect threaded Forth in `docs/indirect-threading.md`, which explains XT, CFA and the dictionary layout.
 - A demo section that prints the first `n` primes with `BEGIN ... UNTIL`.
 - The loop words `BEGIN` and `UNTIL`: the body of a loop runs at least once, and `UNTIL` goes back
