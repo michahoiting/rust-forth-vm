@@ -441,6 +441,20 @@ impl Dictionary {
         Ok(unsafe { *(self.start as *const u8).add(offset) })
     }
 
+    /// Returns the `len` bytes at `addr`, which needn't be aligned. The whole range is checked
+    /// before any byte is read, so a bad range returns no bytes at all.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error of [`written_range`](Self::written_range) if the range isn't written.
+    pub(crate) fn bytes(&self, addr: Cell, len: usize) -> Result<&[u8], ForthError> {
+        let range = self.written_range(addr, len)?;
+        // SAFETY: `written_range` keeps the `len` bytes in the arena below HERE, every byte
+        // there is initialized, and the returned slice borrows `self`, so nothing can change
+        // them while the slice is in use.
+        Ok(unsafe { std::slice::from_raw_parts((self.start as *const u8).add(range.start), len) })
+    }
+
     /// Writes the byte at `addr`, checked in the same way as `fetch_byte`. Like `store`, this
     /// can change word headers and compiled code.
     ///
@@ -1125,6 +1139,46 @@ mod tests {
             assert!(matches!(
                 dictionary.written_range(end, 1),
                 Err(ForthError::AddressOutOfBounds(addr)) if addr == end
+            ));
+        }
+    }
+
+    #[test]
+    fn bytes_returns_the_written_bytes_without_alignment() {
+        unsafe {
+            let dictionary = dictionary_with(&[0x0102, 0x0304]);
+            let start = dictionary.start as Cell;
+
+            assert_eq!(
+                dictionary.bytes(start, CELL_SIZE).unwrap(),
+                0x0102usize.to_ne_bytes()
+            );
+            assert_eq!(
+                dictionary.bytes(start + 1, 2).unwrap(),
+                &0x0102usize.to_ne_bytes()[1..3]
+            );
+            assert!(dictionary.bytes(dictionary.here(), 0).unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn bytes_rejects_ranges_that_are_not_written_and_leaves_nothing_behind() {
+        unsafe {
+            let dictionary = dictionary_with(&[1]);
+            let start = dictionary.start as Cell;
+            let here = dictionary.here();
+
+            assert!(matches!(
+                dictionary.bytes(here - 1, 2),
+                Err(ForthError::UnwrittenAddress(addr)) if addr == here - 1
+            ));
+            assert!(matches!(
+                dictionary.bytes(start, Cell::MAX),
+                Err(ForthError::UnwrittenAddress(addr)) if addr == start
+            ));
+            assert!(matches!(
+                dictionary.bytes(1, 0),
+                Err(ForthError::AddressOutOfBounds(1))
             ));
         }
     }

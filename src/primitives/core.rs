@@ -538,6 +538,35 @@ pub(super) unsafe fn dot_print(vm: &mut Vm) {
     }
 }
 
+/// `EMIT ( char -- )`: Pops a Cell from the stack and writes its low byte to the output as one
+/// character. Like `C,`, it ignores the other bytes of the Cell.
+pub(super) unsafe fn emit(vm: &mut Vm) {
+    if let Some(value) = vm.pop() {
+        let result = vm.output.write_all(&[value as u8]);
+        vm.check(result.map_err(ForthError::Output));
+    }
+}
+
+/// `TYPE ( c-addr u -- )`: Pops a dictionary address and a length, and writes that many bytes
+/// from the address to the output. The whole range must be written, and a negative `u` is out
+/// of range too. On an error, nothing is written.
+pub(super) unsafe fn type_print(vm: &mut Vm) {
+    if !vm.require(2) {
+        return;
+    }
+    if let (Some(len), Some(addr)) = (vm.data_stack.pop(), vm.data_stack.pop()) {
+        let bytes = match vm.dictionary.bytes(addr, len) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                vm.check::<()>(Err(error));
+                return;
+            }
+        };
+        let result = vm.output.write_all(bytes);
+        vm.check(result.map_err(ForthError::Output));
+    }
+}
+
 /// `DUP ( x -- x x )`: Copies the top Cell.
 pub(super) unsafe fn dup(vm: &mut Vm) {
     if vm.require(1) {
@@ -716,6 +745,98 @@ mod tests {
             vm.error
         );
         assert_eq!(vm.data_stack, before);
+    }
+
+    // Boots a VM whose output is captured, and returns the VM with the capture.
+    unsafe fn captured_vm() -> (Vm, Capture) {
+        let output = Capture::default();
+        let vm = boot(output.clone(), VmConfig::new(TEST_CELLS)).unwrap();
+        (vm, output)
+    }
+
+    // Returns what a capture holds as text.
+    fn text(output: &Capture) -> String {
+        String::from_utf8(output.0.borrow().clone()).unwrap()
+    }
+
+    #[test]
+    fn emit_writes_the_low_byte_as_one_character() {
+        unsafe {
+            let (mut vm, output) = captured_vm();
+            vm.data_stack.extend_from_slice(&[0x141]);
+
+            emit(&mut vm);
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+            assert!(vm.data_stack.is_empty());
+            assert_eq!(text(&output), "A");
+        }
+    }
+
+    #[test]
+    fn type_writes_the_bytes_at_an_address() {
+        unsafe {
+            let (mut vm, output) = captured_vm();
+            let addr = vm.dictionary.here();
+            vm.dictionary.char_comma(b'h').unwrap();
+            vm.dictionary.char_comma(b'i').unwrap();
+            vm.data_stack.extend_from_slice(&[addr, 2]);
+
+            type_print(&mut vm);
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+            assert!(vm.data_stack.is_empty());
+            assert_eq!(text(&output), "hi");
+        }
+    }
+
+    #[test]
+    fn type_of_zero_bytes_at_here_writes_nothing() {
+        unsafe {
+            let (mut vm, output) = captured_vm();
+            let here = vm.dictionary.here();
+            vm.data_stack.extend_from_slice(&[here, 0]);
+
+            type_print(&mut vm);
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+            assert!(vm.data_stack.is_empty());
+            assert_eq!(text(&output), "");
+        }
+    }
+
+    #[test]
+    fn type_of_an_unwritten_range_writes_nothing_and_reports_the_address() {
+        unsafe {
+            let (mut vm, output) = captured_vm();
+            let addr = vm.dictionary.here();
+            vm.dictionary.char_comma(b'x').unwrap();
+            vm.data_stack.extend_from_slice(&[addr, 2]);
+
+            type_print(&mut vm);
+            assert!(
+                matches!(vm.error, Some(ForthError::UnwrittenAddress(a)) if a == addr),
+                "got: {:?}",
+                vm.error
+            );
+            assert!(vm.data_stack.is_empty());
+            assert_eq!(text(&output), "");
+        }
+    }
+
+    #[test]
+    fn type_of_a_negative_length_writes_nothing() {
+        unsafe {
+            let (mut vm, output) = captured_vm();
+            let addr = vm.dictionary.here();
+            vm.dictionary.char_comma(b'x').unwrap();
+            vm.data_stack.extend_from_slice(&[addr, -1isize as Cell]);
+
+            type_print(&mut vm);
+            assert!(
+                matches!(vm.error, Some(ForthError::UnwrittenAddress(a)) if a == addr),
+                "got: {:?}",
+                vm.error
+            );
+            assert_eq!(text(&output), "");
+        }
     }
 
     #[test]
@@ -1196,6 +1317,8 @@ mod tests {
                 zero_greater_than,
                 invert,
                 cell_plus,
+                emit,
+                type_print,
             ] {
                 assert_underflow(word, &[]);
             }

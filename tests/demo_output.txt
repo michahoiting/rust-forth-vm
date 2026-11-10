@@ -23,8 +23,9 @@ Demo sections:
   18. Loops with BEGIN and UNTIL
   19. Generating Primes
   20. Program Information
-  21. Returning to the Interpreter with QUIT and ABORT
-  22. Error Handling
+  21. Printing Characters and Strings
+  22. Returning to the Interpreter with QUIT and ABORT
+  23. Error Handling
 Enter a section number, Q to quit [0]: --- TEST RUN 1: Evaluating Text Operations ---
 Input:
     40 2 +            \ leaves 42 on the stack
@@ -379,7 +380,14 @@ SOFTWARE.
 ok
 -------------------------------------
 
---- TEST RUN 21: Returning to the Interpreter with QUIT and ABORT ---
+--- TEST RUN 21: Printing Characters and Strings ---
+Input:
+    65 EMIT 32 EMIT                      \ prints A and a space
+    HERE 72 C, 105 C, HERE OVER - TYPE   \ stores two bytes at HERE, then prints them: Hi
+Output: A Hiok
+-------------------------------------
+
+--- TEST RUN 22: Returning to the Interpreter with QUIT and ABORT ---
 Input:
     7 1 . QUIT 2 .                  \ prints 1, and leaves 7 on the stack
 Output: 1 
@@ -406,7 +414,7 @@ Input:
 Output: 0 ok
 -------------------------------------
 
---- TEST RUN 22: Error Handling ---
+--- TEST RUN 23: Error Handling ---
 Input:
     : BROKEN 1 NO-SUCH-WORD ;
 Output: Forth Error: Word or numeric literal 'NO-SUCH-WORD' not recognized.
@@ -467,6 +475,7 @@ Demo sections:
   18. Loops with BEGIN and UNTIL
   19. Generating Primes
   20. Program Information
-  21. Returning to the Interpreter with QUIT and ABORT
-  22. Error Handling
+  21. Printing Characters and Strings
+  22. Returning to the Interpreter with QUIT and ABORT
+  23. Error Handling
 Enter a section number, Q to quit [0]: 
