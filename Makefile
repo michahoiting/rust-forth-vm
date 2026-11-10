@@ -35,7 +35,7 @@ MSRV := $(shell sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
 
 .DEFAULT_GOAL := ci
 
-.PHONY: ci ci-all fmt clippy build test test-release test-minimal doc doc-serve miri miri-32 check-miri report-miri actionlint msrv msrv-version code-changed mutants mutants-diff mutants-test check-mutants demo demo-expected setup-dev hooks protect metrics perf perf-report perf-compare perf-pad-check perf-test perf-ci perf-record check-python
+.PHONY: ci ci-all fmt clippy build test test-release test-minimal doc doc-serve miri miri-32 check-miri miri-needed report-miri actionlint msrv msrv-version code-changed mutants mutants-diff mutants-test check-mutants demo demo-expected setup-dev hooks protect metrics perf perf-report perf-compare perf-pad-check perf-test perf-ci perf-record check-python
 
 ci: fmt clippy build test test-release test-minimal doc
 
@@ -84,6 +84,14 @@ check-miri:
 		echo "  rustup toolchain install nightly --profile minimal --component miri,rust-src"; \
 		exit 1; \
 	}
+
+# Prints true when SHA differs from the commit of the latest Miri run other than RUN_ID, and
+# false when they match. A failed lookup prints true, so Miri runs rather than being skipped.
+# The workflow passes its own run ID and commit. Needs gh and jq.
+miri-needed:
+	@test -n "$(RUN_ID)" -a -n "$(SHA)" || { echo "Set RUN_ID and SHA."; exit 2; }
+	@last=$$(gh run list --workflow miri.yml --limit 5 --json databaseId,headSha | jq -r --arg id "$(RUN_ID)" '[.[] | select((.databaseId | tostring) != $$id)][0].headSha // ""') || last=""; \
+	if [ -n "$$last" ] && [ "$$last" = "$(SHA)" ]; then echo false; else echo true; fi
 
 # Opens an issue for a failed nightly Miri run, or comments on the open one. The workflow
 # passes RUN_URL, the link to the run.
