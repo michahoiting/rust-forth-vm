@@ -195,8 +195,9 @@ fn bye_exits_with_code_zero_and_keeps_prior_output() {
     let output = run(&[], b"40 2 + . BYE 99 .\n");
     assert_eq!(output.status.code(), Some(0));
     let stdout = String::from_utf8(output.stdout).unwrap();
+    // The banner prints the build's git hash, which can contain "99", so only the end of the
+    // output says that nothing ran after BYE.
     assert!(stdout.ends_with("42 "));
-    assert!(!stdout.contains("99"));
 }
 
 #[test]
