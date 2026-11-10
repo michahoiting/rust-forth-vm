@@ -225,11 +225,11 @@ See the [limitations](../README.md#limitations) in the README for what the VM do
 | `CHAR` | `( -- char )` | ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Parses a name and pushes its first character |
 | `COUNT` | `( c-addr1 -- c-addr2 u )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Gives the bytes and the length of a counted string |
 | `CR` | `( -- )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Starts a new line |
-| `EMIT` | `( char -- )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Prints one character |
+| `EMIT` | `( char -- )` | FORTH-83, ANS CORE | Yes | Prints the low byte of the Cell as one character |
 | `S"` | `( -- c-addr u )` | ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Parses text up to `"`, and pushes it as a string |
 | `SPACE` | `( -- )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Prints a space |
 | `SPACES` | `( n -- )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Prints `n` spaces |
-| `TYPE` | `( c-addr u -- )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Prints `u` bytes |
+| `TYPE` | `( c-addr u -- )` | FORTH-83, ANS CORE | Yes | Prints `u` bytes from a dictionary address below `HERE`. A range that isn't written, including a negative `u`, gives an error and prints nothing |
 | `[CHAR]` | `( -- )` | ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Inside a definition: parses a name, and compiles its first character as a literal (immediate) |
 
 ## Numbers

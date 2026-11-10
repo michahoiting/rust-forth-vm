@@ -498,6 +498,49 @@ fn dot_writes_a_signed_number() {
 }
 
 #[test]
+fn emit_writes_one_character() {
+    assert_eq!(output_of(&["65 EMIT"]), "A");
+    assert_eq!(output_of(&["65 EMIT 66 EMIT"]), "AB");
+}
+
+#[test]
+fn type_writes_bytes_from_the_dictionary() {
+    assert_eq!(output_of(&["HERE 72 C, 105 C, HERE OVER - TYPE"]), "Hi");
+    assert_eq!(output_of(&["HERE 0 TYPE"]), "");
+}
+
+#[test]
+fn type_rejects_ranges_that_are_not_written_and_prints_nothing() {
+    unsafe {
+        let output = Capture::default();
+        let mut vm = test_vm(output.clone());
+        assert_error!(&mut vm, "HERE 2 TYPE", ForthError::UnwrittenAddress(_));
+        assert_error!(&mut vm, "HERE -1 TYPE", ForthError::UnwrittenAddress(_));
+        assert_eq!(output.text(), "");
+    }
+}
+
+#[test]
+fn emit_and_type_need_their_arguments() {
+    unsafe {
+        let output = Capture::default();
+        let mut vm = test_vm(output.clone());
+        assert_error!(&mut vm, "EMIT", ForthError::DataStackUnderflow);
+        assert_error!(&mut vm, "1 TYPE", ForthError::DataStackUnderflow);
+        assert_eq!(output.text(), "");
+    }
+}
+
+#[test]
+fn emit_and_type_report_output_errors() {
+    unsafe {
+        let mut vm = test_vm(FailingWriter);
+        assert_error!(&mut vm, "65 EMIT", ForthError::Output(_));
+        assert_error!(&mut vm, "HERE 0 C, HERE 1 - 1 TYPE", ForthError::Output(_));
+    }
+}
+
+#[test]
 fn information_words_write_their_text() {
     assert_eq!(output_of(&["HELP"]), "Type BYE or press Ctrl-D to leave.\n");
     assert_eq!(output_of(&["COPYRIGHT"]), format!("{}\n", COPYRIGHT));
