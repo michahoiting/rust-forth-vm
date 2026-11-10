@@ -51,7 +51,7 @@ const MORE_INFORMATION: &str = r#"Type "HELP", "COPYRIGHT" or "LICENSE" for more
 
 /// The demo sections, each with its title and one block of Forth source. Each section runs in a
 /// new VM, so it must define everything it uses.
-const SECTIONS: [(&str, &str); 20] = [
+const SECTIONS: [(&str, &str); 21] = [
     (
         "Evaluating Text Operations",
         r"
@@ -381,6 +381,13 @@ CREATE TABLE 5 , TABLE @ .    \ prints 5: , still works when no definition is op
 HELP                          \ prints how to leave the prompt
 COPYRIGHT                     \ prints the copyright notice
 LICENSE                       \ prints the license
+",
+    ),
+    (
+        "Printing Characters and Strings",
+        r"
+65 EMIT 32 EMIT                      \ prints A and a space
+HERE 72 C, 105 C, HERE OVER - TYPE   \ stores two bytes at HERE, then prints them: Hi
 ",
     ),
 ];
