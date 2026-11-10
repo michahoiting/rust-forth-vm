@@ -142,8 +142,8 @@ See the [limitations](../README.md#limitations) in the README for what the VM do
 | `CELLS` | `( n1 -- n2 )` | ANS CORE | Yes | Gives the size of `n1` Cells in bytes |
 | `CHAR+` | `( c-addr1 -- c-addr2 )` | ANS CORE | Yes | Adds the size of a character to an address |
 | `CHARS` | `( n1 -- n2 )` | ANS CORE | Yes | Gives the size of `n1` characters in bytes. A character is one byte |
-| `CMOVE` | `( c-addr1 c-addr2 u -- )` | FORTH-83 | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Copies `u` bytes, starting with the lowest address |
-| `CMOVE>` | `( c-addr1 c-addr2 u -- )` | FORTH-83 | No | Copies `u` bytes, starting with the highest address |
+| `CMOVE` | `( c-addr1 c-addr2 u -- )` | FORTH-83 | Yes | Copies `u` bytes, starting with the lowest address |
+| `CMOVE>` | `( c-addr1 c-addr2 u -- )` | FORTH-83 | Yes | Copies `u` bytes, starting with the highest address |
 | `ERASE` | `( addr u -- )` | ANS CORE EXT | No | Sets `u` bytes to zero |
 | `FILL` | `( c-addr u char -- )` | FORTH-83, ANS CORE | Yes | Fills `u` bytes with the low byte of `char` |
 | `HERE` | `( -- addr )` | FORTH-83, ANS CORE | Yes | Pushes the address of the next free byte in the dictionary |
@@ -218,19 +218,20 @@ See the [limitations](../README.md#limitations) in the README for what the VM do
 | Word | Stack effect | Standard | Implemented | Description |
 |------|--------------|----------|-------------|-------------|
 | `-TRAILING` | `( c-addr u1 -- c-addr u2 )` | FORTH-83 | No | Shortens a string to drop its trailing spaces |
-| `."` | `( -- )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Inside a definition: parses text up to `"`, and prints it when the definition runs (immediate) |
+| `."` | `( -- )` | FORTH-83, ANS CORE | Yes | Inside a definition: parses text up to `"`, and prints it when the definition runs (immediate) |
 | `.(` | `( -- )` | FORTH-83, ANS CORE EXT | No | Parses text up to `)`, and prints it right away (immediate) |
 | `BL` | `( -- char )` | ANS CORE | Yes | Pushes the value of the space character |
 | `C"` | `( -- c-addr )` | ANS CORE EXT | No | Inside a definition: parses text up to `"`, and pushes it as a counted string (immediate) |
-| `CHAR` | `( -- char )` | ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Parses a name and pushes its first character |
-| `COUNT` | `( c-addr1 -- c-addr2 u )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Gives the bytes and the length of a counted string |
-| `CR` | `( -- )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Starts a new line |
+| `CHAR` | `( -- char )` | ANS CORE | Yes | Parses a name and pushes its first byte, which is its first character if that is ASCII |
+| `COMPARE` | `( c-addr1 u1 c-addr2 u2 -- n )` | ANS STRING | Yes | Compares two strings byte by byte, as unsigned bytes. Gives -1, 0 or 1. A string that is a prefix of the other is less |
+| `COUNT` | `( c-addr1 -- c-addr2 u )` | FORTH-83, ANS CORE | Yes | Gives the bytes and the length of a counted string |
+| `CR` | `( -- )` | FORTH-83, ANS CORE | Yes | Starts a new line |
 | `EMIT` | `( char -- )` | FORTH-83, ANS CORE | Yes | Prints the low byte of the Cell as one character |
-| `S"` | `( -- c-addr u )` | ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Parses text up to `"`, and pushes it as a string |
-| `SPACE` | `( -- )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Prints a space |
-| `SPACES` | `( n -- )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Prints `n` spaces |
+| `S"` | `( -- c-addr u )` | ANS CORE | Yes | Parses text up to `"`, and pushes it as a string. Interpreted text goes into one of two transient buffers of 256 bytes, so a longer text gives an error |
+| `SPACE` | `( -- )` | FORTH-83, ANS CORE | Yes | Prints a space |
+| `SPACES` | `( n -- )` | FORTH-83, ANS CORE | Yes | Prints `n` spaces |
 | `TYPE` | `( c-addr u -- )` | FORTH-83, ANS CORE | Yes | Prints `u` bytes from a dictionary address below `HERE`. A range that isn't written, including a negative `u`, gives an error and prints nothing |
-| `[CHAR]` | `( -- )` | ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Inside a definition: parses a name, and compiles its first character as a literal (immediate) |
+| `[CHAR]` | `( -- )` | ANS CORE | Yes | Inside a definition: parses a name, and compiles its first character as a literal (immediate) |
 
 ## Numbers
 
@@ -283,7 +284,7 @@ See the [limitations](../README.md#limitations) in the README for what the VM do
 |------|--------------|----------|-------------|-------------|
 | `(BYE)` | `( n -- )` | rust-forth-vm | Yes | Stops the program with exit code `n`'s low byte |
 | `ABORT` | `( i*x -- )` | FORTH-83, ANS CORE | Yes | Clears the data stack, then does the same as `QUIT` |
-| `ABORT"` | `( i*x flag -- )` | FORTH-83, ANS CORE | No ([#120](https://github.com/michahoiting/rust-forth-vm/issues/120)) | Inside a definition: parses text up to `"`. When the definition runs with a true flag, it prints the text and does `ABORT` (immediate) |
+| `ABORT"` | `( i*x flag -- )` | FORTH-83, ANS CORE | Yes | Inside a definition: parses text up to `"`. When the definition runs with a true flag, it prints the text and does `ABORT` (immediate) |
 | `BYE` | `( -- )` | ANS TOOLS EXT | Yes | Stops the program with exit code 0 |
 | `COPYRIGHT` | `( -- )` | rust-forth-vm | Yes | Prints the copyright notice |
 | `FORTH-83` | `( -- )` | FORTH-83 | No | Exists to show that the system follows the FORTH-83 Standard |

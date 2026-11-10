@@ -51,7 +51,7 @@ const MORE_INFORMATION: &str = r#"Type "HELP", "COPYRIGHT" or "LICENSE" for more
 
 /// The demo sections, each with its title and one block of Forth source. Each section runs in a
 /// new VM, so it must define everything it uses.
-const SECTIONS: [(&str, &str); 21] = [
+const SECTIONS: [(&str, &str); 22] = [
     (
         "Evaluating Text Operations",
         r"
@@ -390,6 +390,17 @@ LICENSE                       \ prints the license
 HERE 72 C, 105 C, HERE OVER - TYPE   \ stores two bytes at HERE, then prints them: Hi
 ",
     ),
+    (
+        "Strings, Spaces and Counted Text",
+        r#"
+S" hello" TYPE CR                    \ prints hello, then a new line
+: GREET ." Hello, world!" CR ;       \ ." prints its text each time GREET runs
+GREET
+CHAR * EMIT 3 SPACES CHAR * EMIT CR  \ CHAR pushes the code of *, and 3 SPACES prints three
+HERE 2 C, 104 C, 105 C, COUNT TYPE CR  \ COUNT turns the counted text into a string: hi
+S" abc" S" abd" COMPARE .            \ prints -1, since abc comes before abd
+"#,
+    ),
 ];
 
 /// The `QUIT` and `ABORT` examples. Both discard the rest of their text, so each one is a
@@ -407,7 +418,7 @@ const RESTART_TESTS: [&str; 8] = [
 
 /// The error handling tests. An error discards the rest of its text, so each one is a separate
 /// block.
-const ERROR_TESTS: [&str; 12] = [
+const ERROR_TESTS: [&str; 14] = [
     ": BROKEN 1 NO-SUCH-WORD ;",
     "BROKEN",
     "+",
@@ -420,6 +431,8 @@ const ERROR_TESTS: [&str; 12] = [
     ": X W ;",
     "' DUP COMPILE,",
     "1 0 /",
+    ": CHECK 0= ABORT\" zero\" ; 0 CHECK",
+    "5 CHECK 42 .",
 ];
 
 /// The sections with several blocks of source, which run after [`SECTIONS`]. Each one has its

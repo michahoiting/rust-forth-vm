@@ -96,6 +96,49 @@ fn reserved_stack<T>(cells: usize) -> Result<Vec<T>, ForthError> {
     Ok(stack)
 }
 
+/// The size of each transient buffer that interpreted `S"` copies its text into.
+pub(crate) const STRING_BUFFER_BYTES: usize = 256;
+
+/// Two transient buffers in the dictionary, below HERE, for the text of interpreted `S"`. A
+/// string goes into the next buffer, so two strings in a row are both still valid. A third
+/// string reuses the first buffer.
+#[derive(Default)]
+pub(crate) struct StringBuffers {
+    /// The addresses of the two buffers, which are set when the VM boots.
+    addresses: [Cell; 2],
+    /// The index in `addresses` of the buffer for the next string.
+    next: usize,
+}
+
+impl StringBuffers {
+    /// Reserves both buffers at HERE, and leaves HERE cell-aligned after them.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::DictionaryOverflow`] if the buffers don't fit in the dictionary.
+    ///
+    /// # Safety
+    ///
+    /// `dictionary` must come from [`Vm::new`]. The buffers are reserved with a positive
+    /// [`Dictionary::allot`], which only moves HERE, so this must run before any word is
+    /// defined, which puts the buffers below every word.
+    pub(crate) unsafe fn reserve(&mut self, dictionary: &mut Dictionary) -> Result<(), ForthError> {
+        for address in &mut self.addresses {
+            *address = dictionary.here();
+            dictionary.allot(STRING_BUFFER_BYTES as isize)?;
+        }
+        dictionary.align();
+        Ok(())
+    }
+
+    /// Returns the address of the buffer for the next string, and moves on to the other one.
+    pub(crate) fn take(&mut self) -> Cell {
+        let address = self.addresses[self.next];
+        self.next = (self.next + 1) % self.addresses.len();
+        address
+    }
+}
+
 /// The state of a Forth VM. Create one with [`boot`](crate::boot), and evaluate Forth with
 /// [`outer_interpreter`](crate::outer_interpreter).
 ///
@@ -126,6 +169,8 @@ pub struct Vm {
     pub(crate) output: Box<dyn Write>,
     /// The text being interpreted.
     pub(crate) input: InputSource,
+    /// The transient buffers for the text of interpreted `S"`.
+    pub(crate) string_buffers: StringBuffers,
     /// Set by a primitive to stop the VM.
     pub(crate) error: Option<ForthError>,
 }
@@ -203,6 +248,7 @@ impl Vm {
             compiler: Compiler::default(),
             output,
             input: InputSource::default(),
+            string_buffers: StringBuffers::default(),
             error: None,
         })
     }

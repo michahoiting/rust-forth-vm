@@ -380,6 +380,76 @@ impl Dictionary {
         Ok(())
     }
 
+    /// Copies `len` bytes from `source` to `destination`, one byte at a time from the lowest
+    /// address, as `CMOVE` does. Where the ranges overlap, a byte that was already copied can be
+    /// copied again, so use [`copy_bytes_backward`](Self::copy_bytes_backward) for a copy to a
+    /// higher address.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::AddressOutOfBounds`] or [`ForthError::UnwrittenAddress`] if either
+    /// range isn't written. No bytes are changed on error.
+    pub(crate) fn copy_bytes_forward(
+        &mut self,
+        source: Cell,
+        destination: Cell,
+        len: usize,
+    ) -> Result<(), ForthError> {
+        let source_range = self.written_range(source, len)?;
+        let destination_range = self.written_range(destination, len)?;
+        let base = self.start as *mut u8;
+        for i in 0..len {
+            // SAFETY: both ranges are in the written part of the arena, and `i < len`.
+            unsafe { *base.add(destination_range.start + i) = *base.add(source_range.start + i) };
+        }
+        Ok(())
+    }
+
+    /// Copies `len` bytes from `source` to `destination`, one byte at a time from the highest
+    /// address, as `CMOVE>` does. Where the ranges overlap, each source byte is copied before
+    /// it is overwritten, which is the copy to use when `destination` is above `source`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::AddressOutOfBounds`] or [`ForthError::UnwrittenAddress`] if either
+    /// range isn't written. No bytes are changed on error.
+    pub(crate) fn copy_bytes_backward(
+        &mut self,
+        source: Cell,
+        destination: Cell,
+        len: usize,
+    ) -> Result<(), ForthError> {
+        let source_range = self.written_range(source, len)?;
+        let destination_range = self.written_range(destination, len)?;
+        let base = self.start as *mut u8;
+        for i in (0..len).rev() {
+            // SAFETY: both ranges are in the written part of the arena, and `i < len`.
+            unsafe { *base.add(destination_range.start + i) = *base.add(source_range.start + i) };
+        }
+        Ok(())
+    }
+
+    /// Writes `bytes` at `addr`, which must be in the written part of the arena. Nothing is
+    /// written on error.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::AddressOutOfBounds`] or [`ForthError::UnwrittenAddress`] if the
+    /// range isn't written.
+    pub(crate) fn write_bytes(&mut self, addr: Cell, bytes: &[u8]) -> Result<(), ForthError> {
+        let range = self.written_range(addr, bytes.len())?;
+        // SAFETY: `written_range` keeps the bytes in the written part of the arena, and `bytes`
+        // is a slice of the caller's memory, so it can't overlap the arena.
+        unsafe {
+            ptr::copy_nonoverlapping(
+                bytes.as_ptr(),
+                (self.start as *mut u8).add(range.start),
+                bytes.len(),
+            )
+        };
+        Ok(())
+    }
+
     /// Returns the index of the Cell at `addr`, which must be cell-aligned and end at or below
     /// HERE. This keeps the Cell inside the part of the arena that has been written.
     ///
@@ -1140,6 +1210,83 @@ mod tests {
                 dictionary.written_range(end, 1),
                 Err(ForthError::AddressOutOfBounds(addr)) if addr == end
             ));
+        }
+    }
+
+    #[test]
+    fn copy_bytes_forward_repeats_the_first_byte_in_an_overlap() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[0, 0]);
+            let start = dictionary.start as Cell;
+            dictionary.write_bytes(start, &[1, 2, 3, 4]).unwrap();
+            dictionary.copy_bytes_forward(start, start + 1, 4).unwrap();
+            assert_eq!(dictionary.bytes(start, 5).unwrap(), [1, 1, 1, 1, 1]);
+        }
+    }
+
+    #[test]
+    fn copy_bytes_backward_keeps_the_source_bytes_in_an_overlap() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[0, 0]);
+            let start = dictionary.start as Cell;
+            dictionary.write_bytes(start, &[1, 2, 3, 4]).unwrap();
+            dictionary.copy_bytes_backward(start, start + 1, 4).unwrap();
+            assert_eq!(dictionary.bytes(start, 5).unwrap(), [1, 1, 2, 3, 4]);
+        }
+    }
+
+    #[test]
+    fn copy_bytes_copies_between_separate_ranges() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[0, 0]);
+            let start = dictionary.start as Cell;
+            let cell = std::mem::size_of::<Cell>() as Cell;
+            dictionary.write_bytes(start, &[7, 8, 9]).unwrap();
+            dictionary
+                .copy_bytes_forward(start, start + cell, 3)
+                .unwrap();
+            assert_eq!(dictionary.bytes(start + cell, 3).unwrap(), [7, 8, 9]);
+            dictionary.write_bytes(start, &[4, 5, 6]).unwrap();
+            dictionary
+                .copy_bytes_backward(start, start + cell, 3)
+                .unwrap();
+            assert_eq!(dictionary.bytes(start + cell, 3).unwrap(), [4, 5, 6]);
+        }
+    }
+
+    #[test]
+    fn copy_bytes_rejects_unwritten_ranges_and_changes_nothing() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[0, 0]);
+            let start = dictionary.start as Cell;
+            let len = 2 * std::mem::size_of::<Cell>();
+            dictionary.write_bytes(start, &[1, 2]).unwrap();
+            let before = dictionary.bytes(start, len).unwrap().to_vec();
+            assert!(matches!(
+                dictionary.copy_bytes_forward(start, start + 1, len),
+                Err(ForthError::UnwrittenAddress(_))
+            ));
+            assert!(matches!(
+                dictionary.copy_bytes_backward(start, start + 1, len),
+                Err(ForthError::UnwrittenAddress(_))
+            ));
+            assert_eq!(dictionary.bytes(start, len).unwrap(), before.as_slice());
+        }
+    }
+
+    #[test]
+    fn write_bytes_writes_only_written_ranges() {
+        unsafe {
+            let mut dictionary = dictionary_with(&[0, 0]);
+            let start = dictionary.start as Cell;
+            let end = start + 2 * std::mem::size_of::<Cell>() as Cell;
+            dictionary.write_bytes(end - 2, &[5, 6]).unwrap();
+            assert_eq!(dictionary.bytes(end - 2, 2).unwrap(), [5, 6]);
+            assert!(matches!(
+                dictionary.write_bytes(end - 1, &[7, 8]),
+                Err(ForthError::UnwrittenAddress(_))
+            ));
+            assert_eq!(dictionary.bytes(end - 1, 1).unwrap(), [6]);
         }
     }
 

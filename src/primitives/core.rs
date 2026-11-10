@@ -2,6 +2,7 @@
 
 //! Words that work on the data stack and on memory.
 
+use std::cmp::Ordering;
 use std::io::Write;
 use std::mem;
 
@@ -515,6 +516,116 @@ pub(super) unsafe fn move_bytes(vm: &mut Vm) {
     vm.check(result);
 }
 
+/// `CMOVE ( c-addr1 c-addr2 u -- )`: Copies `u` bytes from `c-addr1` to `c-addr2`, starting
+/// with the lowest address. Where the ranges overlap, a copy to a higher address repeats bytes,
+/// so `CMOVE>` is the one to use then. Nothing is copied if a range isn't written.
+pub(super) unsafe fn cmove(vm: &mut Vm) {
+    if !vm.require(3) {
+        return;
+    }
+    let len = vm.data_stack.len();
+    let count = vm.data_stack[len - 1];
+    let destination = vm.data_stack[len - 2];
+    let source = vm.data_stack[len - 3];
+    let result = vm.dictionary.copy_bytes_forward(source, destination, count);
+    vm.data_stack.truncate(len - 3);
+    vm.check(result);
+}
+
+/// `CMOVE> ( c-addr1 c-addr2 u -- )`: Copies `u` bytes from `c-addr1` to `c-addr2`, starting
+/// with the highest address. This is the copy to use when `c-addr2` is above `c-addr1` and the
+/// ranges overlap. Nothing is copied if a range isn't written.
+pub(super) unsafe fn cmove_backward(vm: &mut Vm) {
+    if !vm.require(3) {
+        return;
+    }
+    let len = vm.data_stack.len();
+    let count = vm.data_stack[len - 1];
+    let destination = vm.data_stack[len - 2];
+    let source = vm.data_stack[len - 3];
+    let result = vm
+        .dictionary
+        .copy_bytes_backward(source, destination, count);
+    vm.data_stack.truncate(len - 3);
+    vm.check(result);
+}
+
+/// `COMPARE ( c-addr1 u1 c-addr2 u2 -- n )`: Compares two strings byte by byte, as unsigned
+/// values, and leaves -1 if the first is less, 0 if they are equal, or 1 if it is greater. A
+/// string that is a prefix of the other is less. Nothing is compared if a range isn't written.
+pub(super) unsafe fn compare(vm: &mut Vm) {
+    if !vm.require(4) {
+        return;
+    }
+    let len = vm.data_stack.len();
+    let second_len = vm.data_stack[len - 1];
+    let second = vm.data_stack[len - 2];
+    let first_len = vm.data_stack[len - 3];
+    let first = vm.data_stack[len - 4];
+    let ordering = match (
+        vm.dictionary.bytes(first, first_len),
+        vm.dictionary.bytes(second, second_len),
+    ) {
+        (Ok(first), Ok(second)) => Ok(first.cmp(second)),
+        (Err(error), _) | (_, Err(error)) => Err(error),
+    };
+    vm.data_stack.truncate(len - 4);
+    match vm.check(ordering) {
+        Some(Ordering::Less) => vm.push(-1isize as Cell),
+        Some(Ordering::Equal) => vm.push(0),
+        Some(Ordering::Greater) => vm.push(1),
+        None => {}
+    }
+}
+
+/// `CR ( -- )`: Writes a newline to the output.
+pub(super) unsafe fn cr(vm: &mut Vm) {
+    write_text(vm, "\n");
+}
+
+/// `SPACE ( -- )`: Writes one space to the output.
+pub(super) unsafe fn space(vm: &mut Vm) {
+    write_text(vm, " ");
+}
+
+/// `SPACES ( n -- )`: Pops a count and writes that many spaces to the output. A zero or
+/// negative count writes nothing.
+pub(super) unsafe fn spaces(vm: &mut Vm) {
+    /// A block of spaces, which `SPACES` writes in pieces, so that a large count needs no
+    /// large buffer.
+    const BLANKS: [u8; 64] = [b' '; 64];
+    let Some(count) = vm.pop() else {
+        return;
+    };
+    let mut remaining = if (count as isize) > 0 { count } else { 0 };
+    while remaining > 0 {
+        let piece = remaining.min(BLANKS.len());
+        let result = vm.output.write_all(&BLANKS[..piece]);
+        if vm.check(result.map_err(ForthError::Output)).is_none() {
+            break;
+        }
+        remaining -= piece;
+    }
+}
+
+/// `COUNT ( c-addr1 -- c-addr2 u )`: Takes the length from the byte at `c-addr1`, and gives the
+/// address of the text after it and that length. The text must be written.
+pub(super) unsafe fn count(vm: &mut Vm) {
+    let Some(address) = vm.pop() else {
+        return;
+    };
+    let Some(len) = vm.check(vm.dictionary.fetch_byte(address)) else {
+        return;
+    };
+    let text = address.wrapping_add(1);
+    let len = len as Cell;
+    let checked = vm.dictionary.bytes(text, len).map(|_| ());
+    if vm.check(checked).is_some() {
+        vm.push(text);
+        vm.push(len);
+    }
+}
+
 /// `BL ( -- char )`: Pushes the value of the space character.
 pub(super) unsafe fn blank(vm: &mut Vm) {
     vm.push(b' ' as Cell);
@@ -757,6 +868,186 @@ mod tests {
     // Returns what a capture holds as text.
     fn text(output: &Capture) -> String {
         String::from_utf8(output.0.borrow().clone()).unwrap()
+    }
+
+    // Writes `bytes` at HERE, and returns their address.
+    unsafe fn store_text(vm: &mut Vm, bytes: &[u8]) -> Cell {
+        let addr = vm.dictionary.here();
+        for &byte in bytes {
+            vm.dictionary.char_comma(byte).unwrap();
+        }
+        addr
+    }
+
+    #[test]
+    fn cr_and_space_write_a_newline_and_a_space() {
+        unsafe {
+            let (mut vm, output) = captured_vm();
+            cr(&mut vm);
+            space(&mut vm);
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+            assert_eq!(text(&output), "\n ");
+        }
+    }
+
+    #[test]
+    fn spaces_writes_the_count_and_nothing_for_zero_or_less() {
+        unsafe {
+            let (mut vm, output) = captured_vm();
+            vm.data_stack.extend_from_slice(&[3]);
+            spaces(&mut vm);
+            vm.data_stack.extend_from_slice(&[1]);
+            spaces(&mut vm);
+            vm.data_stack.extend_from_slice(&[0]);
+            spaces(&mut vm);
+            vm.data_stack.extend_from_slice(&[-1isize as Cell]);
+            spaces(&mut vm);
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+            assert!(vm.data_stack.is_empty());
+            assert_eq!(text(&output), "    ");
+        }
+    }
+
+    #[test]
+    fn spaces_writes_a_count_longer_than_one_piece() {
+        unsafe {
+            let (mut vm, output) = captured_vm();
+            vm.data_stack.extend_from_slice(&[150]);
+            spaces(&mut vm);
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+            assert_eq!(text(&output), " ".repeat(150));
+        }
+    }
+
+    #[test]
+    fn spaces_needs_a_cell() {
+        unsafe {
+            let (mut vm, output) = captured_vm();
+            spaces(&mut vm);
+            assert!(matches!(vm.error, Some(ForthError::DataStackUnderflow)));
+            assert_eq!(text(&output), "");
+        }
+    }
+
+    #[test]
+    fn count_gives_the_text_after_the_length_byte() {
+        unsafe {
+            let (mut vm, _output) = captured_vm();
+            let addr = store_text(&mut vm, &[3, b'a', b'b', b'c']);
+            vm.data_stack.push(addr);
+            count(&mut vm);
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+            assert_eq!(vm.data_stack, [addr + 1, 3]);
+        }
+    }
+
+    #[test]
+    fn count_of_text_that_is_not_written_is_an_error() {
+        unsafe {
+            let (mut vm, _output) = captured_vm();
+            let addr = store_text(&mut vm, &[5, b'a']);
+            vm.data_stack.push(addr);
+            count(&mut vm);
+            assert!(
+                matches!(vm.error, Some(ForthError::UnwrittenAddress(a)) if a == addr + 1),
+                "got: {:?}",
+                vm.error
+            );
+            assert!(vm.data_stack.is_empty());
+        }
+    }
+
+    #[test]
+    fn cmove_copies_from_the_lowest_address_and_repeats_in_an_overlap() {
+        unsafe {
+            let (mut vm, _output) = captured_vm();
+            let addr = store_text(&mut vm, b"abcd");
+            vm.data_stack.extend_from_slice(&[addr, addr + 1, 3]);
+            cmove(&mut vm);
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+            assert!(vm.data_stack.is_empty());
+            assert_eq!(vm.dictionary.bytes(addr, 4).unwrap(), b"aaaa");
+        }
+    }
+
+    #[test]
+    fn cmove_backward_keeps_the_source_bytes_in_an_overlap() {
+        unsafe {
+            let (mut vm, _output) = captured_vm();
+            let addr = store_text(&mut vm, b"abcd");
+            vm.data_stack.extend_from_slice(&[addr, addr + 1, 3]);
+            cmove_backward(&mut vm);
+            assert!(vm.error.is_none(), "got: {:?}", vm.error);
+            assert!(vm.data_stack.is_empty());
+            assert_eq!(vm.dictionary.bytes(addr, 4).unwrap(), b"aabc");
+        }
+    }
+
+    #[test]
+    fn cmove_of_a_range_that_is_not_written_changes_nothing() {
+        unsafe {
+            let (mut vm, _output) = captured_vm();
+            let addr = store_text(&mut vm, b"abcd");
+            vm.data_stack.extend_from_slice(&[addr, addr + 2, 9]);
+            cmove(&mut vm);
+            assert!(
+                matches!(vm.error, Some(ForthError::UnwrittenAddress(_))),
+                "got: {:?}",
+                vm.error
+            );
+            assert_eq!(vm.dictionary.bytes(addr, 4).unwrap(), b"abcd");
+        }
+    }
+
+    // Stores two strings, and returns what `COMPARE` leaves for them.
+    unsafe fn compare_result(first: &[u8], second: &[u8]) -> Cell {
+        let (mut vm, _output) = captured_vm();
+        let first_addr = store_text(&mut vm, first);
+        let second_addr = store_text(&mut vm, second);
+        vm.data_stack
+            .extend_from_slice(&[first_addr, first.len(), second_addr, second.len()]);
+        compare(&mut vm);
+        assert!(vm.error.is_none(), "got: {:?}", vm.error);
+        assert_eq!(vm.data_stack.len(), 1);
+        vm.data_stack[0]
+    }
+
+    #[test]
+    fn compare_gives_minus_one_zero_or_one() {
+        unsafe {
+            assert_eq!(compare_result(b"abc", b"abd"), -1isize as Cell);
+            assert_eq!(compare_result(b"abd", b"abc"), 1);
+            assert_eq!(compare_result(b"abc", b"abc"), 0);
+        }
+    }
+
+    #[test]
+    fn compare_puts_a_prefix_first_and_compares_bytes_as_unsigned() {
+        unsafe {
+            assert_eq!(compare_result(b"ab", b"abc"), -1isize as Cell);
+            assert_eq!(compare_result(b"", b"a"), -1isize as Cell);
+            assert_eq!(compare_result(&[0x80], &[0x7f]), 1);
+        }
+    }
+
+    #[test]
+    fn compare_needs_four_cells_and_a_written_range() {
+        unsafe {
+            let (mut vm, _output) = captured_vm();
+            vm.data_stack.extend_from_slice(&[1, 2, 3]);
+            compare(&mut vm);
+            assert!(matches!(vm.error, Some(ForthError::DataStackUnderflow)));
+
+            let (mut vm, _output) = captured_vm();
+            let addr = store_text(&mut vm, b"a");
+            vm.data_stack.extend_from_slice(&[addr, 5, addr, 1]);
+            compare(&mut vm);
+            assert!(
+                matches!(vm.error, Some(ForthError::UnwrittenAddress(_))),
+                "got: {:?}",
+                vm.error
+            );
+        }
     }
 
     #[test]

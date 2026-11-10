@@ -48,6 +48,19 @@ impl InputSource {
             self.pos = self.text.len();
         }
     }
+
+    /// Parses the text up to the next `delimiter`, and skips the delimiter. Like `S"`, it
+    /// first skips one space, if there is one. Returns `None`, without moving, if there is no
+    /// `delimiter`.
+    pub(crate) fn parse_until(&mut self, delimiter: char) -> Option<String> {
+        let rest = &self.text[self.pos..];
+        let start = usize::from(rest.starts_with(' '));
+        let tail = &rest[start..];
+        let len = tail.find(delimiter)?;
+        let text = tail[..len].to_string();
+        self.pos += start + len + delimiter.len_utf8();
+        Some(text)
+    }
 }
 
 #[cfg(test)]
@@ -108,6 +121,46 @@ mod tests {
         let mut input = source("first\nnext");
         input.parse_name();
         input.skip_line();
+        assert_eq!(input.parse_name().as_deref(), Some("next"));
+    }
+
+    #[test]
+    fn parse_until_skips_one_space_and_the_delimiter() {
+        let mut input = source(" text here\" next");
+        assert_eq!(input.parse_until('"').as_deref(), Some("text here"));
+        assert_eq!(input.parse_name().as_deref(), Some("next"));
+    }
+
+    #[test]
+    fn parse_until_gives_an_empty_text_for_an_immediate_delimiter() {
+        let mut input = source(" \" next");
+        assert_eq!(input.parse_until('"').as_deref(), Some(""));
+        assert_eq!(input.parse_name().as_deref(), Some("next"));
+    }
+
+    #[test]
+    fn parse_until_keeps_a_space_that_is_not_the_first() {
+        let mut input = source("  two spaces\"");
+        assert_eq!(input.parse_until('"').as_deref(), Some(" two spaces"));
+    }
+
+    #[test]
+    fn parse_until_spans_lines() {
+        let mut input = source(" one\ntwo\" next");
+        assert_eq!(input.parse_until('"').as_deref(), Some("one\ntwo"));
+    }
+
+    #[test]
+    fn parse_until_reports_a_missing_delimiter_without_moving() {
+        let mut input = source(" no quote");
+        assert_eq!(input.parse_until('"'), None);
+        assert_eq!(input.parse_name().as_deref(), Some("no"));
+    }
+
+    #[test]
+    fn parse_until_handles_non_ascii_text() {
+        let mut input = source(" één\" next");
+        assert_eq!(input.parse_until('"').as_deref(), Some("één"));
         assert_eq!(input.parse_name().as_deref(), Some("next"));
     }
 }
