@@ -35,6 +35,10 @@ pub(crate) struct Compiler {
     branch_cfa: Cell,
     /// CFA compiled by `IF`.
     zero_branch_cfa: Cell,
+    /// CFA of `TYPE`, which `."` compiles.
+    type_cfa: Cell,
+    /// CFA of the hidden `(ABORT")`, which `ABORT"` compiles.
+    abort_quote_cfa: Cell,
     /// The control structures that are open in the definition, innermost last. This is the
     /// control flow stack, which is kept apart from the data stack so that a number can't be
     /// taken for the address of a branch operand.
@@ -54,6 +58,12 @@ impl Compiler {
         self.exit_cfa = exit_cfa;
         self.branch_cfa = branch_cfa;
         self.zero_branch_cfa = zero_branch_cfa;
+    }
+
+    /// Records the primitives that the compiled forms of `."` and `ABORT"` call.
+    pub(crate) fn link_string_words(&mut self, type_cfa: Cell, abort_quote_cfa: Cell) {
+        self.type_cfa = type_cfa;
+        self.abort_quote_cfa = abort_quote_cfa;
     }
 
     /// Returns whether a definition is being compiled.
@@ -139,6 +149,88 @@ impl Compiler {
     ) -> Result<(), ForthError> {
         dictionary.comma(self.lit_cfa)?;
         dictionary.comma(number)
+    }
+
+    /// Compiles the bytes of a string, followed by the code that pushes its address and length.
+    /// The layout is `BRANCH`, the bytes, and then two literals. The branch goes over the bytes,
+    /// so they never run, and the literals push the address of the bytes and their length. The
+    /// bytes are word-aligned after they end, so that the literals stay aligned.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ForthError::DictionaryOverflow`] if the string doesn't fit in the dictionary.
+    /// Nothing is compiled then.
+    ///
+    /// # Safety
+    ///
+    /// `dictionary` must come from a booted VM, as every dictionary write requires.
+    pub(crate) unsafe fn compile_string(
+        &self,
+        dictionary: &mut Dictionary,
+        text: &[u8],
+    ) -> Result<(), ForthError> {
+        let mark = dictionary.mark();
+        let result = self.write_string(dictionary, text);
+        if result.is_err() {
+            dictionary.restore(mark);
+        }
+        result
+    }
+
+    /// Writes the layout of [`compile_string`](Self::compile_string), without restoring on error.
+    unsafe fn write_string(
+        &self,
+        dictionary: &mut Dictionary,
+        text: &[u8],
+    ) -> Result<(), ForthError> {
+        dictionary.comma(self.branch_cfa)?;
+        let operand = dictionary.here();
+        dictionary.comma(0)?;
+        let address = dictionary.here();
+        for &byte in text {
+            dictionary.char_comma(byte)?;
+        }
+        dictionary.align();
+        dictionary.store(operand, dictionary.here())?;
+        self.compile_literal(dictionary, address)?;
+        self.compile_literal(dictionary, text.len() as Cell)
+    }
+
+    /// Compiles the code of `."`: the string, then a call to `TYPE`.
+    ///
+    /// # Errors
+    ///
+    /// See [`compile_string`](Self::compile_string) and [`compile_word`](Self::compile_word).
+    ///
+    /// # Safety
+    ///
+    /// The same as [`compile_string`](Self::compile_string), and `link_string_words` must have
+    /// run.
+    pub(crate) unsafe fn compile_print_string(
+        &self,
+        dictionary: &mut Dictionary,
+        text: &[u8],
+    ) -> Result<(), ForthError> {
+        self.compile_string(dictionary, text)?;
+        self.compile_word(dictionary, self.type_cfa)
+    }
+
+    /// Compiles the code of `ABORT"`: the string, then a call to the hidden `(ABORT")`.
+    ///
+    /// # Errors
+    ///
+    /// See [`compile_string`](Self::compile_string) and [`compile_word`](Self::compile_word).
+    ///
+    /// # Safety
+    ///
+    /// The same as [`compile_print_string`](Self::compile_print_string).
+    pub(crate) unsafe fn compile_abort_quote(
+        &self,
+        dictionary: &mut Dictionary,
+        text: &[u8],
+    ) -> Result<(), ForthError> {
+        self.compile_string(dictionary, text)?;
+        self.compile_word(dictionary, self.abort_quote_cfa)
     }
 
     /// Compiles the start of `IF`: a branch that is taken when the flag is zero, with an operand

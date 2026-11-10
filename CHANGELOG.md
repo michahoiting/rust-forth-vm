@@ -12,6 +12,11 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 
 ### Added
 
+- The string and output words `S"`, `."`, `ABORT"`, `COUNT`, `CR`, `SPACE`, `SPACES`, `CHAR`,
+  `[CHAR]`, `CMOVE`, `CMOVE>` and `COMPARE`. Interpreted `S"` text goes into one of two transient
+  buffers of 256 bytes. `ABORT"` prints its text and does `ABORT` when its flag is true. Part of
+  #120, and of the string words of #92.
+
 - Miri runs nightly on `main` in the new `miri.yml` workflow, instead of on every PR. A failed run
   opens or updates a GitHub issue labeled `miri-failure`. A Miri status badge is in the README.
 

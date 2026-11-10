@@ -19,6 +19,8 @@ pub use self::core::COPYRIGHT;
 ///
 /// Returns [`ForthError::DictionaryOverflow`] if they don't fit in the dictionary.
 pub(crate) unsafe fn install(vm: &mut Vm) -> Result<(), ForthError> {
+    // The transient buffers come first, so that every later word goes after them.
+    vm.string_buffers.reserve(&mut vm.dictionary)?;
     vm.dictionary
         .add_primitive_word("+", code_cell(core::plus), 0)?;
     vm.dictionary
@@ -113,8 +115,23 @@ pub(crate) unsafe fn install(vm: &mut Vm) -> Result<(), ForthError> {
         .add_primitive_word(".", code_cell(core::dot_print), 0)?;
     vm.dictionary
         .add_primitive_word("EMIT", code_cell(core::emit), 0)?;
-    vm.dictionary
+    let type_cfa = vm
+        .dictionary
         .add_primitive_word("TYPE", code_cell(core::type_print), 0)?;
+    vm.dictionary
+        .add_primitive_word("CR", code_cell(core::cr), 0)?;
+    vm.dictionary
+        .add_primitive_word("SPACE", code_cell(core::space), 0)?;
+    vm.dictionary
+        .add_primitive_word("SPACES", code_cell(core::spaces), 0)?;
+    vm.dictionary
+        .add_primitive_word("COUNT", code_cell(core::count), 0)?;
+    vm.dictionary
+        .add_primitive_word("CMOVE", code_cell(core::cmove), 0)?;
+    vm.dictionary
+        .add_primitive_word("CMOVE>", code_cell(core::cmove_backward), 0)?;
+    vm.dictionary
+        .add_primitive_word("COMPARE", code_cell(core::compare), 0)?;
     vm.dictionary
         .add_primitive_word("@", code_cell(core::fetch), 0)?;
     vm.dictionary
@@ -208,11 +225,28 @@ pub(crate) unsafe fn install(vm: &mut Vm) -> Result<(), ForthError> {
     vm.dictionary
         .add_primitive_word("[']", code_cell(parsing::bracket_tick), F_IMMEDIATE)?;
     vm.dictionary
+        .add_primitive_word("CHAR", code_cell(parsing::char_word), 0)?;
+    vm.dictionary
+        .add_primitive_word("[CHAR]", code_cell(parsing::bracket_char), F_IMMEDIATE)?;
+    vm.dictionary
+        .add_primitive_word("S\"", code_cell(parsing::s_quote), F_IMMEDIATE)?;
+    vm.dictionary
+        .add_primitive_word(".\"", code_cell(parsing::dot_quote), F_IMMEDIATE)?;
+    vm.dictionary
+        .add_primitive_word("ABORT\"", code_cell(parsing::abort_quote), F_IMMEDIATE)?;
+    vm.dictionary
         .add_primitive_word("EXECUTE", code_cell(runtime::execute), 0)?;
     vm.dictionary
         .add_primitive_word("QUIT", code_cell(runtime::quit), 0)?;
     vm.dictionary
         .add_primitive_word("ABORT", code_cell(runtime::abort), 0)?;
+    // The text of ABORT" is on the stack, so no inline operand is needed, and the word is
+    // hidden, because it's only compiled.
+    let abort_quote_cfa = vm.dictionary.add_primitive_word(
+        "(ABORT\")",
+        code_cell(runtime::run_abort_quote),
+        F_HIDDEN,
+    )?;
     vm.dictionary
         .add_primitive_word("BYE", code_cell(runtime::bye), 0)?;
     vm.dictionary
@@ -240,5 +274,6 @@ pub(crate) unsafe fn install(vm: &mut Vm) -> Result<(), ForthError> {
     )?;
     vm.compiler
         .link_primitives(lit_cfa, exit_cfa, branch_cfa, zero_branch_cfa);
+    vm.compiler.link_string_words(type_cfa, abort_quote_cfa);
     Ok(())
 }

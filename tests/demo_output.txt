@@ -24,8 +24,9 @@ Demo sections:
   19. Generating Primes
   20. Program Information
   21. Printing Characters and Strings
-  22. Returning to the Interpreter with QUIT and ABORT
-  23. Error Handling
+  22. Strings, Spaces and Counted Text
+  23. Returning to the Interpreter with QUIT and ABORT
+  24. Error Handling
 Enter a section number, Q to quit [0]: --- TEST RUN 1: Evaluating Text Operations ---
 Input:
     40 2 +            \ leaves 42 on the stack
@@ -387,7 +388,22 @@ Input:
 Output: A Hiok
 -------------------------------------
 
---- TEST RUN 22: Returning to the Interpreter with QUIT and ABORT ---
+--- TEST RUN 22: Strings, Spaces and Counted Text ---
+Input:
+    S" hello" TYPE CR                    \ prints hello, then a new line
+    : GREET ." Hello, world!" CR ;       \ ." prints its text each time GREET runs
+    GREET
+    CHAR * EMIT 3 SPACES CHAR * EMIT CR  \ CHAR pushes the code of *, and 3 SPACES prints three
+    HERE 2 C, 104 C, 105 C, COUNT TYPE CR  \ COUNT turns the counted text into a string: hi
+    S" abc" S" abd" COMPARE .            \ prints -1, since abc comes before abd
+Output: hello
+Hello, world!
+*   *
+hi
+-1 ok
+-------------------------------------
+
+--- TEST RUN 23: Returning to the Interpreter with QUIT and ABORT ---
 Input:
     7 1 . QUIT 2 .                  \ prints 1, and leaves 7 on the stack
 Output: 1 
@@ -414,7 +430,7 @@ Input:
 Output: 0 ok
 -------------------------------------
 
---- TEST RUN 23: Error Handling ---
+--- TEST RUN 24: Error Handling ---
 Input:
     : BROKEN 1 NO-SUCH-WORD ;
 Output: Forth Error: Word or numeric literal 'NO-SUCH-WORD' not recognized.
@@ -451,6 +467,12 @@ Output: Forth Error: COMPILE, can only be used while compiling.
 Input:
     1 0 /
 Output: Forth Error: Division by zero.
+Input:
+    : CHECK 0= ABORT" zero" ; 0 CHECK
+Output: zero
+Input:
+    5 CHECK 42 .
+Output: 42 ok
 -------------------------------------
 
 Demo sections:
@@ -476,6 +498,7 @@ Demo sections:
   19. Generating Primes
   20. Program Information
   21. Printing Characters and Strings
-  22. Returning to the Interpreter with QUIT and ABORT
-  23. Error Handling
+  22. Strings, Spaces and Counted Text
+  23. Returning to the Interpreter with QUIT and ABORT
+  24. Error Handling
 Enter a section number, Q to quit [0]: 

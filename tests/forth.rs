@@ -541,6 +541,123 @@ fn emit_and_type_report_output_errors() {
 }
 
 #[test]
+fn s_quote_gives_a_string_for_type_both_interpreted_and_compiled() {
+    assert_eq!(output_of(&["S\" hello\" TYPE"]), "hello");
+    assert_eq!(output_of(&["S\" a\" S\" bc\" TYPE TYPE"]), "bca");
+    assert_eq!(output_of(&["S\" café\" TYPE"]), "café");
+    assert_eq!(output_of(&[": T S\" abc\" TYPE ; T"]), "abc");
+}
+
+#[test]
+fn dot_quote_prints_its_text_from_a_definition() {
+    assert_eq!(output_of(&[": HI .\" hello\" ;", "HI HI"]), "hellohello");
+    assert_eq!(output_of(&[": NUM .\" n=\" 7 . ; NUM"]), "n=7 ");
+}
+
+#[test]
+fn string_words_need_a_closing_quote() {
+    unsafe {
+        let mut vm = test_vm(io::sink());
+        assert_error!(&mut vm, "S\" open", ForthError::UnterminatedString("S\""));
+        assert_error!(&mut vm, ".\" open", ForthError::NotCompiling(".\""));
+        assert_error!(
+            &mut vm,
+            ": OPEN .\" open",
+            ForthError::UnterminatedString(".\"")
+        );
+    }
+}
+
+#[test]
+fn a_comment_can_hold_a_quote() {
+    assert_eq!(output_of(&["( a \" b ) 65 EMIT"]), "A");
+    assert_eq!(output_of(&["\\ S\" hidden", "66 EMIT"]), "B");
+}
+
+#[test]
+fn s_quote_longer_than_a_buffer_is_an_error_and_the_vm_still_works() {
+    unsafe {
+        let output = Capture::default();
+        let mut vm = test_vm(output.clone());
+        let long = format!("S\" {}\"", "x".repeat(256 + 1));
+        assert_error!(&mut vm, &long, ForthError::StringTooLong(257));
+        assert_eq!(output_of(&["S\" fits\" TYPE"]), "fits");
+    }
+}
+
+#[test]
+fn spaces_space_and_cr_write_layout() {
+    assert_eq!(output_of(&["3 SPACES 65 EMIT"]), "   A");
+    assert_eq!(output_of(&["SPACE CR"]), " \n");
+    assert_eq!(output_of(&["-2 SPACES"]), "");
+}
+
+#[test]
+fn count_gives_the_counted_text_for_type() {
+    assert_eq!(output_of(&["HERE 2 C, 104 C, 105 C, COUNT TYPE"]), "hi");
+}
+
+#[test]
+fn char_and_bracket_char_give_the_first_byte() {
+    assert_eq!(output_of(&["CHAR A EMIT"]), "A");
+    assert_eq!(output_of(&[": STAR [CHAR] * EMIT ; STAR"]), "*");
+}
+
+#[test]
+fn cmove_repeats_bytes_in_an_overlap_and_cmove_backward_does_not() {
+    // Three bytes, ABC, and then the first two are copied one byte up.
+    assert_eq!(
+        output_of(&["HERE 65 C, 66 C, 67 C, DUP 1+ 2 CMOVE HERE 3 - 3 TYPE"]),
+        "AAA"
+    );
+    assert_eq!(
+        output_of(&["HERE 65 C, 66 C, 67 C, DUP 1+ 2 CMOVE> HERE 3 - 3 TYPE"]),
+        "AAB"
+    );
+}
+
+#[test]
+fn compare_orders_strings() {
+    assert_eq!(output_of(&["S\" abc\" S\" abd\" COMPARE ."]), "-1 ");
+    assert_eq!(output_of(&["S\" abc\" S\" abc\" COMPARE ."]), "0 ");
+    assert_eq!(output_of(&["S\" abd\" S\" abc\" COMPARE ."]), "1 ");
+}
+
+#[test]
+fn abort_quote_prints_and_aborts_when_its_flag_is_true() {
+    unsafe {
+        let output = Capture::default();
+        let mut vm = test_vm(output.clone());
+        outer_interpreter(&mut vm, ": CHECK 0= ABORT\" zero\" ;").unwrap();
+        assert_error!(&mut vm, "0 CHECK", ForthError::Abort);
+        assert_eq!(output.text(), "zero");
+        outer_interpreter(&mut vm, "5 CHECK 42 .").unwrap();
+        assert_eq!(output.text(), "zero42 ");
+    }
+}
+
+#[test]
+fn a_failed_definition_with_strings_leaves_nothing_behind() {
+    unsafe {
+        let output = Capture::default();
+        let mut vm = test_vm(output.clone());
+        outer_interpreter(&mut vm, "HERE .").unwrap();
+        assert_error!(
+            &mut vm,
+            ": BAD S\" abc\" .\" x\" ABORT\" y\" NO-SUCH-WORD ;",
+            ForthError::UnknownWord(_)
+        );
+        outer_interpreter(&mut vm, "HERE .").unwrap();
+        let text = output.text();
+        let cells: Vec<&str> = text.split_whitespace().collect();
+        assert_eq!(cells.len(), 2);
+        assert_eq!(cells[0], cells[1]);
+        outer_interpreter(&mut vm, ": OK 1 ; OK .").unwrap();
+        assert!(output.text().ends_with("1 "));
+    }
+}
+
+#[test]
 fn information_words_write_their_text() {
     assert_eq!(output_of(&["HELP"]), "Type BYE or press Ctrl-D to leave.\n");
     assert_eq!(output_of(&["COPYRIGHT"]), format!("{}\n", COPYRIGHT));
@@ -775,6 +892,14 @@ fn errors_have_stable_messages() {
         (ForthError::ReturnStackOverflow, "Return stack overflow."),
         (ForthError::DictionaryOverflow, "Dictionary overflow."),
         (ForthError::DivisionByZero, "Division by zero."),
+        (
+            ForthError::UnterminatedString("S\""),
+            "S\" has no closing quotation mark.",
+        ),
+        (
+            ForthError::StringTooLong(300),
+            "String of 300 bytes is too long for a transient buffer.",
+        ),
         (ForthError::MissingName("CREATE"), "CREATE needs a name."),
         (
             ForthError::DoesOutsideDefinition,

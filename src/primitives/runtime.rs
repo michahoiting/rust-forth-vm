@@ -6,6 +6,8 @@
 //! Every word's Parameter Field directly follows its Code Field, so these words use
 //! [`pfa_of`] on W. `DODOES` is in [`vm`](crate::vm), because the inner interpreter calls it.
 
+use std::io::Write;
+
 use crate::cell::Cell;
 use crate::dictionary::pfa_of;
 use crate::error::ForthError;
@@ -49,6 +51,33 @@ pub(super) unsafe fn quit(vm: &mut Vm) {
 /// `ABORT ( i*x -- )`: Does the same as `QUIT`, and also clears the data stack. The
 /// interpreter does that part too, so that a host can tell the two apart.
 pub(super) unsafe fn abort(vm: &mut Vm) {
+    vm.set_error(ForthError::Abort);
+}
+
+/// `(ABORT") ( flag c-addr u -- )`: Pops a flag and a string. If the flag is nonzero, writes the
+/// string to the output and does `ABORT`. `ABORT"` compiles a call to this word, which is
+/// hidden, because it takes its string from the stack.
+pub(super) unsafe fn run_abort_quote(vm: &mut Vm) {
+    if !vm.require(3) {
+        return;
+    }
+    let len = vm.data_stack.len();
+    let count = vm.data_stack[len - 1];
+    let address = vm.data_stack[len - 2];
+    let flag = vm.data_stack[len - 3];
+    vm.data_stack.truncate(len - 3);
+    if flag == 0 {
+        return;
+    }
+    let bytes = match vm.dictionary.bytes(address, count) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            vm.set_error(error);
+            return;
+        }
+    };
+    let result = vm.output.write_all(bytes);
+    vm.check(result.map_err(ForthError::Output));
     vm.set_error(ForthError::Abort);
 }
 

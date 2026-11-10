@@ -217,6 +217,11 @@ stacks, and rolls back any unfinished colon definition.
   can crash the process.
 - A negative `ALLOT` can only give back data of the newest word, and only if `CREATE` made
   it.
+- Interpreted `S"` puts its text in one of two transient buffers of 256 bytes, which take 512
+  bytes of the dictionary at boot. Two strings in a row are both valid. A third string reuses
+  the first buffer, and a text longer than 256 bytes gives `StringTooLong`.
+- Strings hold bytes. `CHAR` and `[CHAR]` give the first byte of a name, so a character that
+  takes more than one byte in UTF-8 gives only its first byte.
 
 ## Performance
 

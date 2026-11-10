@@ -94,6 +94,11 @@ pub enum ForthError {
     InvalidExecutionToken(Cell),
     /// `(` found no closing `)` in the input.
     UnterminatedComment,
+    /// `S"`, `."` or `ABORT"`, named here, found no closing `"` in the input.
+    UnterminatedString(&'static str),
+    /// An interpreted `S"` has this many bytes of text, which is more than a transient buffer
+    /// holds.
+    StringTooLong(usize),
     /// A word, whose execution token is held here, has a null pointer in its code field.
     NullCodeField(Cell),
     /// The output writer failed.
@@ -164,6 +169,16 @@ impl fmt::Display for ForthError {
                 write!(f, "Invalid execution token {:#x}.", xt)
             }
             ForthError::UnterminatedComment => write!(f, "Comment has no closing parenthesis."),
+            ForthError::UnterminatedString(word) => {
+                write!(f, "{} has no closing quotation mark.", word)
+            }
+            ForthError::StringTooLong(len) => {
+                write!(
+                    f,
+                    "String of {} bytes is too long for a transient buffer.",
+                    len
+                )
+            }
             ForthError::NullCodeField(xt) => {
                 write!(f, "Null code field at {:#x}.", xt)
             }
