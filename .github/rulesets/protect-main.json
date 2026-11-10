@@ -44,7 +44,6 @@
       "parameters": { "severity": "errors" }
     },
     { "type": "required_linear_history" },
-    { "type": "creation" },
-    { "type": "update" }
+    { "type": "creation" }
   ]
 }
