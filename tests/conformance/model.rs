@@ -376,6 +376,7 @@ pub fn baseline(outcomes: &[Outcome]) -> String {
 /// Requires an explicit review of additions, improvements, regressions, and stale exceptions.
 pub fn check_baseline(outcomes: &[Outcome], expected: &str) -> Result<(), String> {
     let actual = baseline(outcomes);
+    let expected = expected.replace("\r\n", "\n");
     if actual == expected {
         return Ok(());
     }

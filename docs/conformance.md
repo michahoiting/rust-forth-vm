@@ -53,7 +53,8 @@ Cell configuration**, default stacks, and an 8192-cell dictionary per scenario. 
 content fingerprint of library sources, test infrastructure, the register and baseline,
 manifests, Makefile, and the relevant documentation. This identifies measured source content
 without the circularity of putting a generated file's own Git commit into that file. It is not
-a cryptographic signature. No timestamps, host paths, or compiler-dependent debug layouts
+a cryptographic signature. Relative path separators and LF/CRLF checkout line endings are
+normalized for fingerprints and artifact comparisons. No timestamps, host paths, or compiler-dependent debug layouts
 enter the artifacts. Other architectures are measured separately and never overwrite these badges.
 
 ## Running and maintaining the checks

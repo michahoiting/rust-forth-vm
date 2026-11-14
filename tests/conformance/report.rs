@@ -150,8 +150,8 @@ pub fn artifacts(
     files
 }
 
-/// Lists every file contributing to the measurement; generated artifacts are excluded.
-fn source_paths(root: &Path) -> Vec<PathBuf> {
+/// Lists the text files contributing to the measurement; generated artifacts are excluded.
+pub fn source_paths(root: &Path) -> Vec<PathBuf> {
     fn walk(root: &Path, directory: &Path, paths: &mut Vec<PathBuf>) {
         for entry in fs::read_dir(root.join(directory)).unwrap() {
             let relative = directory.join(entry.unwrap().file_name());
@@ -187,12 +187,15 @@ fn source_paths(root: &Path) -> Vec<PathBuf> {
 pub fn source_revision(root: &Path) -> String {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for path in source_paths(root) {
-        let name = path.to_str().unwrap().as_bytes();
-        let bytes = fs::read(root.join(&path)).unwrap();
+        let name = path.to_str().unwrap().replace('\\', "/");
+        let bytes = fs::read_to_string(root.join(&path))
+            .unwrap()
+            .replace("\r\n", "\n");
         for byte in name
+            .as_bytes()
             .iter()
             .chain([0_u8].iter())
-            .chain(bytes.iter())
+            .chain(bytes.as_bytes().iter())
             .chain([0_u8].iter())
         {
             hash ^= u64::from(*byte);
@@ -207,7 +210,10 @@ pub fn check_files(root: &Path, files: &BTreeMap<String, String>) -> Result<(), 
     let stale: Vec<_> = files
         .iter()
         .filter(|(path, expected)| {
-            fs::read_to_string(root.join(path)).ok().as_ref() != Some(expected)
+            let actual = fs::read_to_string(root.join(path))
+                .ok()
+                .map(|text| text.replace("\r\n", "\n"));
+            actual.as_deref() != Some(expected.replace("\r\n", "\n").as_str())
         })
         .map(|(path, _)| path.as_str())
         .collect();

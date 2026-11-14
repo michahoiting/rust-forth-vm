@@ -219,6 +219,7 @@ fn baseline_rejects_regressions_improvements_removed_checks_and_stale_entries() 
     let rows = model::measure(&[fixture("DUP", "word")], &cases::cases(), &words).unwrap();
     let expected = model::baseline(&rows);
     assert!(model::check_baseline(&rows, &expected).is_ok());
+    assert!(model::check_baseline(&rows, &expected.replace('\n', "\r\n")).is_ok());
     let mut changed = rows.clone();
     changed[0].status = Status::Deviating;
     assert!(model::check_baseline(&changed, &expected).is_err());
@@ -301,12 +302,49 @@ fn freshness_checks_reject_missing_and_stale_files() {
         std::process::id()
     ));
     std::fs::create_dir_all(&root).unwrap();
-    let files = std::collections::BTreeMap::from([("report.md".into(), "measured".into())]);
+    let files = std::collections::BTreeMap::from([("report.md".into(), "measured\n".into())]);
     assert!(report::check_files(&root, &files).is_err());
     std::fs::write(root.join("report.md"), "stale").unwrap();
     assert!(report::check_files(&root, &files).is_err());
-    std::fs::write(root.join("report.md"), "measured").unwrap();
+    std::fs::write(root.join("report.md"), "measured\n").unwrap();
     assert!(report::check_files(&root, &files).is_ok());
+    std::fs::write(root.join("report.md"), "measured\r\n").unwrap();
+    assert!(report::check_files(&root, &files).is_ok());
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(not(miri))]
+#[test]
+fn source_fingerprints_ignore_checkout_line_endings_but_detect_new_inputs() {
+    let project = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = std::env::temp_dir().join(format!(
+        "forth-conformance-fingerprint-{}",
+        std::process::id()
+    ));
+    let paths = report::source_paths(project);
+    for path in &paths {
+        let destination = root.join(path);
+        std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
+        let text = std::fs::read_to_string(project.join(path))
+            .unwrap()
+            .replace("\r\n", "\n");
+        std::fs::write(destination, text).unwrap();
+    }
+    let original = report::source_revision(&root);
+    assert_eq!(original, report::source_revision(project));
+    for path in &paths {
+        let text = std::fs::read_to_string(root.join(path))
+            .unwrap()
+            .replace('\n', "\r\n");
+        std::fs::write(root.join(path), text).unwrap();
+    }
+    assert_eq!(original, report::source_revision(&root));
+    std::fs::write(
+        root.join("src/conformance_extra.rs"),
+        "// Copyright (c) 2026 M.W.R. Hoiting\n\n// Additional source input.\n",
+    )
+    .unwrap();
+    assert_ne!(original, report::source_revision(&root));
     std::fs::remove_dir_all(root).unwrap();
 }
 
