@@ -12,6 +12,11 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 
 ### Added
 
+- FORTH-83 and ISO Forth conformance probes, a requirements register and reviewed regression
+  baseline, and generated reports and README percentage badges with standard provision links.
+  `make conformance` refreshes the artifacts; CI checks their freshness and known outcomes.
+  Scores include registered general system requirements and do not claim certification.
+
 - Host-authorized MMIO ranges, Forth registration and revocation, volatile register access,
   and block transfers between MMIO and dictionary buffers, including fixed-address FIFO
   transfers. Permission and width flags combine with `OR`. Includes a host-buffer demo
