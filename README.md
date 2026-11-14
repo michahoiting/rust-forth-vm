@@ -6,6 +6,9 @@
 [![Miri](https://github.com/michahoiting/rust-forth-vm/actions/workflows/miri.yml/badge.svg?branch=main)](https://github.com/michahoiting/rust-forth-vm/actions/workflows/miri.yml?query=branch%3Amain)
 [![CodeQL](https://github.com/michahoiting/rust-forth-vm/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/michahoiting/rust-forth-vm/actions/workflows/github-code-scanning/codeql)
 
+[![FORTH-83 conformance](docs/conformance/f83.svg)](docs/conformance/report.md#forth-83)
+[![ISO Forth conformance](docs/conformance/iso.svg)](docs/conformance/report.md#iso-forth)
+
 A clean-room implementation of a Forth virtual machine in Rust. It is an
 indirect-threaded VM with a linked-list dictionary, a text interpreter, and a
 compiler for colon definitions.
@@ -146,6 +149,31 @@ it.
 [docs/words.md](docs/words.md) lists every word of the FORTH-83 Required Word Set and of the ANS
 Forth CORE and CORE EXT word sets, with the standard that each one belongs to and whether
 rust-forth-vm has it yet. It also has the words that rust-forth-vm adds, such as `BYE` and `HELP`.
+
+## Standard conformance
+
+The two conformance badges show **100 × passed mandatory requirements / all mandatory
+requirements in the register**, including general system requirements, rounded to one decimal
+place. Missing, deviating, blocked, and unassessed requirements stay in the denominator.
+Each word definition or registered general clause counts once. These are sampled coverage
+scores, not certification; passing probes does not prove full standard conformance.
+
+See the [measured report](docs/conformance/report.md),
+[requirements register](tests/conformance/requirements.tsv), and
+[measurement guide](docs/conformance.md) for results, dependencies, and coverage limitations.
+README badges use the reviewed 64-bit little-endian configuration; 32-bit results are separate.
+The FORTH-83 profile explicitly reports the difference between its 16-bit requirement and the
+VM's native Cell width.
+
+| Standard / reference | Relevant provisions |
+| --- | --- |
+| [FORTH-83 Standard](https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT) | Chapter 12: Required Word Set; chapter 5: data definitions; chapters 7–10: requirements, compliance, usage, and errors (plain-text source without section anchors) |
+| [ISO/IEC 15145:1997](https://www.iso.org/standard/26479.html) | Normative ISO publication identifying the Forth standard |
+| Supporting **ANS draft**, DPANS94 | [6.1 CORE](https://www.taygeta.com/forth/dpans6.htm#6.1), [3 Usage requirements](https://www.taygeta.com/forth/dpans3.htm), [3.1 Data types](https://www.taygeta.com/forth/dpans3.htm#3.1), [3.2 Implementation environment](https://www.taygeta.com/forth/dpans3.htm#3.2), [3.3 Dictionary](https://www.taygeta.com/forth/dpans3.htm#3.3), [3.4 Interpreter](https://www.taygeta.com/forth/dpans3.htm#3.4), [4.1 System documentation](https://www.taygeta.com/forth/dpans4.htm#4.1) |
+
+Individual provision links appear in the register and report. The accessible DPANS94 text is
+supporting draft material, not the published ISO text or the later Forth 2012 standard.
+Run `make conformance` to regenerate artifacts and `make conformance-check` to validate them.
 
 ## How it works
 
