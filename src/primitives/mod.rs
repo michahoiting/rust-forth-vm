@@ -23,30 +23,30 @@ pub(crate) unsafe fn install(vm: &mut Vm) -> Result<(), ForthError> {
     // The transient buffers come first, so that every later word goes after them.
     vm.string_buffers.reserve(&mut vm.dictionary)?;
     vm.dictionary
-        .add_primitive_word("MMIO@", code_cell(mmio::mmio_fetch), 0)?;
+        .add_primitive_word("MMIO@", code_cell(mmio::fetch), 0)?;
     vm.dictionary
-        .add_primitive_word("MMIO!", code_cell(mmio::mmio_store), 0)?;
+        .add_primitive_word("MMIO!", code_cell(mmio::store), 0)?;
     vm.dictionary
-        .add_primitive_word("MMIO-REGISTER", code_cell(mmio::mmio_register), 0)?;
+        .add_primitive_word("MMIO-REGISTER", code_cell(mmio::register), 0)?;
     vm.dictionary
-        .add_primitive_word("MMIO-UNREGISTER", code_cell(mmio::mmio_unregister), 0)?;
+        .add_primitive_word("MMIO-UNREGISTER", code_cell(mmio::unregister), 0)?;
     vm.dictionary
-        .add_primitive_word("MMIO>DICT", code_cell(mmio::mmio_to_dict), 0)?;
+        .add_primitive_word("MMIO>DICT", code_cell(mmio::to_dict), 0)?;
     vm.dictionary
-        .add_primitive_word("DICT>MMIO", code_cell(mmio::dict_to_mmio), 0)?;
+        .add_primitive_word("DICT>MMIO", code_cell(mmio::from_dict), 0)?;
     vm.dictionary
-        .add_primitive_word("MMIO_READ", code_cell(mmio::mmio_read), 0)?;
+        .add_primitive_word("MMIO_READ", code_cell(mmio::read_flag), 0)?;
     vm.dictionary
-        .add_primitive_word("MMIO_WRITE", code_cell(mmio::mmio_write), 0)?;
+        .add_primitive_word("MMIO_WRITE", code_cell(mmio::write_flag), 0)?;
     vm.dictionary
-        .add_primitive_word("MMIO_WIDTH_8", code_cell(mmio::mmio_width_8), 0)?;
+        .add_primitive_word("MMIO_WIDTH_8", code_cell(mmio::width_8_flag), 0)?;
     vm.dictionary
-        .add_primitive_word("MMIO_WIDTH_16", code_cell(mmio::mmio_width_16), 0)?;
+        .add_primitive_word("MMIO_WIDTH_16", code_cell(mmio::width_16_flag), 0)?;
     vm.dictionary
-        .add_primitive_word("MMIO_WIDTH_32", code_cell(mmio::mmio_width_32), 0)?;
+        .add_primitive_word("MMIO_WIDTH_32", code_cell(mmio::width_32_flag), 0)?;
     #[cfg(target_pointer_width = "64")]
     vm.dictionary
-        .add_primitive_word("MMIO_WIDTH_64", code_cell(mmio::mmio_width_64), 0)?;
+        .add_primitive_word("MMIO_WIDTH_64", code_cell(mmio::width_64_flag), 0)?;
 
     vm.dictionary
         .add_primitive_word("+", code_cell(core::plus), 0)?;

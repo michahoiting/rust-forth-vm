@@ -7,8 +7,8 @@ use crate::error::ForthError;
 use crate::vm::Vm;
 
 /// `MMIO@ ( addr width -- x )`: Reads one authorized register, zero-extending its value.
-pub(super) unsafe fn mmio_fetch(vm: &mut Vm) {
-    let Some([addr, width]) = mmio_arguments(vm) else {
+pub(super) unsafe fn fetch(vm: &mut Vm) {
+    let Some([addr, width]) = take_arguments(vm) else {
         return;
     };
     let result = vm.mmio.access(addr, width, width, true, false);
@@ -18,8 +18,8 @@ pub(super) unsafe fn mmio_fetch(vm: &mut Vm) {
 }
 
 /// `MMIO! ( x addr width -- )`: Writes the low bits of a Cell to one authorized register.
-pub(super) unsafe fn mmio_store(vm: &mut Vm) {
-    let Some([value, addr, width]) = mmio_arguments(vm) else {
+pub(super) unsafe fn store(vm: &mut Vm) {
+    let Some([value, addr, width]) = take_arguments(vm) else {
         return;
     };
     let result = vm.mmio.access(addr, width, width, true, true);
@@ -29,7 +29,7 @@ pub(super) unsafe fn mmio_store(vm: &mut Vm) {
 }
 
 /// Takes all arguments in stack order, leaving the stack unchanged on underflow.
-fn mmio_arguments<const N: usize>(vm: &mut Vm) -> Option<[Cell; N]> {
+fn take_arguments<const N: usize>(vm: &mut Vm) -> Option<[Cell; N]> {
     if !vm.require(N) {
         return None;
     }
@@ -41,8 +41,8 @@ fn mmio_arguments<const N: usize>(vm: &mut Vm) -> Option<[Cell; N]> {
 }
 
 /// `MMIO-REGISTER ( addr bytes rights widths -- id )`: Activates a permitted host subrange.
-pub(super) unsafe fn mmio_register(vm: &mut Vm) {
-    let Some([addr, bytes, rights, widths]) = mmio_arguments(vm) else {
+pub(super) unsafe fn register(vm: &mut Vm) {
+    let Some([addr, bytes, rights, widths]) = take_arguments(vm) else {
         return;
     };
     if vm.dictionary.overlaps_arena(addr, bytes) {
@@ -56,8 +56,8 @@ pub(super) unsafe fn mmio_register(vm: &mut Vm) {
 }
 
 /// `MMIO-UNREGISTER ( id -- )`: Revokes an active registration without recycling its ID.
-pub(super) unsafe fn mmio_unregister(vm: &mut Vm) {
-    let Some([id]) = mmio_arguments(vm) else {
+pub(super) unsafe fn unregister(vm: &mut Vm) {
+    let Some([id]) = take_arguments(vm) else {
         return;
     };
     let result = vm.mmio.unregister(id);
@@ -66,19 +66,19 @@ pub(super) unsafe fn mmio_unregister(vm: &mut Vm) {
 
 /// `MMIO>DICT ( mmio-addr dict-addr bytes width increment -- )`: Reads registers into a
 /// reserved dictionary buffer. A zero increment flag reads the same FIFO register repeatedly.
-pub(super) unsafe fn mmio_to_dict(vm: &mut Vm) {
-    mmio_block(vm, false);
+pub(super) unsafe fn to_dict(vm: &mut Vm) {
+    transfer_block(vm, false);
 }
 
 /// `DICT>MMIO ( dict-addr mmio-addr bytes width increment -- )`: Writes a reserved dictionary
 /// buffer to registers. A zero increment flag writes the same FIFO register repeatedly.
-pub(super) unsafe fn dict_to_mmio(vm: &mut Vm) {
-    mmio_block(vm, true);
+pub(super) unsafe fn from_dict(vm: &mut Vm) {
+    transfer_block(vm, true);
 }
 
 /// Validates a complete block before its first access; dictionary bytes may be unaligned.
-fn mmio_block(vm: &mut Vm, write: bool) {
-    let Some([source, destination, bytes, width, increment]) = mmio_arguments(vm) else {
+fn transfer_block(vm: &mut Vm, write: bool) {
+    let Some([source, destination, bytes, width, increment]) = take_arguments(vm) else {
         return;
     };
     let (addr, dict) = if write {
@@ -97,33 +97,33 @@ fn mmio_block(vm: &mut Vm, write: bool) {
 }
 
 /// `MMIO_READ ( -- mask )`: Pushes its MMIO permission bit.
-pub(super) unsafe fn mmio_read(vm: &mut Vm) {
+pub(super) unsafe fn read_flag(vm: &mut Vm) {
     vm.push(crate::mmio::MMIO_READ);
 }
 
 /// `MMIO_WRITE ( -- mask )`: Pushes its MMIO permission bit.
-pub(super) unsafe fn mmio_write(vm: &mut Vm) {
+pub(super) unsafe fn write_flag(vm: &mut Vm) {
     vm.push(crate::mmio::MMIO_WRITE);
 }
 
 /// `MMIO_WIDTH_8 ( -- mask )`: Pushes its MMIO permission bit.
-pub(super) unsafe fn mmio_width_8(vm: &mut Vm) {
+pub(super) unsafe fn width_8_flag(vm: &mut Vm) {
     vm.push(crate::mmio::MMIO_WIDTH_8);
 }
 
 /// `MMIO_WIDTH_16 ( -- mask )`: Pushes its MMIO permission bit.
-pub(super) unsafe fn mmio_width_16(vm: &mut Vm) {
+pub(super) unsafe fn width_16_flag(vm: &mut Vm) {
     vm.push(crate::mmio::MMIO_WIDTH_16);
 }
 
 /// `MMIO_WIDTH_32 ( -- mask )`: Pushes its MMIO permission bit.
-pub(super) unsafe fn mmio_width_32(vm: &mut Vm) {
+pub(super) unsafe fn width_32_flag(vm: &mut Vm) {
     vm.push(crate::mmio::MMIO_WIDTH_32);
 }
 
 /// `MMIO_WIDTH_64 ( -- mask )`: Pushes its MMIO permission bit.
 #[cfg(target_pointer_width = "64")]
-pub(super) unsafe fn mmio_width_64(vm: &mut Vm) {
+pub(super) unsafe fn width_64_flag(vm: &mut Vm) {
     vm.push(crate::mmio::MMIO_WIDTH_64);
 }
 
@@ -137,12 +137,12 @@ mod tests {
         // SAFETY: VMs are only driven by primitives under their normal contract.
         unsafe {
             for (primitive, count) in [
-                (mmio_fetch as crate::vm::PrimitiveFn, 2),
-                (mmio_store, 3),
-                (mmio_register, 4),
-                (mmio_unregister, 1),
-                (mmio_to_dict, 5),
-                (dict_to_mmio, 5),
+                (fetch as crate::vm::PrimitiveFn, 2),
+                (store, 3),
+                (register, 4),
+                (unregister, 1),
+                (to_dict, 5),
+                (from_dict, 5),
             ] {
                 for available in 0..count {
                     let mut vm = crate::boot(std::io::sink(), crate::VmConfig::new(4096)).unwrap();
@@ -158,8 +158,8 @@ mod tests {
 
     #[test]
     fn register_fetch_store_unregister_have_exact_stack_effects() {
-        let mut register = Box::new(0usize);
-        let pointer = (&mut *register) as *mut Cell;
+        let mut storage = Box::new(0usize);
+        let pointer = (&mut *storage) as *mut Cell;
         let addr = pointer as Cell;
         // SAFETY: the boxed Cell outlives the VM, with no conflicting accesses.
         unsafe {
@@ -173,16 +173,16 @@ mod tests {
             .unwrap();
             vm.data_stack
                 .extend([77, addr, mem::size_of::<Cell>(), 3, 1]);
-            mmio_register(&mut vm);
+            register(&mut vm);
             assert_eq!(vm.data_stack, [77, 1]);
             vm.data_stack.extend([0x1ab, addr, 1]);
-            mmio_store(&mut vm);
+            store(&mut vm);
             assert_eq!(vm.data_stack, [77, 1]);
             vm.data_stack.extend([addr, 1]);
-            mmio_fetch(&mut vm);
+            fetch(&mut vm);
             assert_eq!(vm.data_stack, [77, 1, 0xab]);
             vm.data_stack.pop();
-            mmio_unregister(&mut vm);
+            unregister(&mut vm);
             assert_eq!(vm.data_stack, [77]);
             assert!(vm.error.is_none());
         }
