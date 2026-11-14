@@ -198,6 +198,34 @@ previous word of the same name. This also means a word cannot call itself.
 If an error occurs, the interpreter discards the rest of the line, clears both
 stacks, and rolls back any unfinished colon definition.
 
+## MMIO
+
+An embedding Rust host can authorize already accessible register memory with the unsafe
+`Vm::allow_mmio(MmioRegion { address, bytes, rights, widths })` API. Host permissions must
+be supplied before the first successful Forth registration and cannot overlap each other or
+the dictionary. By default no MMIO is authorized. The interactive CLI has no register mapping
+option; the MMIO demo uses a host-owned buffer.
+
+Forth registers subranges within one host permission and receives an ID for later revocation.
+Rights (`MMIO_READ | MMIO_WRITE`) and width masks (`MMIO_WIDTH_8 | MMIO_WIDTH_32`, for example)
+combine with `|` in Rust and `OR` in Forth. Width flag suffixes are bits; access arguments are
+bytes. Active registrations cannot overlap. IDs are never reused, and host permissions stay
+locked even after all registrations are removed. See [the word list](docs/words.md#mmio)
+for stack effects.
+
+Block transfers use byte counts divisible by their access width. A zero increment flag keeps
+the register address fixed for FIFO access; any nonzero flag advances it by the width.
+Dictionary buffers must already be reserved below `HERE` and need not be aligned. The complete
+transfer must fit in one registration. All checks finish before the first device access;
+valid zero-byte transfers still check the start address, permissions and width but access no
+memory. Reads zero-extend, writes truncate, and block buffers use native byte order.
+
+The host must keep memory mapped and valid for the VM's lifetime, preserve pointer provenance
+for Rust allocations, and provide synchronization and hardware barriers where required.
+Volatile operations are neither atomic nor a substitute for hardware barriers. Device faults
+are not recoverable VM errors and may leave partial transfers. This feature does not map
+physical addresses or provide a `no_std`/bare-metal port.
+
 ## Limitations
 
 - There are no return stack words, such as `>R` and `R>`.
@@ -213,7 +241,7 @@ stacks, and rolls back any unfinished colon definition.
   stacks like any other error.
 - The interactive prompt evaluates each line by itself, so a `(` comment must end on
   the line where it starts.
-- `!`, `C!`, `+!`, `2!`, `FILL` and `MOVE` can overwrite word headers and compiled code, which
+- `!`, `C!`, `+!`, `2!`, `FILL`, `MOVE` and `MMIO>DICT` can overwrite word headers and compiled code, which
   can crash the process.
 - A negative `ALLOT` can only give back data of the newest word, and only if `CREATE` made
   it.

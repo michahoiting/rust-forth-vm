@@ -11,10 +11,10 @@ use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
 /// The number of sections in the menu.
-const SECTION_COUNT: usize = 24;
+const SECTION_COUNT: usize = 25;
 
 /// The number of the error handling section, the only one that should report errors.
-const ERROR_SECTION: usize = 24;
+const ERROR_SECTION: usize = 25;
 
 /// The line that ends a section.
 const FOOTER: &str = "-------------------------------------\n";
@@ -249,8 +249,9 @@ fn menu_lists_every_section() {
     assert!(output.contains("  19. Generating Primes\n"));
     assert!(output.contains("  21. Printing Characters and Strings\n"));
     assert!(output.contains("  22. Strings, Spaces and Counted Text\n"));
-    assert!(output.contains("  23. Returning to the Interpreter with QUIT and ABORT\n"));
-    assert!(output.contains("  24. Error Handling\n"));
+    assert!(output.contains("  23. MMIO Registers and Block Transfers\n"));
+    assert!(output.contains("  24. Returning to the Interpreter with QUIT and ABORT\n"));
+    assert!(output.contains("  25. Error Handling\n"));
     assert!(output.ends_with(PROMPT));
 }
 
@@ -309,8 +310,8 @@ fn the_menu_comes_back_after_a_run() {
 
 #[test]
 fn an_invalid_choice_shows_the_menu_again() {
-    let output = menu("25\nabc\nq\n");
-    assert!(output.contains("Invalid choice: 25\n"));
+    let output = menu("26\nabc\nq\n");
+    assert!(output.contains("Invalid choice: 26\n"));
     assert!(output.contains("Invalid choice: abc\n"));
     assert_eq!(output.matches(MENU).count(), 3);
     assert!(!output.contains("--- TEST RUN "));

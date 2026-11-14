@@ -262,6 +262,27 @@ impl Dictionary {
         Ok(())
     }
 
+    /// Whether a nonoverflowing nonempty external range overlaps any of the arena.
+    pub(crate) fn overlaps_arena(&self, addr: Cell, bytes: usize) -> bool {
+        addr.checked_add(bytes)
+            .is_none_or(|end| addr < self.end as Cell && end > self.start as Cell)
+    }
+
+    /// Borrows a fully validated written buffer for an MMIO transfer.
+    ///
+    /// # Errors
+    /// Returns the address error from `written_range` before exposing any bytes.
+    pub(crate) fn bytes_mut(&mut self, addr: Cell, len: usize) -> Result<&mut [u8], ForthError> {
+        let range = self.written_range(addr, len)?;
+        // SAFETY: the range is initialized and within the arena; the exclusive borrow
+        // prevents any other access for the lifetime of the returned slice.
+        Ok(
+            unsafe {
+                std::slice::from_raw_parts_mut(self.start.cast::<u8>().add(range.start), len)
+            },
+        )
+    }
+
     /// Returns whether `addr` points into the arena, to a written Cell or not.
     #[inline(always)]
     pub(crate) fn is_in_arena(&self, addr: Cell) -> bool {

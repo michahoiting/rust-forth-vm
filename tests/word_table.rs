@@ -153,6 +153,7 @@ fn implemented_words_are_exactly_the_words_of_the_vm() {
     let marked: BTreeSet<String> = word_rows()
         .iter()
         .filter(|row| row[3] == "Yes")
+        .filter(|row| cfg!(target_pointer_width = "64") || word_of(row) != "MMIO_WIDTH_64")
         .map(|row| word_of(row).to_string())
         .collect();
 

@@ -12,6 +12,11 @@ The `[Unreleased]` section below is the unreleased `0.1.0`.
 
 ### Added
 
+- Host-authorized MMIO ranges, Forth registration and revocation, volatile register access,
+  and block transfers between MMIO and dictionary buffers, including fixed-address FIFO
+  transfers. Permission and width flags combine with `OR`. Includes a host-buffer demo
+  and a block-transfer performance workload. #179.
+
 - The string and output words `S"`, `."`, `ABORT"`, `COUNT`, `CR`, `SPACE`, `SPACES`, `CHAR`,
   `[CHAR]`, `CMOVE`, `CMOVE>` and `COMPARE`. Interpreted `S"` text goes into one of two transient
   buffers of 256 bytes. `ABORT"` prints its text and does `ABORT` when its flag is true. Part of
