@@ -1888,3 +1888,22 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod mmio_range_tests {
+    use super::*;
+
+    #[test]
+    fn external_ranges_may_touch_but_not_overlap_arena_boundaries() {
+        // SAFETY: the dictionary is used only through its accessors.
+        let dictionary = unsafe { Dictionary::new(8).unwrap() };
+        let start = dictionary.start as Cell;
+        let end = dictionary.end as Cell;
+        assert!(!dictionary.overlaps_arena(start - 4, 4));
+        assert!(!dictionary.overlaps_arena(end, 4));
+        assert!(dictionary.overlaps_arena(start - 1, 2));
+        assert!(dictionary.overlaps_arena(end - 1, 2));
+        assert!(dictionary.overlaps_arena(start, end - start));
+        assert!(dictionary.overlaps_arena(Cell::MAX - 1, 4));
+    }
+}

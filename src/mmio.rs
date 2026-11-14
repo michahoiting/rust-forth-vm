@@ -5,12 +5,16 @@
 use std::mem::size_of;
 use std::ptr;
 
-use crate::{Cell, ForthError};
+use crate::cell::Cell;
+use crate::error::ForthError;
 
 /// Permission to read an MMIO range.
 pub const MMIO_READ: Cell = 1;
 /// Permission to write an MMIO range.
 pub const MMIO_WRITE: Cell = 2;
+/// All supported read/write permission bits.
+const RIGHTS_MASK: Cell = MMIO_READ | MMIO_WRITE;
+
 /// Permission for 8-bit accesses.
 pub const MMIO_WIDTH_8: Cell = 1;
 /// Permission for 16-bit accesses.
@@ -39,7 +43,7 @@ impl MmioRegion {
     /// Returns the exclusive end after checking size and masks.
     fn end(self) -> Result<Cell, ForthError> {
         if self.rights == 0
-            || self.rights & !(MMIO_READ | MMIO_WRITE) != 0
+            || self.rights & !RIGHTS_MASK != 0
             || self.widths == 0
             || self.widths & !(size_of::<Cell>() * 2 - 1) != 0
         {
@@ -135,7 +139,9 @@ impl Mmio {
         }
         let region = MmioRegion {
             address: host.address.wrapping_add(addr - host.address as Cell),
-            ..requested
+            bytes,
+            rights,
+            widths,
         };
         let id = self
             .last_id
@@ -259,7 +265,14 @@ pub(crate) fn write(access: Access, value: Cell) {
 
 /// Transfers a validated dictionary buffer with native byte order and no dictionary alignment requirement.
 pub(crate) fn transfer(access: Access, buffer: &mut [u8], increment: bool, write: bool) {
-    transfer_with(&mut Volatile, access, buffer, increment, write);
+    transfer_with(
+        &mut Volatile,
+        access,
+        buffer,
+        increment,
+        write,
+        cfg!(target_endian = "big"),
+    );
 }
 
 /// Shared transfer loop; validation has completed before this runs.
@@ -269,6 +282,7 @@ fn transfer_with(
     buffer: &mut [u8],
     increment: bool,
     write: bool,
+    big_endian: bool,
 ) {
     for (index, chunk) in buffer.chunks_exact_mut(access.width).enumerate() {
         let current = Access {
@@ -279,16 +293,28 @@ fn transfer_with(
         };
         if write {
             let mut bytes = [0u8; size_of::<Cell>()];
-            let offset = if cfg!(target_endian = "big") {
+            let offset = if big_endian {
                 bytes.len() - chunk.len()
             } else {
                 0
             };
             bytes[offset..offset + chunk.len()].copy_from_slice(chunk);
-            bus.write(current, Cell::from_ne_bytes(bytes));
+            bus.write(
+                current,
+                if big_endian {
+                    Cell::from_be_bytes(bytes)
+                } else {
+                    Cell::from_le_bytes(bytes)
+                },
+            );
         } else {
-            let bytes = bus.read(current).to_ne_bytes();
-            let offset = if cfg!(target_endian = "big") {
+            let value = bus.read(current);
+            let bytes = if big_endian {
+                value.to_be_bytes()
+            } else {
+                value.to_le_bytes()
+            };
+            let offset = if big_endian {
                 bytes.len() - chunk.len()
             } else {
                 0
@@ -412,6 +438,26 @@ mod tests {
         assert!(mmio.active.is_empty());
     }
 
+    #[test]
+    fn disjoint_and_adjacent_ranges_are_allowed_in_both_orders() {
+        let mut mmio = Mmio::default();
+        for addr in [32, 48, 16, 96] {
+            mmio.allow(permission(addr, 16, 3, 7)).unwrap();
+        }
+        let mut mmio = Mmio::default();
+        mmio.allow(permission(0, 128, 3, 7)).unwrap();
+        for (id, addr) in [32, 48, 16, 96].into_iter().enumerate() {
+            assert_eq!(mmio.register(addr, 16, 3, 7).unwrap(), id + 1);
+        }
+        assert!(matches!(
+            mmio.access(44, 8, 4, true, false),
+            Err(ForthError::MmioOutOfBounds(44))
+        ));
+        assert!(mmio.access(44, 8, 4, false, false).is_ok());
+        let access = mmio.access(100, 4, 4, true, false).unwrap();
+        assert_eq!(access.pointer as Cell, 100);
+    }
+
     #[derive(Default)]
     struct RecordingBus {
         events: Vec<(bool, Cell, usize, Cell)>,
@@ -429,14 +475,16 @@ mod tests {
     #[test]
     fn transfer_records_exact_accesses_for_both_directions_and_address_modes() {
         for width in [1, 2, 4, size_of::<Cell>()] {
-            for increment in [false, true] {
+            for (increment, big_endian) in
+                [(false, false), (true, false), (false, true), (true, true)]
+            {
                 let access = Access {
                     pointer: ptr::without_provenance_mut(16),
                     width,
                 };
                 let mut buffer = vec![0; width * 3];
                 let mut bus = RecordingBus::default();
-                transfer_with(&mut bus, access, &mut buffer, increment, false);
+                transfer_with(&mut bus, access, &mut buffer, increment, false, big_endian);
                 let addresses: Vec<_> = (0..3)
                     .map(|i| 16 + if increment { i * width } else { 0 })
                     .collect();
@@ -449,17 +497,17 @@ mod tests {
                 );
                 let mut expected = Vec::new();
                 for value in 1..=3usize {
-                    let bytes = value.to_ne_bytes();
-                    let offset = if cfg!(target_endian = "big") {
-                        bytes.len() - width
+                    let bytes = if big_endian {
+                        value.to_be_bytes()
                     } else {
-                        0
+                        value.to_le_bytes()
                     };
+                    let offset = if big_endian { bytes.len() - width } else { 0 };
                     expected.extend_from_slice(&bytes[offset..offset + width]);
                 }
                 assert_eq!(buffer, expected);
                 bus.events.clear();
-                transfer_with(&mut bus, access, &mut buffer, increment, true);
+                transfer_with(&mut bus, access, &mut buffer, increment, true, big_endian);
                 assert_eq!(
                     bus.events,
                     addresses
@@ -469,7 +517,7 @@ mod tests {
                         .collect::<Vec<_>>()
                 );
                 bus.events.clear();
-                transfer_with(&mut bus, access, &mut [], increment, false);
+                transfer_with(&mut bus, access, &mut [], increment, false, big_endian);
                 assert!(bus.events.is_empty());
             }
         }

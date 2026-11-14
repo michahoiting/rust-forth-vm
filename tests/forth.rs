@@ -3494,3 +3494,24 @@ fn mmio_flag_constants_have_separate_composable_masks() {
     #[cfg(target_pointer_width = "64")]
     assert_eq!(output_of(&["MMIO_WIDTH_64 ."]), "8 ");
 }
+
+#[test]
+fn mmio_fifo_blocks_validate_one_register_even_for_a_long_buffer() {
+    let mut register = Box::new(0u32);
+    let pointer = (&mut *register as *mut u32).cast::<u8>();
+    // SAFETY: register outlives vm and is exclusively accessed through the registered pointer.
+    unsafe {
+        let (mut vm, output) = mmio_test_vm(pointer, 4, 3, 4);
+        let addr = pointer as Cell;
+        outer_interpreter(&mut vm, &format!("DROP CREATE BUFFER 12 ALLOT BUFFER 12 85 FILL BUFFER {addr} 12 4 FALSE DICT>MMIO {addr} BUFFER 12 4 FALSE MMIO>DICT BUFFER C@ . BUFFER 11 + C@ . DEPTH .")).unwrap();
+        assert_eq!(output.text(), "85 85 0 ");
+        assert!(matches!(
+            outer_interpreter(&mut vm, &format!("BUFFER {addr} 12 4 1 DICT>MMIO")),
+            Err(ForthError::MmioOutOfBounds(_))
+        ));
+        assert!(matches!(
+            outer_interpreter(&mut vm, &format!("{addr} BUFFER 12 4 1 MMIO>DICT")),
+            Err(ForthError::MmioOutOfBounds(_))
+        ));
+    }
+}
