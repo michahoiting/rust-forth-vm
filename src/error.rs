@@ -37,6 +37,29 @@ use crate::cell::Cell;
 /// ```
 #[derive(Debug)]
 pub enum ForthError {
+    /// The MMIO range is empty or overflows.
+    MmioInvalidRegion,
+    /// The MMIO permission mask is empty or unknown.
+    MmioInvalidFlags,
+    /// MMIO ranges overlap.
+    MmioOverlap,
+    /// MMIO host permissions are locked.
+    MmioHostLocked,
+    /// MMIO access is not permitted.
+    MmioPermissionDenied,
+    /// The MMIO address is outside an active or host range.
+    MmioOutOfBounds(Cell),
+    /// The MMIO access width is unsupported.
+    MmioInvalidWidth(Cell),
+    /// The MMIO byte count is not divisible by the width.
+    MmioInvalidLength(Cell),
+    /// The MMIO registration ID does not exist.
+    MmioUnknownId(Cell),
+    /// MMIO registration IDs are exhausted.
+    MmioIdsExhausted,
+    /// The MMIO registry could not allocate storage.
+    MmioAllocationFailed,
+
     /// A word needed more Cells than the data stack holds.
     DataStackUnderflow,
     /// `EXIT` ran with nothing to return to.
@@ -119,6 +142,26 @@ pub enum ForthError {
 impl fmt::Display for ForthError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            ForthError::MmioInvalidRegion => write!(f, "The MMIO range is empty or overflows."),
+            ForthError::MmioInvalidFlags => {
+                write!(f, "The MMIO permission mask is empty or unknown.")
+            }
+            ForthError::MmioOverlap => write!(f, "MMIO ranges overlap."),
+            ForthError::MmioHostLocked => write!(f, "MMIO host permissions are locked."),
+            ForthError::MmioPermissionDenied => write!(f, "MMIO access is not permitted."),
+            ForthError::MmioOutOfBounds(_) => {
+                write!(f, "The MMIO address is outside an active or host range.")
+            }
+            ForthError::MmioInvalidWidth(_) => write!(f, "The MMIO access width is unsupported."),
+            ForthError::MmioInvalidLength(_) => {
+                write!(f, "The MMIO byte count is not divisible by the width.")
+            }
+            ForthError::MmioUnknownId(_) => write!(f, "The MMIO registration ID does not exist."),
+            ForthError::MmioIdsExhausted => write!(f, "MMIO registration IDs are exhausted."),
+            ForthError::MmioAllocationFailed => {
+                write!(f, "The MMIO registry could not allocate storage.")
+            }
+
             ForthError::DataStackUnderflow => write!(f, "Data stack underflow."),
             ForthError::ReturnStackUnderflow => write!(f, "Return stack underflow."),
             ForthError::DataStackOverflow => write!(f, "Data stack overflow."),

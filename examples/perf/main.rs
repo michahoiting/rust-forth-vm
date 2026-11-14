@@ -142,7 +142,16 @@ fn prints_runs(runs: usize) -> String {
 }
 
 /// Every workload. `scripts/perf.py` reads this through `--list`.
-const WORKLOADS: [Workload; 13] = [
+const WORKLOADS: [Workload; 14] = [
+    tower_workload(
+        "mmio_block",
+        "MMIO block transfer",
+        true,
+        include_str!("workloads/mmio_block.fth"),
+        14,
+        "BUFFER C@ . DEPTH .",
+        |_| "90 0 ".to_string(),
+    ),
     Workload {
         name: "boot",
         category: "Startup",
@@ -366,7 +375,19 @@ fn run(workload: &Workload, size: Size, pad_words: usize) -> Result<(), Failure>
                 boot(io::sink(), VmConfig::new(dictionary_cells))?;
             }
         }
+        let mut registers = Box::new([0usize; 128]);
         let mut vm = boot(output.clone(), VmConfig::new(dictionary_cells))?;
+        if workload.name == "mmio_block" {
+            // SAFETY: the buffer outlives vm and is exclusively used by MMIO while it runs.
+            let address = registers.as_mut_ptr().cast::<u8>();
+            vm.allow_mmio(rust_forth_vm::MmioRegion {
+                address,
+                bytes: std::mem::size_of_val(&*registers),
+                rights: rust_forth_vm::MMIO_READ | rust_forth_vm::MMIO_WRITE,
+                widths: rust_forth_vm::MMIO_WIDTH_8,
+            })?;
+            outer_interpreter(&mut vm, &format!("{} CONSTANT REGISTERS", address as usize))?;
+        }
         for _ in 0..pad_words {
             outer_interpreter(&mut vm, ": PAD ;")?;
         }
@@ -480,7 +501,7 @@ mod tests {
                 "threading",
                 "Inner interpreter",
                 true,
-                WORKLOADS[1].source,
+                WORKLOADS[2].source,
                 1,
                 EMPTY_STACK,
                 prints_zero,

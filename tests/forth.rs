@@ -886,6 +886,47 @@ fn is_compiling_follows_an_open_definition() {
 #[test]
 fn errors_have_stable_messages() {
     let cases = [
+        (
+            ForthError::MmioInvalidRegion,
+            "The MMIO range is empty or overflows.",
+        ),
+        (
+            ForthError::MmioInvalidFlags,
+            "The MMIO permission mask is empty or unknown.",
+        ),
+        (ForthError::MmioOverlap, "MMIO ranges overlap."),
+        (
+            ForthError::MmioHostLocked,
+            "MMIO host permissions are locked.",
+        ),
+        (
+            ForthError::MmioPermissionDenied,
+            "MMIO access is not permitted.",
+        ),
+        (
+            ForthError::MmioOutOfBounds(16),
+            "The MMIO address is outside an active or host range.",
+        ),
+        (
+            ForthError::MmioInvalidWidth(16),
+            "The MMIO access width is unsupported.",
+        ),
+        (
+            ForthError::MmioInvalidLength(16),
+            "The MMIO byte count is not divisible by the width.",
+        ),
+        (
+            ForthError::MmioUnknownId(16),
+            "The MMIO registration ID does not exist.",
+        ),
+        (
+            ForthError::MmioIdsExhausted,
+            "MMIO registration IDs are exhausted.",
+        ),
+        (
+            ForthError::MmioAllocationFailed,
+            "The MMIO registry could not allocate storage.",
+        ),
         (ForthError::DataStackUnderflow, "Data stack underflow."),
         (ForthError::ReturnStackUnderflow, "Return stack underflow."),
         (ForthError::DataStackOverflow, "Data stack overflow."),
@@ -3217,5 +3258,260 @@ fn a_number_cannot_stand_in_for_a_loop_target() {
             ForthError::UnbalancedControlFlow("UNTIL")
         );
         assert!(!vm.is_compiling());
+    }
+}
+
+// Registers a host-owned buffer for a test; the caller keeps its storage alive and exclusive.
+unsafe fn mmio_test_vm(
+    pointer: *mut u8,
+    bytes: usize,
+    rights: Cell,
+    widths: Cell,
+) -> (Vm, Capture) {
+    let output = Capture::default();
+    let mut vm = test_vm(output.clone());
+    vm.allow_mmio(rust_forth_vm::MmioRegion {
+        address: pointer,
+        bytes,
+        rights,
+        widths,
+    })
+    .unwrap();
+    outer_interpreter(
+        &mut vm,
+        &format!(
+            "{} {} {} {} MMIO-REGISTER",
+            pointer as Cell, bytes, rights, widths
+        ),
+    )
+    .unwrap();
+    (vm, output)
+}
+
+#[test]
+fn mmio_scalar_access_round_trips_each_supported_width_and_truncates() {
+    for width in [1, 2, 4, mem::size_of::<Cell>()] {
+        let mut registers = Box::new([0usize; 2]);
+        let pointer = registers.as_mut_ptr().cast::<u8>();
+        // SAFETY: the box remains alive, and no access conflicts with the VM.
+        unsafe {
+            let (mut vm, output) = mmio_test_vm(pointer, mem::size_of_val(&*registers), 3, width);
+            let addr = pointer as Cell;
+            outer_interpreter(
+                &mut vm,
+                &format!("DROP -1 {addr} {width} MMIO! {addr} {width} MMIO@ . DEPTH ."),
+            )
+            .unwrap();
+            let expected = Cell::MAX >> ((mem::size_of::<Cell>() - width) * 8);
+            assert_eq!(output.text(), format!("{} 0 ", expected as isize));
+        }
+    }
+}
+
+#[test]
+fn mmio_block_copies_use_native_order_unaligned_buffers_and_both_address_modes() {
+    for width in [1, 2, 4, mem::size_of::<Cell>()] {
+        let mut registers = Box::new([0usize; 3]);
+        let pointer = registers.as_mut_ptr().cast::<u8>();
+        // SAFETY: registers outlive the VM and are accessed exclusively while it runs.
+        unsafe {
+            let (mut vm, output) = mmio_test_vm(pointer, mem::size_of_val(&*registers), 3, width);
+            let addr = pointer as Cell;
+            outer_interpreter(
+                &mut vm,
+                &format!(
+                    r"
+                DROP CREATE BUFFER 1 ALLOT HERE {bytes} ALLOT
+                {first} {addr} {width} MMIO!
+                {second} {next} {width} MMIO!
+                {addr} OVER {bytes} {width} TRUE MMIO>DICT
+                DUP C@ .
+                DUP {width} + C@ .
+                DUP {addr} {bytes} {width} TRUE DICT>MMIO
+                DUP {addr} {bytes} {width} FALSE DICT>MMIO
+                {addr} {width} MMIO@ .
+                {addr} OVER {bytes} {width} FALSE MMIO>DICT
+                DUP C@ . DUP {width} + C@ .
+                DROP DEPTH .",
+                    bytes = width * 2,
+                    first = Cell::from_ne_bytes([0x11; mem::size_of::<Cell>()]),
+                    second = Cell::from_ne_bytes([0x22; mem::size_of::<Cell>()]),
+                    next = addr + width
+                ),
+            )
+            .unwrap();
+            assert_eq!(
+                output.text(),
+                format!(
+                    "17 34 {} 34 34 0 ",
+                    (Cell::from_ne_bytes([0x22; mem::size_of::<Cell>()])
+                        >> ((mem::size_of::<Cell>() - width) * 8)) as isize
+                )
+            );
+        }
+    }
+}
+
+#[test]
+fn mmio_registration_restricts_access_and_unregister_revokes_it() {
+    let mut registers = Box::new([0usize; 2]);
+    let pointer = registers.as_mut_ptr().cast::<u8>();
+    // SAFETY: host buffer stays alive and no conflicting access occurs.
+    unsafe {
+        let output = Capture::default();
+        let mut vm = test_vm(output.clone());
+        vm.allow_mmio(rust_forth_vm::MmioRegion {
+            address: pointer,
+            bytes: mem::size_of_val(&*registers),
+            rights: 3,
+            widths: 7,
+        })
+        .unwrap();
+        let addr = pointer as Cell;
+        outer_interpreter(
+            &mut vm,
+            &format!("{addr} 4 MMIO_READ MMIO_WIDTH_32 MMIO-REGISTER ."),
+        )
+        .unwrap();
+        assert_eq!(output.text(), "1 ");
+        assert!(matches!(
+            outer_interpreter(&mut vm, &format!("99 {addr} 4 MMIO!")),
+            Err(ForthError::MmioPermissionDenied)
+        ));
+        assert!(matches!(
+            outer_interpreter(&mut vm, &format!("{addr} 1 MMIO@")),
+            Err(ForthError::MmioPermissionDenied)
+        ));
+        assert!(matches!(
+            outer_interpreter(&mut vm, &format!("{} 4 MMIO@", addr + 4)),
+            Err(ForthError::MmioOutOfBounds(_))
+        ));
+        outer_interpreter(&mut vm, "1 MMIO-UNREGISTER").unwrap();
+        assert!(matches!(
+            outer_interpreter(&mut vm, &format!("{addr} 4 MMIO@")),
+            Err(ForthError::MmioOutOfBounds(_))
+        ));
+        assert!(matches!(
+            outer_interpreter(&mut vm, "1 MMIO-UNREGISTER"),
+            Err(ForthError::MmioUnknownId(1))
+        ));
+        outer_interpreter(
+            &mut vm,
+            &format!("{addr} 4 MMIO_READ MMIO_WIDTH_32 MMIO-REGISTER ."),
+        )
+        .unwrap();
+        assert_eq!(output.text(), "1 2 ");
+    }
+}
+
+#[test]
+fn mmio_invalid_blocks_leave_registers_and_dictionary_unchanged() {
+    let mut registers = Box::new([0usize; 2]);
+    let pointer = registers.as_mut_ptr().cast::<u8>();
+    // SAFETY: storage outlives the VM; all its accesses are serialized.
+    unsafe {
+        let (mut vm, output) = mmio_test_vm(pointer, mem::size_of_val(&*registers), 3, 7);
+        let addr = pointer as Cell;
+        outer_interpreter(&mut vm, "DROP CREATE BUFFER 4 ALLOT BUFFER 4 85 FILL").unwrap();
+        for source in [
+            format!("BUFFER {addr} 3 2 TRUE DICT>MMIO"),
+            format!("BUFFER {addr} 8 4 TRUE DICT>MMIO"),
+            format!(
+                "BUFFER {} 4 4 TRUE DICT>MMIO",
+                addr + mem::size_of_val(&*registers)
+            ),
+            format!("{addr} BUFFER 8 4 TRUE MMIO>DICT"),
+            format!("{addr} HERE 4 4 TRUE MMIO>DICT"),
+            format!("{addr} BUFFER -1 1 TRUE MMIO>DICT"),
+            format!("BUFFER {} 4 4 TRUE DICT>MMIO", addr + 1),
+        ] {
+            assert!(outer_interpreter(&mut vm, &source).is_err(), "{source}");
+        }
+        outer_interpreter(
+            &mut vm,
+            &format!("{addr} 4 MMIO@ . BUFFER C@ . BUFFER 3 + C@ ."),
+        )
+        .unwrap();
+        assert_eq!(output.text(), "0 85 85 ");
+    }
+}
+
+#[test]
+fn mmio_zero_length_blocks_do_not_touch_valid_buffers() {
+    let mut registers = Box::new([0usize]);
+    let pointer = registers.as_mut_ptr().cast::<u8>();
+    // SAFETY: host storage outlives VM execution with exclusive access.
+    unsafe {
+        let (mut vm, output) = mmio_test_vm(pointer, mem::size_of_val(&*registers), 3, 1);
+        let addr = pointer as Cell;
+        outer_interpreter(
+            &mut vm,
+            &format!("DROP {addr} HERE 0 1 TRUE MMIO>DICT HERE {addr} 0 1 FALSE DICT>MMIO DEPTH ."),
+        )
+        .unwrap();
+        assert_eq!(output.text(), "0 ");
+    }
+}
+
+#[test]
+fn mmio_default_vm_denies_registration_and_access_and_dictionary_overlap() {
+    // SAFETY: only validated VM operations are invoked.
+    unsafe {
+        let mut vm = test_vm(io::sink());
+        assert!(matches!(
+            outer_interpreter(&mut vm, "16 4 MMIO_READ MMIO_WIDTH_32 MMIO-REGISTER"),
+            Err(ForthError::MmioOutOfBounds(16))
+        ));
+        assert!(matches!(
+            outer_interpreter(&mut vm, "16 4 MMIO@"),
+            Err(ForthError::MmioOutOfBounds(16))
+        ));
+        assert!(matches!(
+            outer_interpreter(&mut vm, "HERE 4 MMIO_READ MMIO_WIDTH_32 MMIO-REGISTER"),
+            Err(ForthError::MmioInvalidRegion)
+        ));
+        assert!(matches!(
+            outer_interpreter(&mut vm, "16 0 MMIO_READ MMIO_WIDTH_32 MMIO-REGISTER"),
+            Err(ForthError::MmioInvalidRegion)
+        ));
+        assert!(matches!(
+            outer_interpreter(&mut vm, "16 4 0 MMIO_WIDTH_32 MMIO-REGISTER"),
+            Err(ForthError::MmioInvalidFlags)
+        ));
+        assert!(matches!(
+            outer_interpreter(&mut vm, "16 3 MMIO@"),
+            Err(ForthError::MmioInvalidWidth(3))
+        ));
+    }
+}
+
+#[test]
+fn mmio_flag_constants_have_separate_composable_masks() {
+    assert_eq!(
+        output_of(&["MMIO_READ MMIO_WRITE OR . MMIO_WIDTH_8 MMIO_WIDTH_16 OR MMIO_WIDTH_32 OR ."]),
+        "3 7 "
+    );
+    #[cfg(target_pointer_width = "64")]
+    assert_eq!(output_of(&["MMIO_WIDTH_64 ."]), "8 ");
+}
+
+#[test]
+fn mmio_fifo_blocks_validate_one_register_even_for_a_long_buffer() {
+    let mut register = Box::new(0u32);
+    let pointer = (&mut *register as *mut u32).cast::<u8>();
+    // SAFETY: register outlives vm and is exclusively accessed through the registered pointer.
+    unsafe {
+        let (mut vm, output) = mmio_test_vm(pointer, 4, 3, 4);
+        let addr = pointer as Cell;
+        outer_interpreter(&mut vm, &format!("DROP CREATE BUFFER 12 ALLOT BUFFER 12 85 FILL BUFFER {addr} 12 4 FALSE DICT>MMIO {addr} BUFFER 12 4 FALSE MMIO>DICT BUFFER C@ . BUFFER 11 + C@ . DEPTH .")).unwrap();
+        assert_eq!(output.text(), "85 85 0 ");
+        assert!(matches!(
+            outer_interpreter(&mut vm, &format!("BUFFER {addr} 12 4 1 DICT>MMIO")),
+            Err(ForthError::MmioOutOfBounds(_))
+        ));
+        assert!(matches!(
+            outer_interpreter(&mut vm, &format!("{addr} BUFFER 12 4 1 MMIO>DICT")),
+            Err(ForthError::MmioOutOfBounds(_))
+        ));
     }
 }

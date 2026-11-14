@@ -53,7 +53,8 @@
 //!
 //! [`boot`] and [`outer_interpreter`] are `unsafe` because the VM runs threaded code through
 //! raw pointers. Bad Forth input normally gives a [`ForthError`], and the README lists the
-//! known exceptions.
+//! known exceptions. MMIO additionally requires the host guarantees documented on
+//! [`Vm::allow_mmio`] for the entire lifetime of the VM.
 
 use std::io::Write;
 
@@ -63,12 +64,16 @@ mod dictionary;
 mod error;
 mod input;
 mod interpreter;
+mod mmio;
 mod primitives;
 mod vm;
 
 pub use cell::Cell;
 pub use error::ForthError;
 pub use interpreter::{outer_interpreter, quit_loop, LineResult};
+#[cfg(target_pointer_width = "64")]
+pub use mmio::MMIO_WIDTH_64;
+pub use mmio::{MmioRegion, MMIO_READ, MMIO_WIDTH_16, MMIO_WIDTH_32, MMIO_WIDTH_8, MMIO_WRITE};
 pub use primitives::COPYRIGHT;
 pub use vm::{Vm, VmConfig, DEFAULT_DATA_STACK_CELLS, DEFAULT_RETURN_STACK_CELLS};
 

@@ -148,6 +148,8 @@ impl StringBuffers {
 //
 // CPU Vm and Stacks conforming to the Forth hardware architecture
 pub struct Vm {
+    /// Host permissions and active MMIO registrations.
+    pub(crate) mmio: crate::mmio::Mmio,
     /// Instruction Pointer: points to a Cell in a thread.
     pub(crate) ip: *const Cell,
     /// Word Register: points to the currently active CFA Cell.
@@ -176,6 +178,44 @@ pub struct Vm {
 }
 
 impl Vm {
+    /// Authorizes an already mapped MMIO range before the first Forth registration.
+    /// An initially booted VM permits no MMIO. Active ranges are registered from Forth.
+    ///
+    /// # Errors
+    /// Returns an MMIO error for invalid masks, empty/overflowing or overlapping ranges,
+    /// locked permissions, allocation failure, or overlap with the dictionary arena.
+    ///
+    /// # Safety
+    /// The pointer must remain valid for the VM's lifetime for all permitted access widths
+    /// and rights. Host-owned memory must retain provenance and obey Rust aliasing rules;
+    /// device accesses must not trap or invalidate Rust memory. The host must provide any
+    /// hardware barriers, synchronization and mapping, and prevent concurrent conflicting
+    /// access. Reads must produce initialized integer values. Volatile is not atomic.
+    ///
+    /// # Examples
+    /// ```
+    /// use rust_forth_vm::{boot, outer_interpreter, MmioRegion, VmConfig, MMIO_READ, MMIO_WIDTH_8};
+    /// let mut registers = Box::new([42u8]);
+    /// // SAFETY: registers remain alive and exclusively available throughout VM execution.
+    /// unsafe {
+    ///     let mut vm = boot(std::io::sink(), VmConfig::new(4096))?;
+    ///     let address = registers.as_mut_ptr();
+    ///     vm.allow_mmio(MmioRegion { address, bytes: 1, rights: MMIO_READ, widths: MMIO_WIDTH_8 })?;
+    ///     outer_interpreter(&mut vm, &format!("{} 1 MMIO_READ MMIO_WIDTH_8 MMIO-REGISTER DROP", address as usize))?;
+    ///     outer_interpreter(&mut vm, &format!("{} 1 MMIO@ DROP", address as usize))?;
+    /// }
+    /// # Ok::<(), rust_forth_vm::ForthError>(())
+    /// ```
+    pub unsafe fn allow_mmio(&mut self, region: crate::MmioRegion) -> Result<(), ForthError> {
+        if self
+            .dictionary
+            .overlaps_arena(region.address as Cell, region.bytes)
+        {
+            return Err(ForthError::MmioInvalidRegion);
+        }
+        self.mmio.allow(region)
+    }
+
     /// Returns whether a definition is open, so that the VM is compiling rather than
     /// interpreting. A definition can continue in the next call to
     /// [`outer_interpreter`](crate::outer_interpreter).
@@ -238,6 +278,7 @@ impl Vm {
     /// [`ForthError::StackTooLarge`] if a stack can't be.
     pub(crate) unsafe fn new(output: Box<dyn Write>, config: VmConfig) -> Result<Vm, ForthError> {
         Ok(Vm {
+            mmio: crate::mmio::Mmio::default(),
             ip: ptr::null(),
             w: ptr::null(),
             data_stack: reserved_stack(config.data_stack_cells)?,

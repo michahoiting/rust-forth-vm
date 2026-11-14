@@ -305,3 +305,28 @@ See the [limitations](../README.md#limitations) in the README for what the VM do
 | `LOAD` | `( u -- )` | FORTH-83 | No | Interprets block `u` |
 | `SAVE-BUFFERS` | `( -- )` | FORTH-83 | No | Writes every changed block buffer to storage |
 | `UPDATE` | `( -- )` | FORTH-83 | No | Marks the newest block buffer as changed |
+
+
+## MMIO
+
+The Rust host first authorizes mapped ranges. Forth registrations restrict those permissions.
+See the [README](../README.md#mmio) for lifetime requirements and limitations.
+
+| Word | Stack effect | Standard | Implemented | Description |
+|------|--------------|----------|-------------|-------------|
+| `MMIO@` | `( addr width -- x )` | rust-forth-vm | Yes | Volatile read, zero-extended to a Cell; width is bytes |
+| `MMIO!` | `( x addr width -- )` | rust-forth-vm | Yes | Volatile write of the low width bytes |
+| `MMIO>DICT` | `( mmio-addr dict-addr bytes width increment -- )` | rust-forth-vm | Yes | Reads a block into reserved dictionary bytes; FALSE repeats one register address |
+| `DICT>MMIO` | `( dict-addr mmio-addr bytes width increment -- )` | rust-forth-vm | Yes | Writes a dictionary block to registers; FALSE repeats one register address |
+| `MMIO-REGISTER` | `( addr bytes rights widths -- id )` | rust-forth-vm | Yes | Activates a nonoverlapping host-authorized subrange with restricted masks |
+| `MMIO-UNREGISTER` | `( id -- )` | rust-forth-vm | Yes | Removes an active registration; IDs are not reused |
+| `MMIO_READ` | `( -- mask )` | rust-forth-vm | Yes | Read permission bit, 1 |
+| `MMIO_WRITE` | `( -- mask )` | rust-forth-vm | Yes | Write permission bit, 2 |
+| `MMIO_WIDTH_8` | `( -- mask )` | rust-forth-vm | Yes | 8-bit access permission bit, 1 |
+| `MMIO_WIDTH_16` | `( -- mask )` | rust-forth-vm | Yes | 16-bit access permission bit, 2 |
+| `MMIO_WIDTH_32` | `( -- mask )` | rust-forth-vm | Yes | 32-bit access permission bit, 4 |
+| `MMIO_WIDTH_64` | `( -- mask )` | rust-forth-vm | Yes | 64-bit access permission bit, 8; only available on 64-bit targets |
+
+Combine rights or width bits with `OR`. A width argument is 1, 2, 4, or (on 64-bit targets) 8.
+The byte count must be divisible by width. Nonzero increment flags advance MMIO addresses by
+width; dictionary addresses always advance. No byte swapping is performed.

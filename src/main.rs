@@ -51,7 +51,7 @@ const MORE_INFORMATION: &str = r#"Type "HELP", "COPYRIGHT" or "LICENSE" for more
 
 /// The demo sections, each with its title and one block of Forth source. Each section runs in a
 /// new VM, so it must define everything it uses.
-const SECTIONS: [(&str, &str); 22] = [
+const SECTIONS: [(&str, &str); 23] = [
     (
         "Evaluating Text Operations",
         r"
@@ -401,6 +401,27 @@ HERE 2 C, 104 C, 105 C, COUNT TYPE CR  \ COUNT turns the counted text into a str
 S" abc" S" abd" COMPARE .            \ prints -1, since abc comes before abd
 "#,
     ),
+    (
+        "MMIO Registers and Block Transfers",
+        r"\ The host provides REGISTERS: a mapped buffer that outlives this VM.
+REGISTERS 16 MMIO_READ MMIO_WRITE OR
+MMIO_WIDTH_8 MMIO_WIDTH_32 OR MMIO-REGISTER
+VARIABLE REGION-ID REGION-ID !
+42 REGISTERS 4 MMIO! REGISTERS 4 MMIO@ .  \ prints 42
+CREATE BUFFER 8 ALLOT
+BUFFER 8 65 FILL
+BUFFER REGISTERS 8 1 TRUE DICT>MMIO
+BUFFER 8 0 FILL
+REGISTERS BUFFER 8 1 TRUE MMIO>DICT
+BUFFER 8 TYPE SPACE                       \ prints AAAAAAAA
+66 REGISTERS 1 MMIO!
+REGISTERS BUFFER 8 1 FALSE MMIO>DICT        \ repeated FIFO reads
+BUFFER 8 TYPE SPACE                       \ prints BBBBBBBB
+BUFFER REGISTERS 8 1 FALSE DICT>MMIO       \ repeated FIFO writes
+REGISTERS 1 MMIO@ .                       \ prints 66
+REGION-ID @ MMIO-UNREGISTER
+DEPTH .                                  \ prints 0",
+    ),
 ];
 
 /// The `QUIT` and `ABORT` examples. Both discard the rest of their text, so each one is a
@@ -504,10 +525,24 @@ fn run_section(number: usize) -> Result<(), ExitCode> {
     println!("--- TEST RUN {}: {} ---", number, title);
     // SAFETY: `vm` comes from `boot`, through `new_vm`.
     unsafe {
+        let mut registers = Box::new([0u32; 4]);
         let mut vm = new_vm(VmConfig {
             data_stack_cells: DEMO_DATA_STACK_CELLS,
             ..VmConfig::new(DEMO_DICTIONARY_CELLS)
         });
+        if title == "MMIO Registers and Block Transfers" {
+            // SAFETY: the box stays alive beyond vm, and is only accessed through MMIO.
+            let address = registers.as_mut_ptr().cast::<u8>();
+            vm.allow_mmio(rust_forth_vm::MmioRegion {
+                address,
+                bytes: std::mem::size_of_val(&*registers),
+                rights: rust_forth_vm::MMIO_READ | rust_forth_vm::MMIO_WRITE,
+                widths: rust_forth_vm::MMIO_WIDTH_8 | rust_forth_vm::MMIO_WIDTH_32,
+            })
+            .expect("valid demo MMIO permission");
+            outer_interpreter(&mut vm, &format!("{} CONSTANT REGISTERS", address as usize))
+                .expect("demo register constant fits");
+        }
         for source in blocks {
             evaluate(&mut vm, source)?;
         }
