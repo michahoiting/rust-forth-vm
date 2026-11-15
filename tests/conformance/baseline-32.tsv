@@ -1,0 +1,343 @@
+# id	status	checks	failed checks	missing prerequisites	probe signatures	evidence
+f83.word.21	passed	fetch-store			fetch-store:ebc5bc50d8f6b880	All assigned probes passed; see the coverage limitations.
+f83.word.23	missing					Required word is absent from the fresh VM.
+f83.word.233e	missing					Required word is absent from the fresh VM.
+f83.word.2353	missing					Required word is absent from the fresh VM.
+f83.word.23544942	missing					Required word is absent from the fresh VM.
+f83.word.27	passed	tick-execute			tick-execute:05916db11477cc66	All assigned probes passed; see the coverage limitations.
+f83.word.28	passed	paren-comment			paren-comment:f37beb6a1b60ac39	All assigned probes passed; see the coverage limitations.
+f83.word.2a	deviating	f83-multiply-wrap,multiply	f83-multiply-wrap		f83-multiply-wrap:488faf2f7e9b8d64,multiply:70d991fa7446a0d6	f83-multiply-wrap: expected "0 31415 0 ", got "65536 31415 0 "
+f83.word.2a2f	missing					Required word is absent from the fresh VM.
+f83.word.2a2f4d4f44	missing					Required word is absent from the fresh VM.
+f83.word.2b	deviating	add,f83-add-wrap	f83-add-wrap		add:68ce2f7a4ffbc945,f83-add-wrap:e8e847413d4781da	f83-add-wrap: expected "-32768 31415 0 ", got "32768 31415 0 "
+f83.word.2b21	passed	plus-store			plus-store:4b16c3aa481e1252	All assigned probes passed; see the coverage limitations.
+f83.word.2b4c4f4f50	missing					Required word is absent from the fresh VM.
+f83.word.2c	deviating	comma,f83-comma-size	f83-comma-size		comma:133d9d3fe0c912ee,f83-comma-size:b09617027780a71a	f83-comma-size: expected "2 31415 0 ", got "4 31415 0 "
+f83.word.2d	deviating	f83-minus-wrap,subtract	f83-minus-wrap		f83-minus-wrap:c95a39d7809ef859,subtract:971e5baa0ce937e1	f83-minus-wrap: expected "32767 31415 0 ", got "-32769 31415 0 "
+f83.word.2d545241494c494e47	missing					Required word is absent from the fresh VM.
+f83.word.2e	deviating	f83-input-bits,f83-integer-input,observer	f83-input-bits,f83-integer-input		f83-input-bits:b27f23347e1af024,f83-integer-input:7b8eb89b52c664b4,observer:cb97c7a756aab85d	f83-integer-input: expected "-1 32767 -32768 31415 0 ", got "65535 32767 -32768 31415 0 "; f83-input-bits: expected "-1 31415 0 ", got "0 31415 0 "
+f83.word.2e22	passed	dot-quote			dot-quote:31d7dc87f4cf70d8	All assigned probes passed; see the coverage limitations.
+f83.word.2e28	missing					Required word is absent from the fresh VM.
+f83.word.2f	passed	divide-signs			divide-signs:739c838d43a8f3da	All assigned probes passed; see the coverage limitations.
+f83.word.2f4d4f44	passed	divmod-signs			divmod-signs:a3c2e6fb98ee1f1c	All assigned probes passed; see the coverage limitations.
+f83.word.303c	passed	zero-order			zero-order:dbcbc9240b364417	All assigned probes passed; see the coverage limitations.
+f83.word.303d	passed	zero-order			zero-order:dbcbc9240b364417	All assigned probes passed; see the coverage limitations.
+f83.word.303e	passed	zero-order			zero-order:dbcbc9240b364417	All assigned probes passed; see the coverage limitations.
+f83.word.312b	deviating	f83-add-wrap,increments	f83-add-wrap		f83-add-wrap:e8e847413d4781da,increments:051f8bba60c4516b	f83-add-wrap: expected "-32768 31415 0 ", got "32768 31415 0 "
+f83.word.312d	deviating	f83-minus-wrap,increments	f83-minus-wrap		f83-minus-wrap:c95a39d7809ef859,increments:051f8bba60c4516b	f83-minus-wrap: expected "32767 31415 0 ", got "-32769 31415 0 "
+f83.word.322b	missing					Required word is absent from the fresh VM.
+f83.word.322d	missing					Required word is absent from the fresh VM.
+f83.word.322f	passed	halve			halve:7c2b8fc0dfc16ea0	All assigned probes passed; see the coverage limitations.
+f83.word.3a	passed	colon-exit,delimiters,name-search,return-capacity			colon-exit:fbf77e1a07f963a0,delimiters:46a5ef825edc4036,name-search:d656e25fbdb9e044,return-capacity:e75a91fbb57695b4	All assigned probes passed; see the coverage limitations.
+f83.word.3b	passed	colon-exit,delimiters,name-search,return-capacity			colon-exit:fbf77e1a07f963a0,delimiters:46a5ef825edc4036,name-search:d656e25fbdb9e044,return-capacity:e75a91fbb57695b4	All assigned probes passed; see the coverage limitations.
+f83.word.3c	passed	signed-order			signed-order:696f5bf8f3e52120	All assigned probes passed; see the coverage limitations.
+f83.word.3c23	missing					Required word is absent from the fresh VM.
+f83.word.3d	passed	equal			equal:0d3cdf13ea51f944	All assigned probes passed; see the coverage limitations.
+f83.word.3e	passed	signed-order			signed-order:696f5bf8f3e52120	All assigned probes passed; see the coverage limitations.
+f83.word.3e424f4459	passed	create-body			create-body:d36a7a3e4b6537d3	All assigned probes passed; see the coverage limitations.
+f83.word.3e494e	missing					Required word is absent from the fresh VM.
+f83.word.3e52	missing					Required word is absent from the fresh VM.
+f83.word.3f445550	passed	qdup-nonzero,qdup-zero			qdup-nonzero:ec384bc591b63632,qdup-zero:ce15fd58f9b99958	All assigned probes passed; see the coverage limitations.
+f83.word.40	passed	fetch-store			fetch-store:ebc5bc50d8f6b880	All assigned probes passed; see the coverage limitations.
+f83.word.41424f5254	passed	abort			abort:530bf8301d13fbb1	All assigned probes passed; see the coverage limitations.
+f83.word.41424f525422	passed	abort-quote-false,abort-quote-true			abort-quote-false:514d2ad5b11f1bc2,abort-quote-true:1f92072e681b0ec8	All assigned probes passed; see the coverage limitations.
+f83.word.414253	deviating	abs,f83-abs-min	f83-abs-min		abs:f2d5f0c77477c014,f83-abs-min:1cef5036828926e6	f83-abs-min: expected "-32768 31415 0 ", got "32768 31415 0 "
+f83.word.414c4c4f54	deviating	allot,allot-negative,dictionary-capacity	allot-negative		allot-negative:40a6492c9345f837,allot:d2cfc1afafcc394b,dictionary-capacity:1c0042204e2a4bcf	allot-negative: unexpected completion: Err(AllotBelowData(-4))
+f83.word.414e44	passed	and			and:49074379a404c815	All assigned probes passed; see the coverage limitations.
+f83.word.42415345	missing					Required word is absent from the fresh VM.
+f83.word.424547494e	passed	begin-until			begin-until:1259a736c37aa1c3	All assigned probes passed; see the coverage limitations.
+f83.word.424c4b	missing					Required word is absent from the fresh VM.
+f83.word.424c4f434b	missing					Required word is absent from the fresh VM.
+f83.word.425546464552	missing					Required word is absent from the fresh VM.
+f83.word.4321	passed	char-fetch-store			char-fetch-store:38a4f5470624ae9f	All assigned probes passed; see the coverage limitations.
+f83.word.4340	passed	char-fetch-store			char-fetch-store:38a4f5470624ae9f	All assigned probes passed; see the coverage limitations.
+f83.word.434d4f5645	passed	cmove-forward			cmove-forward:762ebb2e9265695e	All assigned probes passed; see the coverage limitations.
+f83.word.434d4f56453e	passed	cmove-backward			cmove-backward:89cfe51f250b11c7	All assigned probes passed; see the coverage limitations.
+f83.word.434f4d50494c45	missing					Required word is absent from the fresh VM.
+f83.word.434f4e5354414e54	passed	constant			constant:e84d1e9faf804bce	All assigned probes passed; see the coverage limitations.
+f83.word.434f4e56455254	missing					Required word is absent from the fresh VM.
+f83.word.434f554e54	passed	count			count:29e076713c94b5f9	All assigned probes passed; see the coverage limitations.
+f83.word.4352	passed	cr			cr:7dbf1a38c2caded8	All assigned probes passed; see the coverage limitations.
+f83.word.435245415445	passed	create-body			create-body:d36a7a3e4b6537d3	All assigned probes passed; see the coverage limitations.
+f83.word.442b	missing					Required word is absent from the fresh VM.
+f83.word.443c	missing					Required word is absent from the fresh VM.
+f83.word.444543494d414c	missing					Required word is absent from the fresh VM.
+f83.word.444546494e4954494f4e53	missing					Required word is absent from the fresh VM.
+f83.word.4445505448	passed	data-capacity,observer			data-capacity:6ee71445c9848b5f,observer:cb97c7a756aab85d	All assigned probes passed; see the coverage limitations.
+f83.word.444e4547415445	missing					Required word is absent from the fresh VM.
+f83.word.444f	missing					Required word is absent from the fresh VM.
+f83.word.444f45533e	passed	does			does:19d531a0daf24b6d	All assigned probes passed; see the coverage limitations.
+f83.word.44524f50	passed	drop			drop:e694f92d7f630bfd	All assigned probes passed; see the coverage limitations.
+f83.word.445550	passed	dup			dup:b6dbe0af391a5c79	All assigned probes passed; see the coverage limitations.
+f83.word.454c5345	passed	if-else-then,nested-control			if-else-then:0a39781068c8bb35,nested-control:ed57b08e0fecc21c	All assigned probes passed; see the coverage limitations.
+f83.word.454d4954	passed	ascii-graphics,emit			ascii-graphics:93160a417573b319,emit:0d51b914dfed5938	All assigned probes passed; see the coverage limitations.
+f83.word.45584543555445	passed	tick-execute			tick-execute:05916db11477cc66	All assigned probes passed; see the coverage limitations.
+f83.word.45584954	passed	colon-exit			colon-exit:fbf77e1a07f963a0	All assigned probes passed; see the coverage limitations.
+f83.word.455850454354	missing					Required word is absent from the fresh VM.
+f83.word.46494c4c	passed	fill			fill:2e666eb9701b1ab8	All assigned probes passed; see the coverage limitations.
+f83.word.46494e44	missing					Required word is absent from the fresh VM.
+f83.word.464c555348	missing					Required word is absent from the fresh VM.
+f83.word.464f52474554	missing					Required word is absent from the fresh VM.
+f83.word.464f525448	missing					Required word is absent from the fresh VM.
+f83.word.464f5254482d3833	missing					Required word is absent from the fresh VM.
+f83.word.48455245	passed	comma			comma:133d9d3fe0c912ee	All assigned probes passed; see the coverage limitations.
+f83.word.484f4c44	missing					Required word is absent from the fresh VM.
+f83.word.49	missing					Required word is absent from the fresh VM.
+f83.word.4946	passed	if-else-then,if-without-else,nested-control			if-else-then:0a39781068c8bb35,if-without-else:a466c01741b32fbe,nested-control:ed57b08e0fecc21c	All assigned probes passed; see the coverage limitations.
+f83.word.494d4d454449415445	passed	immediate			immediate:f1e1badc38090d9d	All assigned probes passed; see the coverage limitations.
+f83.word.4a	missing					Required word is absent from the fresh VM.
+f83.word.4b4559	missing					Required word is absent from the fresh VM.
+f83.word.4c45415645	missing					Required word is absent from the fresh VM.
+f83.word.4c49544552414c	missing					Required word is absent from the fresh VM.
+f83.word.4c4f4144	missing					Required word is absent from the fresh VM.
+f83.word.4c4f4f50	missing					Required word is absent from the fresh VM.
+f83.word.4d4158	passed	minmax			minmax:b7518c35363748a8	All assigned probes passed; see the coverage limitations.
+f83.word.4d494e	passed	minmax			minmax:b7518c35363748a8	All assigned probes passed; see the coverage limitations.
+f83.word.4d4f44	passed	mod-signs			mod-signs:09d282bb169e7a86	All assigned probes passed; see the coverage limitations.
+f83.word.4e4547415445	deviating	f83-negate-min,negate	f83-negate-min		f83-negate-min:5dc84ef268a5a832,negate:b01d940961394575	f83-negate-min: expected "-32768 31415 0 ", got "32768 31415 0 "
+f83.word.4e4f54	deviating	f83-not-width,not	f83-not-width		f83-not-width:880786c632540dc0,not:fc274f8e372ceffe	f83-not-width: expected "-1 31415 0 ", got "0 31415 0 "
+f83.word.4f52	passed	or			or:c01c936dbf7bb624	All assigned probes passed; see the coverage limitations.
+f83.word.4f564552	passed	over			over:14945a51038367e4	All assigned probes passed; see the coverage limitations.
+f83.word.504144	missing					Required word is absent from the fresh VM.
+f83.word.5049434b	passed	pick			pick:2b8263431322c0ba	All assigned probes passed; see the coverage limitations.
+f83.word.51554954	passed	quit			quit:76e587ef8e268bb2	All assigned probes passed; see the coverage limitations.
+f83.word.523e	missing					Required word is absent from the fresh VM.
+f83.word.5240	missing					Required word is absent from the fresh VM.
+f83.word.524550454154	missing					Required word is absent from the fresh VM.
+f83.word.524f4c4c	passed	roll			roll:81966107f526842b	All assigned probes passed; see the coverage limitations.
+f83.word.524f54	passed	rot			rot:bfbdd53e3e32780e	All assigned probes passed; see the coverage limitations.
+f83.word.534156452d42554646455253	missing					Required word is absent from the fresh VM.
+f83.word.5349474e	missing					Required word is absent from the fresh VM.
+f83.word.5350414345	passed	space			space:ce2c240bdebc5bff	All assigned probes passed; see the coverage limitations.
+f83.word.535041434553	passed	spaces			spaces:bb363a31838fbfda	All assigned probes passed; see the coverage limitations.
+f83.word.5350414e	missing					Required word is absent from the fresh VM.
+f83.word.5354415445	missing					Required word is absent from the fresh VM.
+f83.word.53574150	passed	swap			swap:66f2db052cf49490	All assigned probes passed; see the coverage limitations.
+f83.word.5448454e	passed	if-else-then,if-without-else,nested-control			if-else-then:0a39781068c8bb35,if-without-else:a466c01741b32fbe,nested-control:ed57b08e0fecc21c	All assigned probes passed; see the coverage limitations.
+f83.word.544942	missing					Required word is absent from the fresh VM.
+f83.word.54595045	passed	type			type:5ebdcd02038eb3c8	All assigned probes passed; see the coverage limitations.
+f83.word.552e	missing					Required word is absent from the fresh VM.
+f83.word.553c	passed	unsigned-order			unsigned-order:f90ae56fbbd1c75f	All assigned probes passed; see the coverage limitations.
+f83.word.554d2a	missing					Required word is absent from the fresh VM.
+f83.word.554d2f4d4f44	missing					Required word is absent from the fresh VM.
+f83.word.554e54494c	passed	begin-until			begin-until:1259a736c37aa1c3	All assigned probes passed; see the coverage limitations.
+f83.word.555044415445	missing					Required word is absent from the fresh VM.
+f83.word.5641524941424c45	deviating	f83-variable-size,fetch-store	f83-variable-size		f83-variable-size:686ffd283f73219e,fetch-store:ebc5bc50d8f6b880	f83-variable-size: expected "2 31415 0 ", got "4 31415 0 "
+f83.word.564f434142554c415259	missing					Required word is absent from the fresh VM.
+f83.word.5748494c45	missing					Required word is absent from the fresh VM.
+f83.word.574f5244	missing					Required word is absent from the fresh VM.
+f83.word.584f52	passed	xor			xor:f72a437e5d441aad	All assigned probes passed; see the coverage limitations.
+f83.word.5b	missing					Required word is absent from the fresh VM.
+f83.word.5b275d	passed	bracket-tick			bracket-tick:0b4a43353ba01263	All assigned probes passed; see the coverage limitations.
+f83.word.5b434f4d50494c455d	missing					Required word is absent from the fresh VM.
+f83.word.5d	missing					Required word is absent from the fresh VM.
+iso.word.6.1.0010	passed	fetch-store			fetch-store:ebc5bc50d8f6b880	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0030	missing					Required word is absent from the fresh VM.
+iso.word.6.1.0040	missing					Required word is absent from the fresh VM.
+iso.word.6.1.0050	missing					Required word is absent from the fresh VM.
+iso.word.6.1.0070	passed	tick-execute			tick-execute:05916db11477cc66	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0080	passed	paren-comment			paren-comment:f37beb6a1b60ac39	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0090	passed	multiply			multiply:70d991fa7446a0d6	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0100	missing					Required word is absent from the fresh VM.
+iso.word.6.1.0110	missing					Required word is absent from the fresh VM.
+iso.word.6.1.0120	passed	add			add:68ce2f7a4ffbc945	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0130	passed	plus-store			plus-store:4b16c3aa481e1252	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0140	missing					Required word is absent from the fresh VM.
+iso.word.6.1.0150	passed	comma			comma:133d9d3fe0c912ee	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0160	passed	subtract			subtract:971e5baa0ce937e1	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0180	passed	integer-input,observer			integer-input:ae1781ecb5935306,observer:cb97c7a756aab85d	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0190	passed	dot-quote			dot-quote:31d7dc87f4cf70d8	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0230	passed	divide-signs			divide-signs:739c838d43a8f3da	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0240	passed	divmod-signs			divmod-signs:a3c2e6fb98ee1f1c	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0250	passed	zero-order			zero-order:dbcbc9240b364417	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0270	passed	zero-order			zero-order:dbcbc9240b364417	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0290	passed	increments			increments:051f8bba60c4516b	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0300	passed	increments			increments:051f8bba60c4516b	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0310	deviating	two-store-order	two-store-order		two-store-order:a9af03fb0dc13ffa	two-store-order: expected "11 22 31415 0 ", got "22 11 31415 0 "
+iso.word.6.1.0320	passed	double			double:31c9d9aac1fcd2d0	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0330	passed	halve			halve:7c2b8fc0dfc16ea0	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0350	deviating	two-fetch-order	two-fetch-order		two-fetch-order:c3660f8686200053	two-fetch-order: expected "22 11 31415 0 ", got "11 22 31415 0 "
+iso.word.6.1.0370	passed	two-drop			two-drop:7a55ffdf317ede88	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0380	passed	two-dup			two-dup:b6af53f35c8ab830	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0400	passed	two-over			two-over:0358f3beb4550977	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0430	passed	two-swap			two-swap:ee4bb5ed753c97a9	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0450	passed	colon-exit,delimiters,name-search,return-capacity			colon-exit:fbf77e1a07f963a0,delimiters:46a5ef825edc4036,name-search:d656e25fbdb9e044,return-capacity:e75a91fbb57695b4	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0460	passed	colon-exit,delimiters,name-search,return-capacity			colon-exit:fbf77e1a07f963a0,delimiters:46a5ef825edc4036,name-search:d656e25fbdb9e044,return-capacity:e75a91fbb57695b4	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0480	passed	iso-extremes,signed-order			iso-extremes:970bfea93a85e0aa,signed-order:696f5bf8f3e52120	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0490	missing					Required word is absent from the fresh VM.
+iso.word.6.1.0530	passed	equal			equal:0d3cdf13ea51f944	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0540	passed	iso-extremes,signed-order			iso-extremes:970bfea93a85e0aa,signed-order:696f5bf8f3e52120	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0550	passed	create-body			create-body:d36a7a3e4b6537d3	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0560	missing					Required word is absent from the fresh VM.
+iso.word.6.1.0570	missing					Required word is absent from the fresh VM.
+iso.word.6.1.0580	missing					Required word is absent from the fresh VM.
+iso.word.6.1.0630	passed	qdup-nonzero,qdup-zero			qdup-nonzero:ec384bc591b63632,qdup-zero:ce15fd58f9b99958	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0650	passed	fetch-store			fetch-store:ebc5bc50d8f6b880	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0670	passed	abort			abort:530bf8301d13fbb1	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0680	passed	abort-quote-false,abort-quote-true			abort-quote-false:514d2ad5b11f1bc2,abort-quote-true:1f92072e681b0ec8	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0690	passed	abs			abs:f2d5f0c77477c014	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0695	missing					Required word is absent from the fresh VM.
+iso.word.6.1.0705	passed	align			align:609e3c09e80c60d6	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0706	passed	align			align:609e3c09e80c60d6	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0710	deviating	allot,allot-negative,dictionary-capacity	allot-negative		allot-negative:40a6492c9345f837,allot:d2cfc1afafcc394b,dictionary-capacity:1c0042204e2a4bcf	allot-negative: unexpected completion: Err(AllotBelowData(-4))
+iso.word.6.1.0720	passed	and			and:49074379a404c815	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0750	missing					Required word is absent from the fresh VM.
+iso.word.6.1.0760	passed	begin-until			begin-until:1259a736c37aa1c3	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0770	passed	blank			blank:f6a5038822c25124	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0850	passed	char-fetch-store			char-fetch-store:38a4f5470624ae9f	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0860	passed	char-comma			char-comma:60687e9763d7fbcf	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0870	passed	char-fetch-store			char-fetch-store:38a4f5470624ae9f	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0880	passed	cell-size			cell-size:3b94123deca42e4f	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0890	passed	cell-size			cell-size:3b94123deca42e4f	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0895	passed	char			char:cfe70bd2f1470614	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0897	passed	char-size			char-size:ede1fa565c494b1c	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0898	passed	char-size			char-size:ede1fa565c494b1c	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0950	passed	constant			constant:e84d1e9faf804bce	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0980	passed	count			count:29e076713c94b5f9	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.0990	passed	cr			cr:7dbf1a38c2caded8	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1000	passed	create-body			create-body:d36a7a3e4b6537d3	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1170	missing					Required word is absent from the fresh VM.
+iso.word.6.1.1200	passed	data-capacity,observer			data-capacity:6ee71445c9848b5f,observer:cb97c7a756aab85d	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1240	missing					Required word is absent from the fresh VM.
+iso.word.6.1.1250	passed	does			does:19d531a0daf24b6d	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1260	passed	drop			drop:e694f92d7f630bfd	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1290	passed	dup			dup:b6dbe0af391a5c79	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1310	passed	if-else-then,nested-control			if-else-then:0a39781068c8bb35,nested-control:ed57b08e0fecc21c	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1320	passed	ascii-graphics,emit			ascii-graphics:93160a417573b319,emit:0d51b914dfed5938	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1345	missing					Required word is absent from the fresh VM.
+iso.word.6.1.1360	missing					Required word is absent from the fresh VM.
+iso.word.6.1.1370	passed	tick-execute			tick-execute:05916db11477cc66	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1380	passed	colon-exit			colon-exit:fbf77e1a07f963a0	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1540	passed	fill			fill:2e666eb9701b1ab8	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1550	missing					Required word is absent from the fresh VM.
+iso.word.6.1.1561	missing					Required word is absent from the fresh VM.
+iso.word.6.1.1650	passed	comma			comma:133d9d3fe0c912ee	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1670	missing					Required word is absent from the fresh VM.
+iso.word.6.1.1680	missing					Required word is absent from the fresh VM.
+iso.word.6.1.1700	passed	if-else-then,if-without-else,nested-control			if-else-then:0a39781068c8bb35,if-without-else:a466c01741b32fbe,nested-control:ed57b08e0fecc21c	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1710	passed	immediate			immediate:f1e1badc38090d9d	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1720	passed	invert			invert:2f55f10ef5ac1cdb	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1730	missing					Required word is absent from the fresh VM.
+iso.word.6.1.1750	missing					Required word is absent from the fresh VM.
+iso.word.6.1.1760	missing					Required word is absent from the fresh VM.
+iso.word.6.1.1780	missing					Required word is absent from the fresh VM.
+iso.word.6.1.1800	missing					Required word is absent from the fresh VM.
+iso.word.6.1.1805	passed	shift-left			shift-left:d0f82bd10eade945	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1810	missing					Required word is absent from the fresh VM.
+iso.word.6.1.1870	passed	minmax			minmax:b7518c35363748a8	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1880	passed	minmax			minmax:b7518c35363748a8	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1890	passed	mod-signs			mod-signs:09d282bb169e7a86	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1900	passed	move-overlap			move-overlap:8fef548ac3ef1dea	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1910	passed	negate			negate:b01d940961394575	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1980	passed	or			or:c01c936dbf7bb624	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.1990	passed	over			over:14945a51038367e4	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.2033	missing					Required word is absent from the fresh VM.
+iso.word.6.1.2050	passed	quit			quit:76e587ef8e268bb2	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.2060	missing					Required word is absent from the fresh VM.
+iso.word.6.1.2070	missing					Required word is absent from the fresh VM.
+iso.word.6.1.2120	missing					Required word is absent from the fresh VM.
+iso.word.6.1.2140	missing					Required word is absent from the fresh VM.
+iso.word.6.1.2160	passed	rot			rot:bfbdd53e3e32780e	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.2162	passed	shift-right			shift-right:c4620e2870abe015	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.2165	passed	s-quote			s-quote:8c5085042e735cf2	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.2170	missing					Required word is absent from the fresh VM.
+iso.word.6.1.2210	missing					Required word is absent from the fresh VM.
+iso.word.6.1.2214	missing					Required word is absent from the fresh VM.
+iso.word.6.1.2216	missing					Required word is absent from the fresh VM.
+iso.word.6.1.2220	passed	space			space:ce2c240bdebc5bff	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.2230	passed	iso-spaces-negative,spaces			iso-spaces-negative:882aea468538aa13,spaces:bb363a31838fbfda	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.2250	missing					Required word is absent from the fresh VM.
+iso.word.6.1.2260	passed	swap			swap:66f2db052cf49490	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.2270	passed	if-else-then,if-without-else,nested-control			if-else-then:0a39781068c8bb35,if-without-else:a466c01741b32fbe,nested-control:ed57b08e0fecc21c	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.2310	passed	type			type:5ebdcd02038eb3c8	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.2320	missing					Required word is absent from the fresh VM.
+iso.word.6.1.2340	passed	iso-extremes,unsigned-order			iso-extremes:970bfea93a85e0aa,unsigned-order:f90ae56fbbd1c75f	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.2360	missing					Required word is absent from the fresh VM.
+iso.word.6.1.2370	missing					Required word is absent from the fresh VM.
+iso.word.6.1.2380	missing					Required word is absent from the fresh VM.
+iso.word.6.1.2390	passed	begin-until			begin-until:1259a736c37aa1c3	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.2410	passed	fetch-store			fetch-store:ebc5bc50d8f6b880	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.2430	missing					Required word is absent from the fresh VM.
+iso.word.6.1.2450	missing					Required word is absent from the fresh VM.
+iso.word.6.1.2490	passed	xor			xor:f72a437e5d441aad	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.2500	missing					Required word is absent from the fresh VM.
+iso.word.6.1.2510	passed	bracket-tick			bracket-tick:0b4a43353ba01263	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.2520	passed	bracket-char			bracket-char:1cf6e65783e99725	All assigned probes passed; see the coverage limitations.
+iso.word.6.1.2540	missing					Required word is absent from the fresh VM.
+f83.system.cell-width	deviating	host.cell-width83	host.cell-width83			FORTH-83 requires 16-bit cells; this target has 32-bit cells.
+f83.system.documentation	not yet assessed					No complete clause-by-clause documentation audit yet.
+f83.system.dictionary-capacity	passed	dictionary-capacity			dictionary-capacity:1c0042204e2a4bcf	All assigned probes passed; see the coverage limitations.
+f83.system.data-stack-capacity	passed	data-capacity			data-capacity:6ee71445c9848b5f	All assigned probes passed; see the coverage limitations.
+f83.system.return-stack-capacity	passed	return-capacity			return-capacity:e75a91fbb57695b4	All assigned probes passed; see the coverage limitations.
+f83.system.block-capacity	blocked			BLOCK,BUFFER,FLUSH,UPDATE		Missing test prerequisites: BLOCK, BUFFER, FLUSH, UPDATE.
+f83.system.terminal	blocked			EXPECT,KEY		Missing test prerequisites: EXPECT, KEY.
+f83.system.labeling	blocked			#,#>,#S,#TIB,*/,*/MOD,+LOOP,-TRAILING,.(,2+,2-,<#,>IN,>R,BASE,BLK,BLOCK,BUFFER,COMPILE,CONVERT,D+,D<,DECIMAL,DEFINITIONS,DNEGATE,DO,EXPECT,FIND,FLUSH,FORGET,FORTH,FORTH-83,HOLD,I,J,KEY,LEAVE,LITERAL,LOAD,LOOP,PAD,R>,R@,REPEAT,SAVE-BUFFERS,SIGN,SPAN,STATE,TIB,U.,UM*,UM/MOD,UPDATE,VOCABULARY,WHILE,WORD,[,[COMPILE],]		Missing test prerequisites: #, #>, #S, #TIB, */, */MOD, +LOOP, -TRAILING, .(, 2+, 2-, <#, >IN, >R, BASE, BLK, BLOCK, BUFFER, COMPILE, CONVERT, D+, D<, DECIMAL, DEFINITIONS, DNEGATE, DO, EXPECT, FIND, FLUSH, FORGET, FORTH, FORTH-83, HOLD, I, J, KEY, LEAVE, LITERAL, LOAD, LOOP, PAD, R>, R@, REPEAT, SAVE-BUFFERS, SIGN, SPAN, STATE, TIB, U., UM*, UM/MOD, UPDATE, VOCABULARY, WHILE, WORD, [, [COMPILE], ].
+f83.system.definitions	not yet assessed					Full interactions between standard definitions have not been assessed.
+f83.system.memory	passed	allot,char-fetch-store,fetch-store			allot:d2cfc1afafcc394b,char-fetch-store:38a4f5470624ae9f,fetch-store:ebc5bc50d8f6b880	All assigned probes passed; see the coverage limitations.
+f83.system.return-stack	blocked			>R,R>,R@		Missing test prerequisites: >R, R>, R@.
+f83.system.compilation	passed	colon-exit,immediate,tick-execute			colon-exit:fbf77e1a07f963a0,immediate:f1e1badc38090d9d,tick-execute:05916db11477cc66	All assigned probes passed; see the coverage limitations.
+f83.system.key	blocked			EXPECT,KEY		Missing test prerequisites: EXPECT, KEY.
+f83.system.expect	blocked			EXPECT,KEY		Missing test prerequisites: EXPECT, KEY.
+f83.system.emit	passed	ascii-graphics			ascii-graphics:93160a417573b319	All assigned probes passed; see the coverage limitations.
+f83.system.type	passed	s-quote,type			s-quote:8c5085042e735cf2,type:5ebdcd02038eb3c8	All assigned probes passed; see the coverage limitations.
+f83.system.buffers	blocked			BLOCK,BUFFER,FLUSH,UPDATE		Missing test prerequisites: BLOCK, BUFFER, FLUSH, UPDATE.
+f83.system.numbers	deviating	f83-input-bits,f83-integer-input	f83-input-bits,f83-integer-input		f83-input-bits:b27f23347e1af024,f83-integer-input:7b8eb89b52c664b4	f83-integer-input: expected "-1 32767 -32768 31415 0 ", got "65535 32767 -32768 31415 0 "; f83-input-bits: expected "-1 31415 0 ", got "0 31415 0 "
+f83.system.control	passed	begin-until,nested-control			begin-until:1259a736c37aa1c3,nested-control:ed57b08e0fecc21c	All assigned probes passed; see the coverage limitations.
+f83.system.errors	not yet assessed					Error variants and README limitations exist; the standard-specific error action audit remains incomplete.
+f83.system.error-conditions	not yet assessed					Not all required error conditions are exercisable with current words.
+iso.system.3.1.1	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.1.2.1	passed	ascii-graphics			ascii-graphics:93160a417573b319	All assigned probes passed; see the coverage limitations.
+iso.system.3.1.2.2	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.1.3.1	passed	equal,signed-order,zero-order			equal:0d3cdf13ea51f944,signed-order:696f5bf8f3e52120,zero-order:dbcbc9240b364417	All assigned probes passed; see the coverage limitations.
+iso.system.3.1.3.2	passed	host.cell-widthiso				All assigned probes passed; see the coverage limitations.
+iso.system.3.1.3.3	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.1.3.4	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.1.3.5	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.1.4.1	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.1.4.2	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.1.5.1	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.1.5.2	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.2.1.1	passed	host.cell-widthiso				All assigned probes passed; see the coverage limitations.
+iso.system.3.2.1.2	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.2.1.3	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.2.2.1	passed	divide-signs,divmod-signs,mod-signs			divide-signs:739c838d43a8f3da,divmod-signs:a3c2e6fb98ee1f1c,mod-signs:09d282bb169e7a86	All assigned probes passed; see the coverage limitations.
+iso.system.3.2.2.2	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.2.3.1	passed	data-capacity			data-capacity:6ee71445c9848b5f	All assigned probes passed; see the coverage limitations.
+iso.system.3.2.3.2	passed	begin-until,nested-control			begin-until:1259a736c37aa1c3,nested-control:ed57b08e0fecc21c	All assigned probes passed; see the coverage limitations.
+iso.system.3.2.3.3	blocked			>R,R>,R@		Missing test prerequisites: >R, R>, R@.
+iso.system.3.2.4.1	blocked			ACCEPT,KEY		Missing test prerequisites: ACCEPT, KEY.
+iso.system.3.2.4.2	passed	ascii-graphics			ascii-graphics:93160a417573b319	All assigned probes passed; see the coverage limitations.
+iso.system.3.2.5	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.2.6	blocked			ENVIRONMENT?		Missing test prerequisites: ENVIRONMENT?.
+iso.system.3.3.1.1	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.3.1.2	passed	name-search			name-search:d656e25fbdb9e044	All assigned probes passed; see the coverage limitations.
+iso.system.3.3.2	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.3.3.1	passed	align			align:609e3c09e80c60d6	All assigned probes passed; see the coverage limitations.
+iso.system.3.3.3.2	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.3.3.3	passed	allot,char-fetch-store,fetch-store			allot:d2cfc1afafcc394b,char-fetch-store:38a4f5470624ae9f,fetch-store:ebc5bc50d8f6b880	All assigned probes passed; see the coverage limitations.
+iso.system.3.3.3.4	passed	s-quote,type			s-quote:8c5085042e735cf2,type:5ebdcd02038eb3c8	All assigned probes passed; see the coverage limitations.
+iso.system.3.3.3.5	blocked			>IN,SOURCE		Missing test prerequisites: >IN, SOURCE.
+iso.system.3.3.3.6	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.4.1.1	passed	delimiters			delimiters:46a5ef825edc4036	All assigned probes passed; see the coverage limitations.
+iso.system.3.4.1.2	passed	colon-exit,integer-input,paren-comment			colon-exit:fbf77e1a07f963a0,integer-input:ae1781ecb5935306,paren-comment:f37beb6a1b60ac39	All assigned probes passed; see the coverage limitations.
+iso.system.3.4.1.3	blocked			BASE,DECIMAL		Missing test prerequisites: BASE, DECIMAL.
+iso.system.3.4.2	passed	name-search			name-search:d656e25fbdb9e044	All assigned probes passed; see the coverage limitations.
+iso.system.3.4.3.1	passed	colon-exit,immediate,tick-execute			colon-exit:fbf77e1a07f963a0,immediate:f1e1badc38090d9d,tick-execute:05916db11477cc66	All assigned probes passed; see the coverage limitations.
+iso.system.3.4.3.2	passed	colon-exit,immediate,tick-execute			colon-exit:fbf77e1a07f963a0,immediate:f1e1badc38090d9d,tick-execute:05916db11477cc66	All assigned probes passed; see the coverage limitations.
+iso.system.3.4.3.3	passed	colon-exit,immediate,tick-execute			colon-exit:fbf77e1a07f963a0,immediate:f1e1badc38090d9d,tick-execute:05916db11477cc66	All assigned probes passed; see the coverage limitations.
+iso.system.3.4.4	not yet assessed					This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.4.5	passed	colon-exit,immediate,tick-execute			colon-exit:fbf77e1a07f963a0,immediate:f1e1badc38090d9d,tick-execute:05916db11477cc66	All assigned probes passed; see the coverage limitations.
+iso.system.4.1.1	not yet assessed					Existing API documentation and README are not yet a complete standard-specific documentation audit.
+iso.system.4.1.2	not yet assessed					Existing API documentation and README are not yet a complete standard-specific documentation audit.
+iso.system.4.1.3	not yet assessed					Existing API documentation and README are not yet a complete standard-specific documentation audit.
+iso.system.core	blocked			#,#>,#S,*/,*/MOD,+LOOP,<#,>IN,>NUMBER,>R,ACCEPT,BASE,DECIMAL,DO,ENVIRONMENT?,EVALUATE,FIND,FM/MOD,HOLD,I,J,KEY,LEAVE,LITERAL,LOOP,M*,POSTPONE,R>,R@,RECURSE,REPEAT,S>D,SIGN,SM/REM,SOURCE,STATE,U.,UM*,UM/MOD,UNLOOP,WHILE,WORD,[,]		Missing test prerequisites: #, #>, #S, */, */MOD, +LOOP, <#, >IN, >NUMBER, >R, ACCEPT, BASE, DECIMAL, DO, ENVIRONMENT?, EVALUATE, FIND, FM/MOD, HOLD, I, J, KEY, LEAVE, LITERAL, LOOP, M*, POSTPONE, R>, R@, RECURSE, REPEAT, S>D, SIGN, SM/REM, SOURCE, STATE, U., UM*, UM/MOD, UNLOOP, WHILE, WORD, [, ].
+iso.system.3	not yet assessed					This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.
+iso.system.3.1	not yet assessed					This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.
+iso.system.3.1.2	not yet assessed					This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.
+iso.system.3.1.3	not yet assessed					This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.
+iso.system.3.1.4	deviating	two-fetch-order,two-store-order	two-fetch-order,two-store-order		two-fetch-order:c3660f8686200053,two-store-order:a9af03fb0dc13ffa	two-store-order: expected "11 22 31415 0 ", got "22 11 31415 0 "; two-fetch-order: expected "22 11 31415 0 ", got "11 22 31415 0 "
+iso.system.3.1.5	not yet assessed					This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.
+iso.system.3.3.3	not yet assessed					This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.
+iso.system.3.4	not yet assessed					This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.
+iso.system.3.4.1	not yet assessed					This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.
+iso.system.3.4.3	not yet assessed					This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.

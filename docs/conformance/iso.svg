@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="245" height="20" role="img" aria-label="ISO Forth conformance: 55.6%">
+  <title>ISO Forth conformance: 55.6%</title>
+  <rect width="245" height="20" rx="3" fill="#555"/>
+  <path d="M177 0h65a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3h-65z" fill="#9a6700"/>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="11">
+    <text x="88.5" y="14">ISO Forth conformance</text>
+    <text x="211" y="14">55.6%</text>
+  </g>
+</svg>

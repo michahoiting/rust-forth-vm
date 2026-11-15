@@ -2,6 +2,10 @@
 
 # Local versions of the CI steps. CI calls these same targets, so the two can't drift apart.
 #
+# make conformance   Regenerates the conformance report and README badges.
+# make conformance-check   Checks generated conformance artifacts.
+# make conformance-baseline   Refreshes reviewed outcomes; review every change.
+# make conformance-32   Saves a separate 32-bit Miri measurement.
 # make ci         Everything that runs on the stable toolchain.
 # make ci-all     Also Miri, which needs the nightly toolchain.
 # make msrv       Checks the oldest supported Rust version, which needs that toolchain.
@@ -35,7 +39,7 @@ MSRV := $(shell sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
 
 .DEFAULT_GOAL := ci
 
-.PHONY: ci ci-all fmt clippy build test test-release test-minimal doc doc-serve miri miri-32 check-miri miri-needed report-miri actionlint msrv msrv-version code-changed mutants mutants-diff mutants-test check-mutants demo demo-expected setup-dev hooks protect metrics perf perf-report perf-compare perf-pad-check perf-test perf-ci perf-record check-python
+.PHONY: conformance-baseline-32 conformance conformance-check conformance-baseline conformance-32 ci ci-all fmt clippy build test test-release test-minimal doc doc-serve miri miri-32 check-miri miri-needed report-miri actionlint msrv msrv-version code-changed mutants mutants-diff mutants-test check-mutants demo demo-expected setup-dev hooks protect metrics perf perf-report perf-compare perf-pad-check perf-test perf-ci perf-record check-python
 
 ci: fmt clippy build test test-release test-minimal doc
 
@@ -51,7 +55,7 @@ clippy:
 build:
 	cargo build --locked
 
-test:
+test: conformance-check
 	cargo test --locked
 
 test-release:
@@ -240,3 +244,27 @@ protect: check-python
 			echo "Created the ruleset $$name."; \
 		fi; \
 	done
+
+# These maintenance commands deliberately rewrite artifacts; ordinary checks never do.
+conformance:
+	CONFORMANCE_WRITE=artifacts cargo test --locked --test conformance regenerate -- --ignored --exact
+
+conformance-baseline:
+	CONFORMANCE_WRITE=baseline cargo test --locked --test conformance regenerate -- --ignored --exact
+
+conformance-check:
+	cargo test --locked --test conformance generated_conformance_files_are_current -- --exact
+
+# Keep the noncanonical measurement separate from the README's reviewed 64-bit artifacts.
+conformance-32: check-miri
+	@mkdir -p target/conformance
+	@cargo +nightly miri test --locked --test conformance --target $(MIRI_32_BIT_TARGET) -- --nocapture > target/conformance/32-bit.txt 2>&1 || { cat target/conformance/32-bit.txt; exit 1; }
+	@cat target/conformance/32-bit.txt
+
+# Explicitly review this separately measured baseline before refreshing canonical artifacts.
+conformance-baseline-32: check-miri
+	@mkdir -p target/conformance
+	@cargo +nightly miri test --locked --test conformance --target $(MIRI_32_BIT_TARGET) print_baseline -- --ignored --exact --nocapture > target/conformance/baseline-32.log 2>&1 || { cat target/conformance/baseline-32.log; exit 1; }
+	@sed -n 's/^.*CONFORMANCE-BASELINE://p' target/conformance/baseline-32.log > target/conformance/baseline-32.tsv
+	@test -s target/conformance/baseline-32.tsv
+	@mv target/conformance/baseline-32.tsv tests/conformance/baseline-32.tsv

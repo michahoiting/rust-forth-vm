@@ -1,0 +1,343 @@
+# id	profile	kind	subject	provision	source	assessment	reason
+f83.word.21	f83	word	!	12 !	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.23	f83	word	#	12 #	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.233e	f83	word	#>	12 #>	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.2353	f83	word	#S	12 #S	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.23544942	f83	word	#TIB	12 #TIB	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.27	f83	word	'	12 '	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.28	f83	word	(	12 (	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.2a	f83	word	*	12 *	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.2a2f	f83	word	*/	12 */	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.2a2f4d4f44	f83	word	*/MOD	12 */MOD	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.2b	f83	word	+	12 +	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.2b21	f83	word	+!	12 +!	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.2b4c4f4f50	f83	word	+LOOP	12 +LOOP	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.2c	f83	word	,	12 ,	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.2d	f83	word	-	12 -	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.2d545241494c494e47	f83	word	-TRAILING	12 -TRAILING	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.2e	f83	word	.	12 .	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.2e22	f83	word	."	12 ."	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.2e28	f83	word	.(	12 .(	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.2f	f83	word	/	12 /	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.2f4d4f44	f83	word	/MOD	12 /MOD	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.303c	f83	word	0<	12 0<	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.303d	f83	word	0=	12 0=	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.303e	f83	word	0>	12 0>	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.312b	f83	word	1+	12 1+	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.312d	f83	word	1-	12 1-	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.322b	f83	word	2+	12 2+	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.322d	f83	word	2-	12 2-	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.322f	f83	word	2/	12 2/	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.3a	f83	word	:	12 :	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.3b	f83	word	;	12 ;	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.3c	f83	word	<	12 <	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.3c23	f83	word	<#	12 <#	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.3d	f83	word	=	12 =	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.3e	f83	word	>	12 >	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.3e424f4459	f83	word	>BODY	12 >BODY	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.3e494e	f83	word	>IN	12 >IN	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.3e52	f83	word	>R	12 >R	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.3f445550	f83	word	?DUP	12 ?DUP	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.40	f83	word	@	12 @	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.41424f5254	f83	word	ABORT	12 ABORT	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.41424f525422	f83	word	ABORT"	12 ABORT"	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.414253	f83	word	ABS	12 ABS	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.414c4c4f54	f83	word	ALLOT	12 ALLOT	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.414e44	f83	word	AND	12 AND	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.42415345	f83	word	BASE	12 BASE	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.424547494e	f83	word	BEGIN	12 BEGIN	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.424c4b	f83	word	BLK	12 BLK	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.424c4f434b	f83	word	BLOCK	12 BLOCK	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.425546464552	f83	word	BUFFER	12 BUFFER	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4321	f83	word	C!	12 C!	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4340	f83	word	C@	12 C@	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.434d4f5645	f83	word	CMOVE	12 CMOVE	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.434d4f56453e	f83	word	CMOVE>	12 CMOVE>	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.434f4d50494c45	f83	word	COMPILE	12 COMPILE	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.434f4e5354414e54	f83	word	CONSTANT	12 CONSTANT	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.434f4e56455254	f83	word	CONVERT	12 CONVERT	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.434f554e54	f83	word	COUNT	12 COUNT	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4352	f83	word	CR	12 CR	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.435245415445	f83	word	CREATE	12 CREATE	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.442b	f83	word	D+	12 D+	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.443c	f83	word	D<	12 D<	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.444543494d414c	f83	word	DECIMAL	12 DECIMAL	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.444546494e4954494f4e53	f83	word	DEFINITIONS	12 DEFINITIONS	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4445505448	f83	word	DEPTH	12 DEPTH	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.444e4547415445	f83	word	DNEGATE	12 DNEGATE	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.444f	f83	word	DO	12 DO	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.444f45533e	f83	word	DOES>	12 DOES>	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.44524f50	f83	word	DROP	12 DROP	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.445550	f83	word	DUP	12 DUP	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.454c5345	f83	word	ELSE	12 ELSE	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.454d4954	f83	word	EMIT	12 EMIT	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.45584543555445	f83	word	EXECUTE	12 EXECUTE	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.45584954	f83	word	EXIT	12 EXIT	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.455850454354	f83	word	EXPECT	12 EXPECT	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.46494c4c	f83	word	FILL	12 FILL	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.46494e44	f83	word	FIND	12 FIND	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.464c555348	f83	word	FLUSH	12 FLUSH	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.464f52474554	f83	word	FORGET	12 FORGET	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.464f525448	f83	word	FORTH	12 FORTH	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.464f5254482d3833	f83	word	FORTH-83	12 FORTH-83	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.48455245	f83	word	HERE	12 HERE	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.484f4c44	f83	word	HOLD	12 HOLD	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.49	f83	word	I	12 I	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4946	f83	word	IF	12 IF	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.494d4d454449415445	f83	word	IMMEDIATE	12 IMMEDIATE	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4a	f83	word	J	12 J	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4b4559	f83	word	KEY	12 KEY	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4c45415645	f83	word	LEAVE	12 LEAVE	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4c49544552414c	f83	word	LITERAL	12 LITERAL	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4c4f4144	f83	word	LOAD	12 LOAD	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4c4f4f50	f83	word	LOOP	12 LOOP	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4d4158	f83	word	MAX	12 MAX	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4d494e	f83	word	MIN	12 MIN	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4d4f44	f83	word	MOD	12 MOD	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4e4547415445	f83	word	NEGATE	12 NEGATE	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4e4f54	f83	word	NOT	12 NOT	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4f52	f83	word	OR	12 OR	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.4f564552	f83	word	OVER	12 OVER	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.504144	f83	word	PAD	12 PAD	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.5049434b	f83	word	PICK	12 PICK	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.51554954	f83	word	QUIT	12 QUIT	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.523e	f83	word	R>	12 R>	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.5240	f83	word	R@	12 R@	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.524550454154	f83	word	REPEAT	12 REPEAT	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.524f4c4c	f83	word	ROLL	12 ROLL	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.524f54	f83	word	ROT	12 ROT	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.534156452d42554646455253	f83	word	SAVE-BUFFERS	12 SAVE-BUFFERS	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.5349474e	f83	word	SIGN	12 SIGN	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.5350414345	f83	word	SPACE	12 SPACE	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.535041434553	f83	word	SPACES	12 SPACES	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.5350414e	f83	word	SPAN	12 SPAN	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.5354415445	f83	word	STATE	12 STATE	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.53574150	f83	word	SWAP	12 SWAP	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.5448454e	f83	word	THEN	12 THEN	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.544942	f83	word	TIB	12 TIB	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.54595045	f83	word	TYPE	12 TYPE	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.552e	f83	word	U.	12 U.	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.553c	f83	word	U<	12 U<	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.554d2a	f83	word	UM*	12 UM*	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.554d2f4d4f44	f83	word	UM/MOD	12 UM/MOD	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.554e54494c	f83	word	UNTIL	12 UNTIL	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.555044415445	f83	word	UPDATE	12 UPDATE	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.5641524941424c45	f83	word	VARIABLE	12 VARIABLE	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.564f434142554c415259	f83	word	VOCABULARY	12 VOCABULARY	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.5748494c45	f83	word	WHILE	12 WHILE	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.574f5244	f83	word	WORD	12 WORD	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.584f52	f83	word	XOR	12 XOR	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.5b	f83	word	[	12 [	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.5b275d	f83	word	[']	12 [']	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.5b434f4d50494c455d	f83	word	[COMPILE]	12 [COMPILE]	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+f83.word.5d	f83	word	]	12 ]	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	word	-
+iso.word.6.1.0010	iso	word	!	6.1.0010	https://www.taygeta.com/forth/dpans6.htm#6.1.0010	word	-
+iso.word.6.1.0030	iso	word	#	6.1.0030	https://www.taygeta.com/forth/dpans6.htm#6.1.0030	word	-
+iso.word.6.1.0040	iso	word	#>	6.1.0040	https://www.taygeta.com/forth/dpans6.htm#6.1.0040	word	-
+iso.word.6.1.0050	iso	word	#S	6.1.0050	https://www.taygeta.com/forth/dpans6.htm#6.1.0050	word	-
+iso.word.6.1.0070	iso	word	'	6.1.0070	https://www.taygeta.com/forth/dpans6.htm#6.1.0070	word	-
+iso.word.6.1.0080	iso	word	(	6.1.0080	https://www.taygeta.com/forth/dpans6.htm#6.1.0080	word	-
+iso.word.6.1.0090	iso	word	*	6.1.0090	https://www.taygeta.com/forth/dpans6.htm#6.1.0090	word	-
+iso.word.6.1.0100	iso	word	*/	6.1.0100	https://www.taygeta.com/forth/dpans6.htm#6.1.0100	word	-
+iso.word.6.1.0110	iso	word	*/MOD	6.1.0110	https://www.taygeta.com/forth/dpans6.htm#6.1.0110	word	-
+iso.word.6.1.0120	iso	word	+	6.1.0120	https://www.taygeta.com/forth/dpans6.htm#6.1.0120	word	-
+iso.word.6.1.0130	iso	word	+!	6.1.0130	https://www.taygeta.com/forth/dpans6.htm#6.1.0130	word	-
+iso.word.6.1.0140	iso	word	+LOOP	6.1.0140	https://www.taygeta.com/forth/dpans6.htm#6.1.0140	word	-
+iso.word.6.1.0150	iso	word	,	6.1.0150	https://www.taygeta.com/forth/dpans6.htm#6.1.0150	word	-
+iso.word.6.1.0160	iso	word	-	6.1.0160	https://www.taygeta.com/forth/dpans6.htm#6.1.0160	word	-
+iso.word.6.1.0180	iso	word	.	6.1.0180	https://www.taygeta.com/forth/dpans6.htm#6.1.0180	word	-
+iso.word.6.1.0190	iso	word	."	6.1.0190	https://www.taygeta.com/forth/dpans6.htm#6.1.0190	word	-
+iso.word.6.1.0230	iso	word	/	6.1.0230	https://www.taygeta.com/forth/dpans6.htm#6.1.0230	word	-
+iso.word.6.1.0240	iso	word	/MOD	6.1.0240	https://www.taygeta.com/forth/dpans6.htm#6.1.0240	word	-
+iso.word.6.1.0250	iso	word	0<	6.1.0250	https://www.taygeta.com/forth/dpans6.htm#6.1.0250	word	-
+iso.word.6.1.0270	iso	word	0=	6.1.0270	https://www.taygeta.com/forth/dpans6.htm#6.1.0270	word	-
+iso.word.6.1.0290	iso	word	1+	6.1.0290	https://www.taygeta.com/forth/dpans6.htm#6.1.0290	word	-
+iso.word.6.1.0300	iso	word	1-	6.1.0300	https://www.taygeta.com/forth/dpans6.htm#6.1.0300	word	-
+iso.word.6.1.0310	iso	word	2!	6.1.0310	https://www.taygeta.com/forth/dpans6.htm#6.1.0310	word	-
+iso.word.6.1.0320	iso	word	2*	6.1.0320	https://www.taygeta.com/forth/dpans6.htm#6.1.0320	word	-
+iso.word.6.1.0330	iso	word	2/	6.1.0330	https://www.taygeta.com/forth/dpans6.htm#6.1.0330	word	-
+iso.word.6.1.0350	iso	word	2@	6.1.0350	https://www.taygeta.com/forth/dpans6.htm#6.1.0350	word	-
+iso.word.6.1.0370	iso	word	2DROP	6.1.0370	https://www.taygeta.com/forth/dpans6.htm#6.1.0370	word	-
+iso.word.6.1.0380	iso	word	2DUP	6.1.0380	https://www.taygeta.com/forth/dpans6.htm#6.1.0380	word	-
+iso.word.6.1.0400	iso	word	2OVER	6.1.0400	https://www.taygeta.com/forth/dpans6.htm#6.1.0400	word	-
+iso.word.6.1.0430	iso	word	2SWAP	6.1.0430	https://www.taygeta.com/forth/dpans6.htm#6.1.0430	word	-
+iso.word.6.1.0450	iso	word	:	6.1.0450	https://www.taygeta.com/forth/dpans6.htm#6.1.0450	word	-
+iso.word.6.1.0460	iso	word	;	6.1.0460	https://www.taygeta.com/forth/dpans6.htm#6.1.0460	word	-
+iso.word.6.1.0480	iso	word	<	6.1.0480	https://www.taygeta.com/forth/dpans6.htm#6.1.0480	word	-
+iso.word.6.1.0490	iso	word	<#	6.1.0490	https://www.taygeta.com/forth/dpans6.htm#6.1.0490	word	-
+iso.word.6.1.0530	iso	word	=	6.1.0530	https://www.taygeta.com/forth/dpans6.htm#6.1.0530	word	-
+iso.word.6.1.0540	iso	word	>	6.1.0540	https://www.taygeta.com/forth/dpans6.htm#6.1.0540	word	-
+iso.word.6.1.0550	iso	word	>BODY	6.1.0550	https://www.taygeta.com/forth/dpans6.htm#6.1.0550	word	-
+iso.word.6.1.0560	iso	word	>IN	6.1.0560	https://www.taygeta.com/forth/dpans6.htm#6.1.0560	word	-
+iso.word.6.1.0570	iso	word	>NUMBER	6.1.0570	https://www.taygeta.com/forth/dpans6.htm#6.1.0570	word	-
+iso.word.6.1.0580	iso	word	>R	6.1.0580	https://www.taygeta.com/forth/dpans6.htm#6.1.0580	word	-
+iso.word.6.1.0630	iso	word	?DUP	6.1.0630	https://www.taygeta.com/forth/dpans6.htm#6.1.0630	word	-
+iso.word.6.1.0650	iso	word	@	6.1.0650	https://www.taygeta.com/forth/dpans6.htm#6.1.0650	word	-
+iso.word.6.1.0670	iso	word	ABORT	6.1.0670	https://www.taygeta.com/forth/dpans6.htm#6.1.0670	word	-
+iso.word.6.1.0680	iso	word	ABORT"	6.1.0680	https://www.taygeta.com/forth/dpans6.htm#6.1.0680	word	-
+iso.word.6.1.0690	iso	word	ABS	6.1.0690	https://www.taygeta.com/forth/dpans6.htm#6.1.0690	word	-
+iso.word.6.1.0695	iso	word	ACCEPT	6.1.0695	https://www.taygeta.com/forth/dpans6.htm#6.1.0695	word	-
+iso.word.6.1.0705	iso	word	ALIGN	6.1.0705	https://www.taygeta.com/forth/dpans6.htm#6.1.0705	word	-
+iso.word.6.1.0706	iso	word	ALIGNED	6.1.0706	https://www.taygeta.com/forth/dpans6.htm#6.1.0706	word	-
+iso.word.6.1.0710	iso	word	ALLOT	6.1.0710	https://www.taygeta.com/forth/dpans6.htm#6.1.0710	word	-
+iso.word.6.1.0720	iso	word	AND	6.1.0720	https://www.taygeta.com/forth/dpans6.htm#6.1.0720	word	-
+iso.word.6.1.0750	iso	word	BASE	6.1.0750	https://www.taygeta.com/forth/dpans6.htm#6.1.0750	word	-
+iso.word.6.1.0760	iso	word	BEGIN	6.1.0760	https://www.taygeta.com/forth/dpans6.htm#6.1.0760	word	-
+iso.word.6.1.0770	iso	word	BL	6.1.0770	https://www.taygeta.com/forth/dpans6.htm#6.1.0770	word	-
+iso.word.6.1.0850	iso	word	C!	6.1.0850	https://www.taygeta.com/forth/dpans6.htm#6.1.0850	word	-
+iso.word.6.1.0860	iso	word	C,	6.1.0860	https://www.taygeta.com/forth/dpans6.htm#6.1.0860	word	-
+iso.word.6.1.0870	iso	word	C@	6.1.0870	https://www.taygeta.com/forth/dpans6.htm#6.1.0870	word	-
+iso.word.6.1.0880	iso	word	CELL+	6.1.0880	https://www.taygeta.com/forth/dpans6.htm#6.1.0880	word	-
+iso.word.6.1.0890	iso	word	CELLS	6.1.0890	https://www.taygeta.com/forth/dpans6.htm#6.1.0890	word	-
+iso.word.6.1.0895	iso	word	CHAR	6.1.0895	https://www.taygeta.com/forth/dpans6.htm#6.1.0895	word	-
+iso.word.6.1.0897	iso	word	CHAR+	6.1.0897	https://www.taygeta.com/forth/dpans6.htm#6.1.0897	word	-
+iso.word.6.1.0898	iso	word	CHARS	6.1.0898	https://www.taygeta.com/forth/dpans6.htm#6.1.0898	word	-
+iso.word.6.1.0950	iso	word	CONSTANT	6.1.0950	https://www.taygeta.com/forth/dpans6.htm#6.1.0950	word	-
+iso.word.6.1.0980	iso	word	COUNT	6.1.0980	https://www.taygeta.com/forth/dpans6.htm#6.1.0980	word	-
+iso.word.6.1.0990	iso	word	CR	6.1.0990	https://www.taygeta.com/forth/dpans6.htm#6.1.0990	word	-
+iso.word.6.1.1000	iso	word	CREATE	6.1.1000	https://www.taygeta.com/forth/dpans6.htm#6.1.1000	word	-
+iso.word.6.1.1170	iso	word	DECIMAL	6.1.1170	https://www.taygeta.com/forth/dpans6.htm#6.1.1170	word	-
+iso.word.6.1.1200	iso	word	DEPTH	6.1.1200	https://www.taygeta.com/forth/dpans6.htm#6.1.1200	word	-
+iso.word.6.1.1240	iso	word	DO	6.1.1240	https://www.taygeta.com/forth/dpans6.htm#6.1.1240	word	-
+iso.word.6.1.1250	iso	word	DOES>	6.1.1250	https://www.taygeta.com/forth/dpans6.htm#6.1.1250	word	-
+iso.word.6.1.1260	iso	word	DROP	6.1.1260	https://www.taygeta.com/forth/dpans6.htm#6.1.1260	word	-
+iso.word.6.1.1290	iso	word	DUP	6.1.1290	https://www.taygeta.com/forth/dpans6.htm#6.1.1290	word	-
+iso.word.6.1.1310	iso	word	ELSE	6.1.1310	https://www.taygeta.com/forth/dpans6.htm#6.1.1310	word	-
+iso.word.6.1.1320	iso	word	EMIT	6.1.1320	https://www.taygeta.com/forth/dpans6.htm#6.1.1320	word	-
+iso.word.6.1.1345	iso	word	ENVIRONMENT?	6.1.1345	https://www.taygeta.com/forth/dpans6.htm#6.1.1345	word	-
+iso.word.6.1.1360	iso	word	EVALUATE	6.1.1360	https://www.taygeta.com/forth/dpans6.htm#6.1.1360	word	-
+iso.word.6.1.1370	iso	word	EXECUTE	6.1.1370	https://www.taygeta.com/forth/dpans6.htm#6.1.1370	word	-
+iso.word.6.1.1380	iso	word	EXIT	6.1.1380	https://www.taygeta.com/forth/dpans6.htm#6.1.1380	word	-
+iso.word.6.1.1540	iso	word	FILL	6.1.1540	https://www.taygeta.com/forth/dpans6.htm#6.1.1540	word	-
+iso.word.6.1.1550	iso	word	FIND	6.1.1550	https://www.taygeta.com/forth/dpans6.htm#6.1.1550	word	-
+iso.word.6.1.1561	iso	word	FM/MOD	6.1.1561	https://www.taygeta.com/forth/dpans6.htm#6.1.1561	word	-
+iso.word.6.1.1650	iso	word	HERE	6.1.1650	https://www.taygeta.com/forth/dpans6.htm#6.1.1650	word	-
+iso.word.6.1.1670	iso	word	HOLD	6.1.1670	https://www.taygeta.com/forth/dpans6.htm#6.1.1670	word	-
+iso.word.6.1.1680	iso	word	I	6.1.1680	https://www.taygeta.com/forth/dpans6.htm#6.1.1680	word	-
+iso.word.6.1.1700	iso	word	IF	6.1.1700	https://www.taygeta.com/forth/dpans6.htm#6.1.1700	word	-
+iso.word.6.1.1710	iso	word	IMMEDIATE	6.1.1710	https://www.taygeta.com/forth/dpans6.htm#6.1.1710	word	-
+iso.word.6.1.1720	iso	word	INVERT	6.1.1720	https://www.taygeta.com/forth/dpans6.htm#6.1.1720	word	-
+iso.word.6.1.1730	iso	word	J	6.1.1730	https://www.taygeta.com/forth/dpans6.htm#6.1.1730	word	-
+iso.word.6.1.1750	iso	word	KEY	6.1.1750	https://www.taygeta.com/forth/dpans6.htm#6.1.1750	word	-
+iso.word.6.1.1760	iso	word	LEAVE	6.1.1760	https://www.taygeta.com/forth/dpans6.htm#6.1.1760	word	-
+iso.word.6.1.1780	iso	word	LITERAL	6.1.1780	https://www.taygeta.com/forth/dpans6.htm#6.1.1780	word	-
+iso.word.6.1.1800	iso	word	LOOP	6.1.1800	https://www.taygeta.com/forth/dpans6.htm#6.1.1800	word	-
+iso.word.6.1.1805	iso	word	LSHIFT	6.1.1805	https://www.taygeta.com/forth/dpans6.htm#6.1.1805	word	-
+iso.word.6.1.1810	iso	word	M*	6.1.1810	https://www.taygeta.com/forth/dpans6.htm#6.1.1810	word	-
+iso.word.6.1.1870	iso	word	MAX	6.1.1870	https://www.taygeta.com/forth/dpans6.htm#6.1.1870	word	-
+iso.word.6.1.1880	iso	word	MIN	6.1.1880	https://www.taygeta.com/forth/dpans6.htm#6.1.1880	word	-
+iso.word.6.1.1890	iso	word	MOD	6.1.1890	https://www.taygeta.com/forth/dpans6.htm#6.1.1890	word	-
+iso.word.6.1.1900	iso	word	MOVE	6.1.1900	https://www.taygeta.com/forth/dpans6.htm#6.1.1900	word	-
+iso.word.6.1.1910	iso	word	NEGATE	6.1.1910	https://www.taygeta.com/forth/dpans6.htm#6.1.1910	word	-
+iso.word.6.1.1980	iso	word	OR	6.1.1980	https://www.taygeta.com/forth/dpans6.htm#6.1.1980	word	-
+iso.word.6.1.1990	iso	word	OVER	6.1.1990	https://www.taygeta.com/forth/dpans6.htm#6.1.1990	word	-
+iso.word.6.1.2033	iso	word	POSTPONE	6.1.2033	https://www.taygeta.com/forth/dpans6.htm#6.1.2033	word	-
+iso.word.6.1.2050	iso	word	QUIT	6.1.2050	https://www.taygeta.com/forth/dpans6.htm#6.1.2050	word	-
+iso.word.6.1.2060	iso	word	R>	6.1.2060	https://www.taygeta.com/forth/dpans6.htm#6.1.2060	word	-
+iso.word.6.1.2070	iso	word	R@	6.1.2070	https://www.taygeta.com/forth/dpans6.htm#6.1.2070	word	-
+iso.word.6.1.2120	iso	word	RECURSE	6.1.2120	https://www.taygeta.com/forth/dpans6.htm#6.1.2120	word	-
+iso.word.6.1.2140	iso	word	REPEAT	6.1.2140	https://www.taygeta.com/forth/dpans6.htm#6.1.2140	word	-
+iso.word.6.1.2160	iso	word	ROT	6.1.2160	https://www.taygeta.com/forth/dpans6.htm#6.1.2160	word	-
+iso.word.6.1.2162	iso	word	RSHIFT	6.1.2162	https://www.taygeta.com/forth/dpans6.htm#6.1.2162	word	-
+iso.word.6.1.2165	iso	word	S"	6.1.2165	https://www.taygeta.com/forth/dpans6.htm#6.1.2165	word	-
+iso.word.6.1.2170	iso	word	S>D	6.1.2170	https://www.taygeta.com/forth/dpans6.htm#6.1.2170	word	-
+iso.word.6.1.2210	iso	word	SIGN	6.1.2210	https://www.taygeta.com/forth/dpans6.htm#6.1.2210	word	-
+iso.word.6.1.2214	iso	word	SM/REM	6.1.2214	https://www.taygeta.com/forth/dpans6.htm#6.1.2214	word	-
+iso.word.6.1.2216	iso	word	SOURCE	6.1.2216	https://www.taygeta.com/forth/dpans6.htm#6.1.2216	word	-
+iso.word.6.1.2220	iso	word	SPACE	6.1.2220	https://www.taygeta.com/forth/dpans6.htm#6.1.2220	word	-
+iso.word.6.1.2230	iso	word	SPACES	6.1.2230	https://www.taygeta.com/forth/dpans6.htm#6.1.2230	word	-
+iso.word.6.1.2250	iso	word	STATE	6.1.2250	https://www.taygeta.com/forth/dpans6.htm#6.1.2250	word	-
+iso.word.6.1.2260	iso	word	SWAP	6.1.2260	https://www.taygeta.com/forth/dpans6.htm#6.1.2260	word	-
+iso.word.6.1.2270	iso	word	THEN	6.1.2270	https://www.taygeta.com/forth/dpans6.htm#6.1.2270	word	-
+iso.word.6.1.2310	iso	word	TYPE	6.1.2310	https://www.taygeta.com/forth/dpans6.htm#6.1.2310	word	-
+iso.word.6.1.2320	iso	word	U.	6.1.2320	https://www.taygeta.com/forth/dpans6.htm#6.1.2320	word	-
+iso.word.6.1.2340	iso	word	U<	6.1.2340	https://www.taygeta.com/forth/dpans6.htm#6.1.2340	word	-
+iso.word.6.1.2360	iso	word	UM*	6.1.2360	https://www.taygeta.com/forth/dpans6.htm#6.1.2360	word	-
+iso.word.6.1.2370	iso	word	UM/MOD	6.1.2370	https://www.taygeta.com/forth/dpans6.htm#6.1.2370	word	-
+iso.word.6.1.2380	iso	word	UNLOOP	6.1.2380	https://www.taygeta.com/forth/dpans6.htm#6.1.2380	word	-
+iso.word.6.1.2390	iso	word	UNTIL	6.1.2390	https://www.taygeta.com/forth/dpans6.htm#6.1.2390	word	-
+iso.word.6.1.2410	iso	word	VARIABLE	6.1.2410	https://www.taygeta.com/forth/dpans6.htm#6.1.2410	word	-
+iso.word.6.1.2430	iso	word	WHILE	6.1.2430	https://www.taygeta.com/forth/dpans6.htm#6.1.2430	word	-
+iso.word.6.1.2450	iso	word	WORD	6.1.2450	https://www.taygeta.com/forth/dpans6.htm#6.1.2450	word	-
+iso.word.6.1.2490	iso	word	XOR	6.1.2490	https://www.taygeta.com/forth/dpans6.htm#6.1.2490	word	-
+iso.word.6.1.2500	iso	word	[	6.1.2500	https://www.taygeta.com/forth/dpans6.htm#6.1.2500	word	-
+iso.word.6.1.2510	iso	word	[']	6.1.2510	https://www.taygeta.com/forth/dpans6.htm#6.1.2510	word	-
+iso.word.6.1.2520	iso	word	[CHAR]	6.1.2520	https://www.taygeta.com/forth/dpans6.htm#6.1.2520	word	-
+iso.word.6.1.2540	iso	word	]	6.1.2540	https://www.taygeta.com/forth/dpans6.htm#6.1.2540	word	-
+f83.system.cell-width	f83	system	16-bit stack items	5	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	width83	-
+f83.system.documentation	f83	system	System documentation	7.1.1	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	review	No complete clause-by-clause documentation audit yet.
+f83.system.dictionary-capacity	f83	system	2000 application dictionary bytes	7.2.1	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	capacity	-
+f83.system.data-stack-capacity	f83	system	64 data-stack bytes	7.2.2	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	data-capacity	-
+f83.system.return-stack-capacity	f83	system	48 return-stack bytes	7.2.3	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	return-capacity	-
+f83.system.block-capacity	f83	system	32 mass-storage blocks	7.2.4	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	blocks	-
+f83.system.terminal	f83	system	ASCII operator terminal	7.2.5	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	terminal	-
+f83.system.labeling	f83	system	Required words and labeling	8	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	all-words	-
+f83.system.definitions	f83	system	Standard definitions	9.1	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	unassessed	Full interactions between standard definitions have not been assessed.
+f83.system.memory	f83	system	Application memory	9.2	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	memory	-
+f83.system.return-stack	f83	system	Return stack usage	9.3	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	return-stack	-
+f83.system.compilation	f83	system	Compilation environment	9.4	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	compiler	-
+f83.system.key	f83	system	Terminal input	9.5.1	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	terminal	-
+f83.system.expect	f83	system	Terminal line input	9.5.2	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	terminal	-
+f83.system.emit	f83	system	Terminal output	9.5.3	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	ascii	-
+f83.system.type	f83	system	String output	9.5.4	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	string-output	-
+f83.system.buffers	f83	system	Block buffer validity	9.7	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	blocks	-
+f83.system.numbers	f83	system	Numeric input range	9.8	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	numbers83	-
+f83.system.control	f83	system	Nested control structures	9.9	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	control	-
+f83.system.errors	f83	system	Documented error actions	10.1	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	review	Error variants and README limitations exist; the standard-specific error action audit remains incomplete.
+f83.system.error-conditions	f83	system	General error conditions	10.2	https://www.complang.tuwien.ac.at/forth/fth83std/FORTH83.TXT	unassessed	Not all required error conditions are exercisable with current words.
+iso.system.3.1.1	iso	system	Data-type relationships	3.1.1	https://www.taygeta.com/forth/dpans3.htm#3.1.1	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.1.2.1	iso	system	Graphic characters	3.1.2.1	https://www.taygeta.com/forth/dpans3.htm#3.1.2.1	ascii	-
+iso.system.3.1.2.2	iso	system	Control characters	3.1.2.2	https://www.taygeta.com/forth/dpans3.htm#3.1.2.2	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.1.3.1	iso	system	Flags	3.1.3.1	https://www.taygeta.com/forth/dpans3.htm#3.1.3.1	flags	-
+iso.system.3.1.3.2	iso	system	Integers	3.1.3.2	https://www.taygeta.com/forth/dpans3.htm#3.1.3.2	widthiso	-
+iso.system.3.1.3.3	iso	system	Addresses	3.1.3.3	https://www.taygeta.com/forth/dpans3.htm#3.1.3.3	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.1.3.4	iso	system	Counted strings	3.1.3.4	https://www.taygeta.com/forth/dpans3.htm#3.1.3.4	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.1.3.5	iso	system	Execution tokens	3.1.3.5	https://www.taygeta.com/forth/dpans3.htm#3.1.3.5	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.1.4.1	iso	system	Double-cell integers	3.1.4.1	https://www.taygeta.com/forth/dpans3.htm#3.1.4.1	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.1.4.2	iso	system	Character strings	3.1.4.2	https://www.taygeta.com/forth/dpans3.htm#3.1.4.2	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.1.5.1	iso	system	System-compilation types	3.1.5.1	https://www.taygeta.com/forth/dpans3.htm#3.1.5.1	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.1.5.2	iso	system	System-execution types	3.1.5.2	https://www.taygeta.com/forth/dpans3.htm#3.1.5.2	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.2.1.1	iso	system	Internal number representation	3.2.1.1	https://www.taygeta.com/forth/dpans3.htm#3.2.1.1	widthiso	-
+iso.system.3.2.1.2	iso	system	Digit conversion	3.2.1.2	https://www.taygeta.com/forth/dpans3.htm#3.2.1.2	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.2.1.3	iso	system	Free-field number display	3.2.1.3	https://www.taygeta.com/forth/dpans3.htm#3.2.1.3	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.2.2.1	iso	system	Integer division	3.2.2.1	https://www.taygeta.com/forth/dpans3.htm#3.2.2.1	division	-
+iso.system.3.2.2.2	iso	system	Other integer operations	3.2.2.2	https://www.taygeta.com/forth/dpans3.htm#3.2.2.2	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.2.3.1	iso	system	Data stack	3.2.3.1	https://www.taygeta.com/forth/dpans3.htm#3.2.3.1	data-capacity	-
+iso.system.3.2.3.2	iso	system	Control-flow stack	3.2.3.2	https://www.taygeta.com/forth/dpans3.htm#3.2.3.2	control	-
+iso.system.3.2.3.3	iso	system	Return stack	3.2.3.3	https://www.taygeta.com/forth/dpans3.htm#3.2.3.3	return-stack	-
+iso.system.3.2.4.1	iso	system	User input device	3.2.4.1	https://www.taygeta.com/forth/dpans3.htm#3.2.4.1	terminal	-
+iso.system.3.2.4.2	iso	system	User output device	3.2.4.2	https://www.taygeta.com/forth/dpans3.htm#3.2.4.2	ascii	-
+iso.system.3.2.5	iso	system	Mass storage	3.2.5	https://www.taygeta.com/forth/dpans3.htm#3.2.5	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.2.6	iso	system	Environmental queries	3.2.6	https://www.taygeta.com/forth/dpans3.htm#3.2.6	environment	-
+iso.system.3.3.1.1	iso	system	Word lists	3.3.1.1	https://www.taygeta.com/forth/dpans3.htm#3.3.1.1	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.3.1.2	iso	system	Definition names	3.3.1.2	https://www.taygeta.com/forth/dpans3.htm#3.3.1.2	names	-
+iso.system.3.3.2	iso	system	Code space	3.3.2	https://www.taygeta.com/forth/dpans3.htm#3.3.2	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.3.3.1	iso	system	Address alignment	3.3.3.1	https://www.taygeta.com/forth/dpans3.htm#3.3.3.1	alignment	-
+iso.system.3.3.3.2	iso	system	Contiguous regions	3.3.3.2	https://www.taygeta.com/forth/dpans3.htm#3.3.3.2	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.3.3.3	iso	system	Variables	3.3.3.3	https://www.taygeta.com/forth/dpans3.htm#3.3.3.3	memory	-
+iso.system.3.3.3.4	iso	system	Text-literal regions	3.3.3.4	https://www.taygeta.com/forth/dpans3.htm#3.3.3.4	string-output	-
+iso.system.3.3.3.5	iso	system	Input buffers	3.3.3.5	https://www.taygeta.com/forth/dpans3.htm#3.3.3.5	input-buffer	-
+iso.system.3.3.3.6	iso	system	Other transient regions	3.3.3.6	https://www.taygeta.com/forth/dpans3.htm#3.3.3.6	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.4.1.1	iso	system	Delimiters	3.4.1.1	https://www.taygeta.com/forth/dpans3.htm#3.4.1.1	delimiters	-
+iso.system.3.4.1.2	iso	system	Syntax	3.4.1.2	https://www.taygeta.com/forth/dpans3.htm#3.4.1.2	syntax	-
+iso.system.3.4.1.3	iso	system	Text interpreter input number conversion	3.4.1.3	https://www.taygeta.com/forth/dpans3.htm#3.4.1.3	number-base	-
+iso.system.3.4.2	iso	system	Finding definition names	3.4.2	https://www.taygeta.com/forth/dpans3.htm#3.4.2	names	-
+iso.system.3.4.3.1	iso	system	Execution semantics	3.4.3.1	https://www.taygeta.com/forth/dpans3.htm#3.4.3.1	compiler	-
+iso.system.3.4.3.2	iso	system	Interpretation semantics	3.4.3.2	https://www.taygeta.com/forth/dpans3.htm#3.4.3.2	compiler	-
+iso.system.3.4.3.3	iso	system	Compilation semantics	3.4.3.3	https://www.taygeta.com/forth/dpans3.htm#3.4.3.3	compiler	-
+iso.system.3.4.4	iso	system	Possible actions on an ambiguous condition	3.4.4	https://www.taygeta.com/forth/dpans3.htm#3.4.4	unassessed	This clause requires further assessment; no complete probe or documentation review yet.
+iso.system.3.4.5	iso	system	Compilation	3.4.5	https://www.taygeta.com/forth/dpans3.htm#3.4.5	compiler	-
+iso.system.4.1.1	iso	system	Implementation-defined options	4.1.1	https://www.taygeta.com/forth/dpans4.htm#4.1.1	review	Existing API documentation and README are not yet a complete standard-specific documentation audit.
+iso.system.4.1.2	iso	system	Ambiguous conditions	4.1.2	https://www.taygeta.com/forth/dpans4.htm#4.1.2	review	Existing API documentation and README are not yet a complete standard-specific documentation audit.
+iso.system.4.1.3	iso	system	Other system documentation	4.1.3	https://www.taygeta.com/forth/dpans4.htm#4.1.3	review	Existing API documentation and README are not yet a complete standard-specific documentation audit.
+iso.system.core	iso	system	All CORE words available	3	https://www.taygeta.com/forth/dpans3.htm#3.	all-words	-
+iso.system.3	iso	system	Consistency of standard words and extensions	3	https://www.taygeta.com/forth/dpans3.htm#3.	unassessed	This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.
+iso.system.3.1	iso	system	Preservation of data types	3.1	https://www.taygeta.com/forth/dpans3.htm#3.1	unassessed	This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.
+iso.system.3.1.2	iso	system	Character width and representation	3.1.2	https://www.taygeta.com/forth/dpans3.htm#3.1.2	unassessed	This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.
+iso.system.3.1.3	iso	system	Cell width and representation of single-cell types	3.1.3	https://www.taygeta.com/forth/dpans3.htm#3.1.3	unassessed	This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.
+iso.system.3.1.4	iso	system	Cell-pair memory and stack order	3.1.4	https://www.taygeta.com/forth/dpans3.htm#3.1.4	cell-pair	-
+iso.system.3.1.5	iso	system	Permitted system-type combinations	3.1.5	https://www.taygeta.com/forth/dpans3.htm#3.1.5	unassessed	This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.
+iso.system.3.3.3	iso	system	Accessible data-space regions	3.3.3	https://www.taygeta.com/forth/dpans3.htm#3.3.3	unassessed	This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.
+iso.system.3.4	iso	system	Interactive startup and interpreter algorithm	3.4	https://www.taygeta.com/forth/dpans3.htm#3.4	unassessed	This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.
+iso.system.3.4.1	iso	system	Parse area and input-position updates	3.4.1	https://www.taygeta.com/forth/dpans3.htm#3.4.1	unassessed	This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.
+iso.system.3.4.3	iso	system	Definition behaviors and stack semantics	3.4.3	https://www.taygeta.com/forth/dpans3.htm#3.4.3	unassessed	This parent clause has requirements beyond its registered subsections; full assessment remains outstanding.
